@@ -48,7 +48,14 @@ if [[ "${clean}" -eq 1 ]]; then
     rm -rf "${build_dir}" "${output_dir}"
 fi
 
-cmake -S "${game_dir}" -B "${build_dir}" -DCMAKE_BUILD_TYPE=Release
+# ccache makes a --clean rebuild fast. Its cache lives outside build-macos, so it
+# survives --clean.
+cache_flags=()
+if command -v ccache >/dev/null 2>&1; then
+    cache_flags+=(-DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache)
+fi
+
+cmake -S "${game_dir}" -B "${build_dir}" -DCMAKE_BUILD_TYPE=Release ${cache_flags[@]+"${cache_flags[@]}"}
 cmake --build "${build_dir}" --target pikmin_pc pikmin_launcher -j "$(sysctl -n hw.ncpu)"
 
 bin_dir="${build_dir}/bin"
