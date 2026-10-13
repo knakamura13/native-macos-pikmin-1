@@ -2798,7 +2798,7 @@ void pc_gfx_init(void) {
                              || std::strstr(renderer, "Softpipe") || std::strstr(renderer, "SVGA3D");
         if (integrated && std::getenv("__NV_PRIME_RENDER_OFFLOAD")) {
             printf("[PC Port] WARNING: requested NVIDIA PRIME but the context is %s. "
-                   "Menus will sit around 30 fps. On Wayland use: prime-run \"./build/bin/Pikmin 1\"\n",
+                   "Menus will sit around 30 fps. On Wayland use: prime-run ./build/bin/nectar\n",
                    renderer);
         }
     }

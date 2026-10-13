@@ -437,7 +437,7 @@ void saveRecords()
 {
     FILE* f = std::fopen(recordsPath().c_str(), "w");
     if (!f) return;
-    std::fprintf(f, "# Pikmin 1 - registro del modo Speedrun\n");
+    std::fprintf(f, "# Open Nectar - registro del modo Speedrun\n");
     if (sRec.hasPb) {
         std::fprintf(f, "pb=%llu|%d|%s\n", (unsigned long long)sRec.pbMs, sRec.pbDays, sRec.pbDate);
         for (int i = 0; i < sRec.pbCount; i++)

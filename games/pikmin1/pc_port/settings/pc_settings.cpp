@@ -1080,7 +1080,7 @@ void saveConfig() {
         printf("[PC Settings] Failed to write %s\n", path.c_str());
         return;
     }
-    out << "# Pikmin 1 settings (F1 or backtick in-game to change)\n";
+    out << "# Open Nectar settings (F1 or backtick in-game to change)\n";
     out << "windowWidth = " << sConfig.windowWidth << "\n";
     out << "windowHeight = " << sConfig.windowHeight << "\n";
     out << "displayMode = " << sConfig.displayMode << "\n";

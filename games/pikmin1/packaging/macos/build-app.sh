@@ -10,7 +10,7 @@
 #
 # The bundle's main executable is the launcher, which
 # asks for the user's own disc image on first run, extracts it under
-# ~/.local/share/pikmin-native, and installs "Pikmin 1" beside itself.
+# ~/.local/share/pikmin-native, and installs the game beside itself.
 #
 # The game links SDL2 from Homebrew (sdl2-compat). The app runs only on Macs
 # that have that library at the same path.
@@ -65,8 +65,10 @@ contents="${app}/Contents"
 rm -rf "${app}"
 mkdir -p "${contents}/MacOS" "${contents}/Resources"
 
-cp "${bin_dir}/Pikmin 1" "${contents}/MacOS/Pikmin 1"
-cp "${bin_dir}/Pikmin 1 Launcher" "${contents}/MacOS/Pikmin 1 Launcher"
+# The binaries keep the upstream names (nectar, nectar-launcher). Only the app
+# bundle is called "Pikmin 1", so the code and the install format stay unchanged.
+cp "${bin_dir}/nectar" "${contents}/MacOS/nectar"
+cp "${bin_dir}/nectar-launcher" "${contents}/MacOS/nectar-launcher"
 
 # App icon: build an .icns from the 256px PNG. iconutil needs the full size set.
 iconset="$(mktemp -d)/AppIcon.iconset"
@@ -96,7 +98,7 @@ cat > "${contents}/Info.plist" <<'PLIST'
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleExecutable</key>
-    <string>Pikmin 1 Launcher</string>
+    <string>nectar-launcher</string>
     <key>CFBundleIconFile</key>
     <string>AppIcon</string>
     <key>LSMinimumSystemVersion</key>
@@ -112,7 +114,7 @@ echo "Built: ${app}"
 if [[ "${install}" -eq 1 ]]; then
     installed="${install_dir}/${app_name}"
     # Refuse rather than kill: quitting a running game would lose unsaved progress.
-    if pgrep -x "Pikmin 1" >/dev/null || pgrep -x "Pikmin 1 Launcher" >/dev/null; then
+    if pgrep -x "nectar" >/dev/null || pgrep -x "nectar-launcher" >/dev/null; then
         echo "Pikmin 1 is running. Quit it, then rerun with --install." >&2
         exit 1
     fi

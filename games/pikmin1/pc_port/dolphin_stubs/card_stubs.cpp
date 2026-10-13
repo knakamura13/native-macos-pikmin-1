@@ -76,7 +76,7 @@ fs::path userDataSaveDir()
 {
 #if defined(_WIN32)
 	if (const char* local = std::getenv("LOCALAPPDATA"); local != nullptr && *local != '\0')
-		return fs::path(local) / "Pikmin 1" / "save";
+		return fs::path(local) / "Nectar" / "save";
 #else
 	if (const char* xdg = std::getenv("XDG_DATA_HOME"); xdg != nullptr && *xdg != '\0')
 		return fs::path(xdg) / "pikmin-native" / "save";

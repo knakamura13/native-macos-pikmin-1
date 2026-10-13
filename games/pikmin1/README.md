@@ -1,4 +1,4 @@
-# Pikmin 1 — Pikmin Native PC/Android Port
+# Open Nectar — Pikmin Native PC/Android Port
 
 <img width="2172" height="476" alt="opennectarlogo (1)" src="https://github.com/user-attachments/assets/71283101-1be5-4ca4-9b16-488320343cc8" />
 
@@ -46,11 +46,11 @@ Grab the package for your system from [Releases](../../releases).
 
 Two downloads with the same content; pick one:
 
-- **`Pikmin-1-x86_64.AppImage`** — one file. Make it executable
-  (`chmod +x Pikmin-1-x86_64.AppImage`, or *Allow executing as program* in
+- **`Open_Nectar-x86_64.AppImage`** — one file. Make it executable
+  (`chmod +x Open_Nectar-x86_64.AppImage`, or *Allow executing as program* in
   its properties) and open it.
-- **`Pikmin-1-linux.tar.gz`** — a folder: `tar -xzf Pikmin-1-linux.tar.gz`, then
-  open `Pikmin-1-linux/Pikmin 1 Launcher`.
+- **`nectar-linux.tar.gz`** — a folder: `tar -xzf nectar-linux.tar.gz`, then
+  open `nectar-linux/nectar-launcher`.
 
 It runs on any x86-64 distribution with glibc 2.29 or newer — Ubuntu 20.04+,
 Mint 20+, Debian 11+, Fedora, openSUSE Leap 15.3+/Tumbleweed, Arch, Manjaro,
@@ -60,7 +60,7 @@ file pickers, `zenity` or `kdialog`, which GNOME and KDE already have.
 
 Press **Install** under the Pikmin cover, choose your disc image and a folder.
 That folder ends up with the game data, your saves and settings, and two
-programs: `Pikmin 1` (the game, for your disc's region) and `Pikmin 1 Launcher`.
+programs: `nectar` (the game, for your disc's region) and `nectar-launcher`.
 Open that launcher to play from then on. `packaging/linux/README.txt` in the
 download covers troubleshooting.
 
@@ -78,9 +78,9 @@ download covers troubleshooting.
 
 **Installing**
 
-1. Extract `Pikmin-1-windows.zip` anywhere. There is no installer to run and
+1. Extract `nectar-windows.zip` anywhere. There is no installer to run and
    nothing is written outside the folder you choose.
-2. Run `Pikmin 1 Launcher.exe`.
+2. Run `nectar-launcher.exe`.
 3. It asks for your Pikmin disc image, and then for a folder to install into.
    Any folder works.
 4. It verifies the image, extracts the assets and starts the game.
@@ -95,7 +95,7 @@ ISO/GCM works without additional tools. For RVZ/WIA/GCZ, the launcher uses
 [Dolphin installation](https://dolphin-emu.org/download/). It looks beside the
 launcher and on PATH, then offers a file picker if the tool was not found.
 Keep the tool with the rest of its Dolphin installation. It is not downloaded
-or included by Pikmin 1.
+or included by Open Nectar.
 
 Conversion needs about **1.4 GiB extra free space in your system's temporary
 folder**. The source image is unchanged; a separate temporary ISO is verified,
@@ -113,26 +113,18 @@ Once the game starts, **F1** opens graphics, controls and gameplay settings.
 
 **Playing afterwards**
 
-Go to the folder you installed into and run `Pikmin 1 Launcher.exe` again, then
+Go to the folder you installed into and run `nectar-launcher.exe` again, then
 click the Pikmin cover.
 
-The launcher starts the build your disc needs. You can also run `Pikmin 1.exe`
-directly from the folder the launcher installed into: the game looks for its
-`assets` folder relative to the current directory. An extracted download holds
-both builds, so run the launcher there instead.
+You can also run `nectar.exe` directly, but only from inside that folder: the
+game looks for its `assets` folder relative to the current directory.
 
 **Installing without dialogs**
 
-From `cmd`:
+From `cmd` or PowerShell:
 
 ```
-"Pikmin 1 Launcher.exe" --rom C:\path\to\Pikmin.iso --install-dir "C:\Games\Pikmin 1"
-```
-
-From PowerShell, put `&` in front of the quoted name:
-
-```
-& "Pikmin 1 Launcher.exe" --rom C:\path\to\Pikmin.iso --install-dir "C:\Games\Pikmin 1"
+nectar-launcher.exe --rom C:\path\to\Pikmin.iso --install-dir C:\Games\OpenNectar
 ```
 
 Add `--extract-only` to install without launching the game afterwards. This
@@ -145,18 +137,11 @@ the path to `dolphin-tool` on Linux.
 
 The game opens a console window alongside it, printing what it is doing. It is
 not an error. This is a young port and those messages are the only thing that
-explains a failure, so they are left visible on purpose. To keep them, from `cmd`:
+explains a failure, so they are left visible on purpose. To keep them:
 
 ```
-cd "C:\Games\Pikmin 1"
-"Pikmin 1.exe" > log.txt 2>&1
-```
-
-From PowerShell, use `&` in front of the quoted name:
-
-```
-cd "C:\Games\Pikmin 1"
-& "Pikmin 1.exe" > log.txt 2>&1
+cd C:\Games\OpenNectar
+nectar.exe > log.txt 2>&1
 ```
 
 **Where your files live**
@@ -246,9 +231,9 @@ installed folder. The disc image is not needed either way.
 ### Launcher options
 
 ```sh
-"./Pikmin 1 Launcher" --rom /path/to/Pikmin.iso --install-dir /path/to/installation
-"./Pikmin 1 Launcher" --extract-only    # extract assets only, don't run
-"./Pikmin 1 Launcher" --help
+nectar-launcher --rom /path/to/Pikmin.iso --install-dir /path/to/installation
+nectar-launcher --extract-only    # extract assets only, don't run
+nectar-launcher --help
 ```
 
 ## Build from source
@@ -287,7 +272,7 @@ cmake --build build-pal -j"$(nproc)"
 ```
 
 The release packages carry both, and the launcher installs whichever the disc
-asks for, named `Pikmin 1`. `packaging/linux/build-release.sh` and
+asks for, named `nectar`. `packaging/linux/build-release.sh` and
 `packaging/windows/package-standalone.sh` each build both executables; see
 [docs/COMPILAR_RELEASES.md](docs/COMPILAR_RELEASES.md) for every release
 package (Linux tar.gz and AppImage, Windows zip, Android APK).
@@ -311,7 +296,7 @@ cmake -S . -B build-windows \
 cmake --build build-windows -j"$(nproc)"
 ```
 
-The result is `build-windows/bin/Pikmin 1.exe`. SDL2 and the MinGW runtime are
+The result is `build-windows/bin/nectar.exe`. SDL2 and the MinGW runtime are
 linked into it (`PIKMIN_STATIC_RUNTIME`, on by default for Windows), so it
 needs no DLLs beside it.
 
@@ -321,20 +306,20 @@ To ship a folder with both USA and PAL builds:
 packaging/windows/package-standalone.sh
 ```
 
-That writes `packaging/windows/out/Pikmin-1-windows/` with `Pikmin 1.exe`,
-`Pikmin 1 PAL.exe` and `Pikmin 1 Launcher.exe`, and zips it as
-`packaging/windows/out/Pikmin-1-windows.zip`.
+That writes `packaging/windows/out/nectar-windows/` with `nectar.exe`,
+`nectar-pal.exe` and `nectar-launcher.exe`, and zips it as
+`packaging/windows/out/nectar-windows.zip`.
 
 ### Run after building
 
 ```sh
-"./build/bin/Pikmin 1 Launcher" --rom /path/to/Pikmin.iso --install-dir ./my-installation
+./build/bin/nectar-launcher --rom /path/to/Pikmin.iso --install-dir ./my-installation
 ```
 
 Or, for development directly against a checked-out asset tree in `./assets/`:
 
 ```sh
-"./build/bin/Pikmin 1"
+./build/bin/nectar
 ```
 
 ### Android (APK)
@@ -637,7 +622,7 @@ The code is offered under [CC0 1.0](LICENSE.MD). This license does not grant rig
 
 - Original decompilation: [projectPiki/pikmin](https://github.com/projectPiki/pikmin)
 - Software DSP and sound bank loader: [NextOs-Ports/pikmin-nextos](https://github.com/NextOs-Ports/pikmin-nextos), adapted here from SDL3 to SDL2. Licence and attribution in [third_party/nextos-audio/](third_party/nextos-audio/)
-- Native PC port: Pikmin 1 Community
+- Native PC port: Open Nectar Community
 
 ## Links
 

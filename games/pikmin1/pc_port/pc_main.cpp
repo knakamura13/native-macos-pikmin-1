@@ -126,7 +126,7 @@ int main(int argc, char* argv[])
     // Initialize SDL2 Window and OpenGL Context FIRST
     printf("[PC Port] Initializing SDL2 window and GL context...\n");
     fflush(stdout);
-    if (!pc_window_init("Pikmin 1", 1280, 720)) {
+    if (!pc_window_init("Open Nectar", 1280, 720)) {
         printf("[PC Port Fatal Error] Could not initialize window/OpenGL!\n");
         fflush(stdout);
         return 1;

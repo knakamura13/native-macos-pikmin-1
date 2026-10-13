@@ -3,9 +3,9 @@
 # Lo lanza packaging/linux/build-release.sh; no llamarlo a mano.
 #
 # Deja en build-linux-release/:
-#   usa/bin/Pikmin 1          juego USA
-#   usa/bin/Pikmin 1 Launcher launcher
-#   pal/bin/Pikmin 1 PAL      juego PAL
+#   usa/bin/nectar            juego USA
+#   usa/bin/nectar-launcher   launcher
+#   pal/bin/nectar            juego PAL
 # con SDL2 y el runtime de C++ dentro (solo dependen de glibc, libGL y libX11).
 set -euo pipefail
 

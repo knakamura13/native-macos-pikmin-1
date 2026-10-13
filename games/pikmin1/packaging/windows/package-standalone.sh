@@ -4,20 +4,20 @@
 # Compila las dos versiones (USA y PAL) para Windows x86-64 con MinGW-w64 y
 # deja un directorio listo para zippear:
 #
-#   packaging/windows/out/Pikmin-1-windows/
-#     Pikmin 1.exe
-#     Pikmin 1 PAL.exe
-#     Pikmin 1 Launcher.exe
+#   packaging/windows/out/nectar-windows/
+#     nectar.exe
+#     nectar-pal.exe
+#     nectar-launcher.exe
 #     README.txt
 #
-# y lo comprime en packaging/windows/out/Pikmin-1-windows.zip, el nombre que
+# y lo comprime en packaging/windows/out/nectar-windows.zip, el nombre que
 # busca el auto-update del launcher en el release de GitHub.
 #
 # SDL2 y el runtime de C/C++ van dentro de cada .exe (PIKMIN_STATIC_RUNTIME):
-# no hay DLL que acompañar. El instalador copia "Pikmin 1.exe" o "Pikmin 1 PAL.exe"
-# a "Pikmin 1.exe" según el disco, así que la carpeta instalada queda en dos
-# archivos: Pikmin 1.exe y Pikmin 1 Launcher.exe.
-# Sin "Pikmin 1 PAL.exe" un ISO europeo "instala bien" y el juego no arranca.
+# no hay DLL que acompañar. El instalador copia nectar.exe o nectar-pal.exe a
+# nectar.exe según el disco, así que la carpeta instalada queda en dos
+# archivos: nectar.exe y nectar-launcher.exe.
+# Sin nectar-pal.exe un ISO europeo "instala bien" y el juego no arranca.
 
 set -euo pipefail
 
@@ -25,7 +25,7 @@ script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd -- "${script_dir}/../.." && pwd)"
 build_dir="${repo_root}/build-windows-standalone"
 pal_build_dir="${repo_root}/build-windows-standalone-pal"
-output_dir="${script_dir}/out/Pikmin-1-windows"
+output_dir="${script_dir}/out/nectar-windows"
 toolchain="${repo_root}/cmake/toolchain-mingw64.cmake"
 sdl2_root="${repo_root}/third_party/SDL2-mingw64"
 
@@ -82,9 +82,9 @@ cmake -S "${repo_root}" -B "${pal_build_dir}" \
     -DPIKMIN_GAME_VERSION=VERSION_GPIP01_00
 cmake --build "${pal_build_dir}" --target pikmin_pc -j"$(nproc)"
 
-usa_exe="${build_dir}/bin/Pikmin 1.exe"
-pal_exe="${pal_build_dir}/bin/Pikmin 1 PAL.exe"
-launcher_exe="${build_dir}/bin/Pikmin 1 Launcher.exe"
+usa_exe="${build_dir}/bin/nectar.exe"
+pal_exe="${pal_build_dir}/bin/nectar.exe"
+launcher_exe="${build_dir}/bin/nectar-launcher.exe"
 
 for required in "${usa_exe}" "${pal_exe}" "${launcher_exe}"; do
     if [[ ! -f "${required}" ]]; then
@@ -96,17 +96,17 @@ done
 printf '%s\n' '[3/4] Montando el paquete...'
 rm -rf "${output_dir}"
 mkdir -p "${output_dir}"
-cp "${usa_exe}" "${output_dir}/Pikmin 1.exe"
-cp "${pal_exe}" "${output_dir}/Pikmin 1 PAL.exe"
-cp "${launcher_exe}" "${output_dir}/Pikmin 1 Launcher.exe"
+cp "${usa_exe}" "${output_dir}/nectar.exe"
+cp "${pal_exe}" "${output_dir}/nectar-pal.exe"
+cp "${launcher_exe}" "${output_dir}/nectar-launcher.exe"
 cp "${script_dir}/README.txt" "${output_dir}/README.txt"
 # Sin símbolos de depuración: con SDL2 y el runtime dentro, cada .exe pasa de
 # ~20 MB a una fracción.
-x86_64-w64-mingw32-strip "${output_dir}/Pikmin 1.exe" "${output_dir}/Pikmin 1 PAL.exe" "${output_dir}/Pikmin 1 Launcher.exe"
+x86_64-w64-mingw32-strip "${output_dir}/nectar.exe" "${output_dir}/nectar-pal.exe" "${output_dir}/nectar-launcher.exe"
 
 # Nada de DLL propias: cada .exe debe pedir solo DLL del sistema.
-system_dlls='^(advapi32|comdlg32|gdi32|imm32|kernel32|msvcrt|ole32|oleaut32|opengl32|setupapi|shell32|user32|version|winmm|shlwapi|uuid|dwmapi|dinput8|xinput1_4|hid|cfgmgr32|ws2_32|bcrypt|dbghelp)\.dll$'
-for exe in "Pikmin 1.exe" "Pikmin 1 PAL.exe" "Pikmin 1 Launcher.exe"; do
+system_dlls='^(advapi32|comdlg32|gdi32|imm32|kernel32|msvcrt|ole32|oleaut32|opengl32|setupapi|shell32|user32|version|winmm|shlwapi|uuid|dwmapi|dinput8|xinput1_4|hid|cfgmgr32)\.dll$'
+for exe in nectar.exe nectar-pal.exe nectar-launcher.exe; do
     while read -r dll; do
         if ! printf '%s\n' "${dll,,}" | grep -Eq "${system_dlls}"; then
             printf '%s necesita %s, que no viene con Windows. Revisa PIKMIN_STATIC_RUNTIME.\n' "${exe}" "${dll}" >&2
@@ -116,19 +116,19 @@ for exe in "Pikmin 1.exe" "Pikmin 1 PAL.exe" "Pikmin 1 Launcher.exe"; do
 done
 
 printf '%s\n' '[4/4] Comprobando que el paquete lleva las dos builds...'
-for required in "Pikmin 1.exe" "Pikmin 1 PAL.exe" "Pikmin 1 Launcher.exe" README.txt; do
+for required in nectar.exe nectar-pal.exe nectar-launcher.exe README.txt; do
     if [[ ! -f "${output_dir}/${required}" ]]; then
         printf 'El paquete está incompleto: falta %s\n' "${required}" >&2
         exit 1
     fi
 done
 
-if cmp -s "${output_dir}/Pikmin 1.exe" "${output_dir}/Pikmin 1 PAL.exe"; then
-    printf 'Pikmin 1.exe y Pikmin 1 PAL.exe son el mismo archivo; la build PAL no se copió.\n' >&2
+if cmp -s "${output_dir}/nectar.exe" "${output_dir}/nectar-pal.exe"; then
+    printf 'nectar.exe y nectar-pal.exe son el mismo archivo; la build PAL no se copió.\n' >&2
     exit 1
 fi
 
-zip_path="${script_dir}/out/Pikmin-1-windows.zip"
+zip_path="${script_dir}/out/nectar-windows.zip"
 rm -f "${zip_path}"
 python3 - "${output_dir}" "${zip_path}" <<'PY'
 import os, sys, zipfile

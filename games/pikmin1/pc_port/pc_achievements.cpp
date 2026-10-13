@@ -75,7 +75,7 @@ void save()
 		printf("[Achievements] Failed to write %s\n", kFilename);
 		return;
 	}
-	fprintf(out, "# Pikmin 1 achievements (unlocked ids)\n");
+	fprintf(out, "# Open Nectar achievements (unlocked ids)\n");
 	for (int i = 0; i < PC_ACH_COUNT; i++) {
 		if (sUnlocked[i]) fprintf(out, "%d\n", i);
 	}
