@@ -3,12 +3,12 @@
 #
 # Paquete de Linux de una release, en dos formatos con el mismo contenido:
 #
-#   packaging/linux/out/nectar-linux.tar.gz          carpeta para extraer
-#   packaging/linux/out/Open_Nectar-x86_64.AppImage  un solo archivo, doble clic
+#   packaging/linux/out/Pikmin-1-linux.tar.gz        carpeta para extraer
+#   packaging/linux/out/Pikmin-1-x86_64.AppImage     un solo archivo, doble clic
 #
-# Dentro van tres ejecutables: nectar (USA), nectar-pal (Europa) y
-# nectar-launcher. El launcher instala solo el de la región del disco, con el
-# nombre nectar, así que la carpeta instalada queda en dos archivos.
+# Dentro van tres ejecutables: Pikmin 1 (USA), Pikmin 1 PAL (Europa) y
+# Pikmin 1 Launcher. El launcher instala solo el de la región del disco, con el
+# nombre Pikmin 1, así que la carpeta instalada queda en dos archivos.
 #
 # Se compila en un contenedor Ubuntu 20.04 (podman) para que los ejecutables
 # arranquen en cualquier distro con glibc 2.29 o posterior. SDL2 y el runtime
@@ -22,7 +22,7 @@ script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd -- "${script_dir}/../.." && pwd)"
 build_dir="${repo_root}/build-linux-release"
 out_dir="${script_dir}/out"
-package_dir="${out_dir}/nectar-linux"
+package_dir="${out_dir}/Pikmin-1-linux"
 appdir="${build_dir}/AppDir"
 image="open-nectar-build"
 
@@ -43,18 +43,18 @@ fi
 printf '[1/4] Imagen de compilación (Ubuntu 20.04)...\n'
 podman build -q -t "${image}" -f "${script_dir}/Containerfile" "${script_dir}" >/dev/null
 
-printf '[2/4] Compilando Open Nectar %s en el contenedor...\n' "${version}"
+printf '[2/4] Compilando Pikmin 1 %s en el contenedor...\n' "${version}"
 podman run --rm --userns=keep-id -v "${repo_root}":/src -e OPEN_NECTAR_VERSION="${version}" \
     "${image}" bash /src/packaging/linux/container-build.sh
 
-usa="${build_dir}/usa/bin/nectar"
-pal="${build_dir}/pal/bin/nectar"
-launcher="${build_dir}/usa/bin/nectar-launcher"
+usa="${build_dir}/usa/bin/Pikmin 1"
+pal="${build_dir}/pal/bin/Pikmin 1 PAL"
+launcher="${build_dir}/usa/bin/Pikmin 1 Launcher"
 for required in "${usa}" "${pal}" "${launcher}"; do
     [[ -f "${required}" ]] || { printf 'No se generó %s\n' "${required}" >&2; exit 1; }
 done
 if cmp -s "${usa}" "${pal}"; then
-    printf 'nectar y nectar-pal son el mismo archivo: la build PAL no se hizo.\n' >&2
+    printf 'Pikmin 1 y Pikmin 1 PAL son el mismo archivo: la build PAL no se hizo.\n' >&2
     exit 1
 fi
 
@@ -69,29 +69,29 @@ for exe in "${usa}" "${pal}" "${launcher}"; do
     done < <(readelf -d "${exe}" | sed -n 's/.*Shared library: \[\(.*\)\]/\1/p')
 done
 
-printf '[3/4] Montando nectar-linux.tar.gz...\n'
+printf '[3/4] Montando Pikmin-1-linux.tar.gz...\n'
 rm -rf "${package_dir}"
 mkdir -p "${package_dir}"
-install -m 755 "${usa}" "${package_dir}/nectar"
-install -m 755 "${pal}" "${package_dir}/nectar-pal"
-install -m 755 "${launcher}" "${package_dir}/nectar-launcher"
-strip "${package_dir}/nectar" "${package_dir}/nectar-pal" "${package_dir}/nectar-launcher" 2>/dev/null || true
+install -m 755 "${usa}" "${package_dir}/Pikmin 1"
+install -m 755 "${pal}" "${package_dir}/Pikmin 1 PAL"
+install -m 755 "${launcher}" "${package_dir}/Pikmin 1 Launcher"
+strip "${package_dir}/Pikmin 1" "${package_dir}/Pikmin 1 PAL" "${package_dir}/Pikmin 1 Launcher" 2>/dev/null || true
 cp "${script_dir}/README.txt" "${script_dir}/LEEME.txt" "${package_dir}/"
 cp "${repo_root}/packaging/icon/open_nectar.png" "${package_dir}/open_nectar.png"
-tar -C "${out_dir}" -czf "${out_dir}/nectar-linux.tar.gz" nectar-linux
+tar -C "${out_dir}" -czf "${out_dir}/Pikmin-1-linux.tar.gz" Pikmin-1-linux
 
-printf '[4/4] Montando Open_Nectar-x86_64.AppImage...\n'
+printf '[4/4] Montando Pikmin-1-x86_64.AppImage...\n'
 rm -rf "${appdir}"
 mkdir -p "${appdir}/usr/bin"
-cp "${package_dir}/nectar" "${package_dir}/nectar-pal" "${package_dir}/nectar-launcher" "${appdir}/usr/bin/"
-ln -s usr/bin/nectar-launcher "${appdir}/AppRun"
+cp "${package_dir}/Pikmin 1" "${package_dir}/Pikmin 1 PAL" "${package_dir}/Pikmin 1 Launcher" "${appdir}/usr/bin/"
+ln -s "usr/bin/Pikmin 1 Launcher" "${appdir}/AppRun"
 cp "${repo_root}/packaging/icon/open_nectar.png" "${appdir}/open-nectar.png"
 cat >"${appdir}/open-nectar.desktop" <<'DESKTOP'
 [Desktop Entry]
 Type=Application
-Name=Open Nectar
+Name=Pikmin 1
 Comment=Native Pikmin port: install, update and play
-Exec=nectar-launcher
+Exec="Pikmin 1 Launcher"
 Icon=open-nectar
 Terminal=false
 Categories=Game;
@@ -105,7 +105,7 @@ fi
 # Sin FUSE: appimagetool se extrae a sí mismo. El AppImage resultante usa el
 # runtime estático nuevo, que tampoco necesita libfuse2 en el sistema.
 APPIMAGE_EXTRACT_AND_RUN=1 ARCH=x86_64 VERSION="${version}" \
-    "${tool}" --no-appstream "${appdir}" "${out_dir}/Open_Nectar-x86_64.AppImage" >/dev/null
+    "${tool}" --no-appstream "${appdir}" "${out_dir}/Pikmin-1-x86_64.AppImage" >/dev/null
 
-printf '\nOpen Nectar %s listo para publicar (sube los dos al release %s de GitHub):\n' "${version}" "${version}"
-printf '  %s\n' "${out_dir}/nectar-linux.tar.gz" "${out_dir}/Open_Nectar-x86_64.AppImage"
+printf '\nPikmin 1 %s listo para publicar (sube los dos al release %s de GitHub):\n' "${version}" "${version}"
+printf '  %s\n' "${out_dir}/Pikmin-1-linux.tar.gz" "${out_dir}/Pikmin-1-x86_64.AppImage"

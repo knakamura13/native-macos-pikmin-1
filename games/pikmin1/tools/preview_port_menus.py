@@ -13,7 +13,7 @@ import subprocess
 root = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--build-dir', type=Path, default=root / 'build')
-parser.add_argument('--output-dir', type=Path, default=Path('/tmp/nectar-menu-preview'))
+parser.add_argument('--output-dir', type=Path, default=Path('/tmp/Pikmin-1-menu-preview'))
 parser.add_argument('--width', type=int, default=640)
 parser.add_argument('--height', type=int, default=480)
 args = parser.parse_args()

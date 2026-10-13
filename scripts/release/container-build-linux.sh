@@ -4,9 +4,9 @@
 # llamarlo a mano.
 #
 # Deja en build-release/linux/:
-#   p1-usa/bin/nectar            Pikmin 1 USA
-#   p1-usa/bin/nectar-launcher   launcher
-#   p1-pal/bin/nectar            Pikmin 1 PAL
+#   p1-usa/bin/Pikmin 1          Pikmin 1 USA
+#   p1-usa/bin/Pikmin 1 Launcher launcher
+#   p1-pal/bin/Pikmin 1          Pikmin 1 PAL
 #   p2/pikmin2_pc                Pikmin 2
 # con SDL2 y el runtime de C++ dentro (solo dependen de glibc, libGL y libX11).
 set -euo pipefail

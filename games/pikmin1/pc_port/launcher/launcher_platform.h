@@ -71,7 +71,7 @@ bool downloadFile(const std::string& url, const std::filesystem::path& destinati
 std::filesystem::path askForFile(const std::string& title, const std::string& filterName, const std::string& patterns);
 
 // Diálogo de selección de la carpeta de instalación. Vacía si se cancela.
-// `title` va tras "Open Nectar - " en la barra del diálogo.
+// `title` va tras "Pikmin 1 - " en la barra del diálogo.
 std::filesystem::path askForInstallDirectory(const std::string& title = "Choose the install folder");
 
 // Aviso al usuario. Si no hay diálogos disponibles, escribe por stderr.

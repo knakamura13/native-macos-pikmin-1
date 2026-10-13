@@ -1,4 +1,4 @@
-OPEN NECTAR — NATIVE PIKMIN PORT FOR WINDOWS (x86-64)
+PIKMIN 1 — NATIVE PIKMIN PORT FOR WINDOWS (x86-64)
 
 A native Windows build of Pikmin: no emulator. It runs the game's original
 JAudio sound engine, so music, sound effects and cinematic audio all play.
@@ -24,27 +24,27 @@ are no DLLs to keep next to them.
 
 WHAT IS IN THE ZIP
 ------------------
-  nectar-launcher.exe   installs, updates and starts the game
-  nectar.exe            the game, USA
-  nectar-pal.exe        the game, Europe
+  Pikmin 1 Launcher.exe installs, updates and starts the game
+  Pikmin 1.exe          the game, USA
+  Pikmin 1 PAL.exe      the game, Europe
   README.txt            this file
 
 The launcher installs only the game for your disc's region, named
-nectar.exe.
+Pikmin 1.exe.
 
 
 INSTALLING
 ----------
 1. Extract the zip anywhere. Nothing is installed system-wide.
-2. Open nectar-launcher.exe.
+2. Open Pikmin 1 Launcher.exe.
 3. Press Install under the Pikmin cover.
 4. Choose your disc image and the folder to install to.
 5. The disc is checked and the game data extracted (a few minutes).
 6. Press "Play now".
 
 The folder you chose ends up with the game data (assets), your saves and
-settings, nectar.exe and nectar-launcher.exe. To play later, open
-nectar-launcher.exe in that folder and click the cover.
+settings, Pikmin 1.exe and Pikmin 1 Launcher.exe. To play later, open
+Pikmin 1 Launcher.exe in that folder and click the cover.
 
 
 THE LAUNCHER
@@ -56,7 +56,7 @@ Settings      Every option of the in-game F1 menu, plus texture packs, HD
 Move Install  Moves the whole installation (saves and settings included)
               to another folder or drive.
 
-When a new version is published, the launcher says so ("Open Nectar X is
+When a new version is published, the launcher says so ("Pikmin 1 X is
 available") and the Update button downloads and installs it by itself.
 
 
@@ -66,7 +66,7 @@ From the installed launcher: press Update. It downloads the latest release
 from GitHub, installs it and restarts. Your saves, settings, texture packs
 and the extracted game data are not touched.
 
-From a new download: extract the new zip, open its nectar-launcher.exe,
+From a new download: extract the new zip, open its Pikmin 1 Launcher.exe,
 press Update and choose the folder where the game is installed. The disc
 image is not needed.
 
@@ -76,9 +76,13 @@ tidied up when updated: the DLLs are no longer needed.
 
 COMMAND LINE
 ------------
-Install without any window, from cmd or PowerShell:
+Install without any window, from cmd or PowerShell (in PowerShell, put & before the quoted name):
 
-  nectar-launcher.exe --rom C:\path\to\pikmin.iso --install-dir C:\Games\OpenNectar
+  "Pikmin 1 Launcher.exe" --rom C:\path\to\pikmin.iso --install-dir "C:\Games\Pikmin 1"
+
+  PowerShell:
+
+  & "Pikmin 1 Launcher.exe" --rom C:\path\to\pikmin.iso --install-dir "C:\Games\Pikmin 1"
 
 Options: --extract-only (install without starting the game), --skip-verify
 (skip the disc checks), --dolphin-tool PATH, --help.
@@ -93,9 +97,13 @@ THE GAME'S CONSOLE WINDOW IS DELIBERATE
 ---------------------------------------
 The game opens a console window with diagnostic messages. It is not a bug:
 it is kept so that a failed launch says why instead of vanishing silently.
-To keep that text for a bug report, run the game from its folder with:
+To keep that text for a bug report, run the game from the folder the launcher installed it into, with (in PowerShell, put & before the quoted name):
 
-  nectar.exe > log.txt 2>&1
+  "Pikmin 1.exe" > log.txt 2>&1
+
+  PowerShell:
+
+  & "Pikmin 1.exe" > log.txt 2>&1
 
 
 IF SOMETHING GOES WRONG

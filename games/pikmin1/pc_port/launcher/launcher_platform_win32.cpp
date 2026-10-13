@@ -128,7 +128,7 @@ fs::path askForImage()
     dialog.lpstrFilter = L"GameCube disc image\0*.iso;*.gcm;*.rvz;*.wia;*.gcz\0All files\0*.*\0\0";
     dialog.lpstrFile   = selected.data();
     dialog.nMaxFile    = static_cast<DWORD>(selected.size());
-    dialog.lpstrTitle  = L"Open Nectar - Choose your disc image";
+    dialog.lpstrTitle  = L"Pikmin 1 -Choose your disc image";
     dialog.Flags       = OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR
                        | OFN_EXPLORER;
 
@@ -143,7 +143,7 @@ fs::path askForFile(const std::string& title, const std::string& filterName, con
     for (char c : patterns) winPatterns += (c == ' ') ? ';' : c;
     const std::wstring filter = fs::path(filterName).wstring() + L'\0' + fs::path(winPatterns).wstring()
                               + L'\0' + L"All files" + L'\0' + L"*.*" + L'\0' + L'\0';
-    const std::wstring caption = L"Open Nectar - " + fs::path(title).wstring();
+    const std::wstring caption = L"Pikmin 1 -" + fs::path(title).wstring();
     std::vector<wchar_t> selected(32768);
     selected[0] = L'\0';
     OPENFILENAMEW dialog {};
@@ -177,7 +177,7 @@ fs::path askForInstallDirectory(const std::string& title)
             dialog->SetOptions(options | FOS_PICKFOLDERS | FOS_PATHMUSTEXIST
                                        | FOS_FORCEFILESYSTEM);
         }
-        const std::wstring caption = L"Open Nectar - " + fs::path(title).wstring();
+        const std::wstring caption = L"Pikmin 1 -" + fs::path(title).wstring();
         dialog->SetTitle(caption.c_str());
 
         if (SUCCEEDED(dialog->Show(nullptr))) {

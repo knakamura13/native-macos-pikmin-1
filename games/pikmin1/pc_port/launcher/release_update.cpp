@@ -26,12 +26,12 @@ constexpr const char* kLatestReleaseApi
 // se publican los dos formatos; el .tar.gz se extrae sin más, el AppImage
 // queda como alternativa.
 #ifdef _WIN32
-const char* const kAssetNames[] = { "nectar-windows.zip" };
+const char* const kAssetNames[] = { "Pikmin-1-windows.zip" };
 #elif defined(__ANDROID__)
 // Android: el .apk del release, se llame como se llame (open_nectar_0.9.apk).
 const char* const kAssetNames[] = { ".apk" };
 #else
-const char* const kAssetNames[] = { "nectar-linux.tar.gz", "Open_Nectar-x86_64.AppImage" };
+const char* const kAssetNames[] = { "Pikmin-1-linux.tar.gz", "Pikmin-1-x86_64.AppImage" };
 #endif
 
 #ifndef _WIN32

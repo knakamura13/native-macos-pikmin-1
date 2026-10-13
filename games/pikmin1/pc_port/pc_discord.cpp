@@ -227,7 +227,7 @@ struct State {
 
 std::mutex sMutex;
 State sState;
-std::string sGameName = "Open Nectar";
+std::string sGameName = "Pikmin 1";
 std::atomic<bool> sRunning { false };
 
 std::string buildActivity(const State& st, bool inGame, long long startEpoch)
@@ -242,13 +242,13 @@ std::string buildActivity(const State& st, bool inGame, long long startEpoch)
 		details   = sGameName;
 		state     = "In the menus";
 		largeKey  = "app";
-		largeText = "Open Nectar";
+		largeText = "Pikmin 1";
 	}
 	std::string a = "{\"details\":\"" + jsonEscape(details) + "\"";
 	if (!state.empty()) a += ",\"state\":\"" + jsonEscape(state) + "\"";
 	a += ",\"timestamps\":{\"start\":" + std::to_string(startEpoch) + "}";
 	a += ",\"assets\":{\"large_image\":\"" + jsonEscape(largeKey) + "\",\"large_text\":\"" + jsonEscape(largeText) + "\"";
-	if (inGame) a += ",\"small_image\":\"app\",\"small_text\":\"Open Nectar\"";
+	if (inGame) a += ",\"small_image\":\"app\",\"small_text\":\"Pikmin 1\"";
 	a += "}}";
 	return a;
 }

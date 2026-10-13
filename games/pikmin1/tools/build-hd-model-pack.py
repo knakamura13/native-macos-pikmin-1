@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build Open Nectar's external HD model packs (NHM1) from Pikmin 3 rips.
+"""Build Pikmin 1's external HD model packs (NHM1) from Pikmin 3 rips.
 
     build-hd-model-pack.py olimar  <Olimar.zip> <out.nhm>
     build-hd-model-pack.py louie   <Louie.zip>  <out.nhm>     (Pikmin 2 rip)

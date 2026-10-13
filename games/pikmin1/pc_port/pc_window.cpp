@@ -187,6 +187,9 @@ static int sLogicalRetraceInterval = 1;
 // like the pad's edge-shaped buttons.
 static Uint32 sMousePressedMask = 0; // buttons pressed since the last take
 static int sMouseWheelSteps = 0;
+// Steps that nothing consumed (title, pause, menus) must not pile up, or a long
+// scroll there jumps colour or zoom when play resumes.
+constexpr int kMaxPendingWheelSteps = 8;
 static float sTouchZoomDelta = 0.0f;
 static float sTouchCameraDrag = 0.0f;
 static float sCameraPitchDrag = 0.0f;
@@ -245,11 +248,24 @@ static int sMouseCenterY = 0;
 static bool sMouseWarped = false;
 
 // Control mode
-static int sControlMode = PC_CONTROL_CLASSIC;
+static int sControlMode = PC_CONTROL_MOUSE_CURSOR;
 // Speedrun: siempre el esquema clásico (cursor con el stick, como en GameCube).
 static int effectiveControlMode() { return pc_speedrun_active() ? PC_CONTROL_CLASSIC : sControlMode; }
 static float sMouseSensitivity = 2.0f;
 static bool sSettingsMenuOpen = false;
+// Pointer capture needs a running level (GameCoreSection sets this), so the
+// title and file screens keep a free pointer even in Mouse Cursor mode.
+static bool sGameplayActive = false;
+static bool captureAllowed() {
+    return sGameplayActive && !sSettingsMenuOpen && effectiveControlMode() == PC_CONTROL_MOUSE_CURSOR;
+}
+// Every relative-mode change goes through here so the gate always applies.
+// The system cursor hides only while the game owns the pointer.
+static void applyMouseCapture() {
+    const bool capture = sMouseRelativeMode && captureAllowed();
+    SDL_SetRelativeMouseMode(capture ? SDL_TRUE : SDL_FALSE);
+    SDL_ShowCursor(capture ? SDL_DISABLE : SDL_ENABLE);
+}
 
 // Virtual cursor (mouse-controlled cursor, separate from movement stick)
 static s8 sVirtualCursorX = 0;
@@ -1104,10 +1120,10 @@ void pc_window_poll_events(PADStatus* pad) {
                 // Issue #52: Escape (or the OS) can drop the mouse out of
                 // relative mode, which froze the cursor until the option was
                 // toggled. A click in the window takes it back.
-                if (!sSettingsMenuOpen && effectiveControlMode() == PC_CONTROL_MOUSE_CURSOR && !sMouseRelativeMode
+                if (captureAllowed() && !sMouseRelativeMode
                     && event.button.which != SDL_TOUCH_MOUSEID) {
                     sMouseRelativeMode = true;
-                    SDL_SetRelativeMouseMode(SDL_TRUE);
+                    applyMouseCapture();
                     int dummyX, dummyY;
                     SDL_GetRelativeMouseState(&dummyX, &dummyY);
                     sMouseCursorDeltaX = 0.0f;
@@ -1122,7 +1138,7 @@ void pc_window_poll_events(PADStatus* pad) {
                 if (event.wheel.direction == SDL_MOUSEWHEEL_FLIPPED) {
                     steps = -steps;
                 }
-                sMouseWheelSteps += steps;
+                sMouseWheelSteps = std::clamp(sMouseWheelSteps + steps, -kMaxPendingWheelSteps, kMaxPendingWheelSteps);
                 break;
             }
             case SDL_WINDOWEVENT:
@@ -1140,7 +1156,7 @@ void pc_window_poll_events(PADStatus* pad) {
                 // Some platforms release the relative-mode grab while the
                 // window is unfocused; put it back on return (issue #52).
                 if (event.window.event == SDL_WINDOWEVENT_FOCUS_GAINED && !sSettingsMenuOpen) {
-                    SDL_SetRelativeMouseMode(sMouseRelativeMode ? SDL_TRUE : SDL_FALSE);
+                    applyMouseCapture();
                 }
                 break;
             case SDL_TEXTINPUT:
@@ -1165,9 +1181,9 @@ void pc_window_poll_events(PADStatus* pad) {
                 }
                 // Toggle relative mouse mode with Tab key
                 if (event.key.keysym.scancode == SDL_SCANCODE_TAB
-                    && effectiveControlMode() == PC_CONTROL_MOUSE_CURSOR && !sSettingsMenuOpen) {
+                    && !event.key.repeat && captureAllowed()) {
                     sMouseRelativeMode = !sMouseRelativeMode;
-                    SDL_SetRelativeMouseMode(sMouseRelativeMode ? SDL_TRUE : SDL_FALSE);
+                    applyMouseCapture();
                     // Clear mouse deltas on relative mode toggle
                     sMouseCursorDeltaX = 0.0f;
                     sMouseCursorDeltaY = 0.0f;
@@ -1183,9 +1199,9 @@ void pc_window_poll_events(PADStatus* pad) {
                     printf("[PC Port] Mouse relative mode: %s\n", sMouseRelativeMode ? "ON" : "OFF");
                 }
                 // Escape key exits relative mode (for menus)
-                if (event.key.keysym.scancode == SDL_SCANCODE_ESCAPE && sMouseRelativeMode) {
+                if (event.key.keysym.scancode == SDL_SCANCODE_ESCAPE && captureAllowed()) {
                     sMouseRelativeMode = false;
-                    SDL_SetRelativeMouseMode(SDL_FALSE);
+                    applyMouseCapture();
                     // Clear mouse deltas on escape
                     sMouseCursorDeltaX = 0.0f;
                     sMouseCursorDeltaY = 0.0f;
@@ -1194,7 +1210,7 @@ void pc_window_poll_events(PADStatus* pad) {
                     printf("[PC Port] Mouse relative mode: OFF (Escape)\n");
                 }
                 // Cycle control modes with F2 key
-                if (event.key.keysym.scancode == SDL_SCANCODE_F2 && !sSettingsMenuOpen) {
+                if (event.key.keysym.scancode == SDL_SCANCODE_F2 && !event.key.repeat && !sSettingsMenuOpen) {
                     pc_window_set_control_mode((sControlMode + 1) % 2);
                     const char* modeNames[] = {"Classic", "Mouse Cursor"};
                     printf("[PC Port] Control mode: %s\n", modeNames[sControlMode]);
@@ -1359,7 +1375,7 @@ void pc_window_poll_events(PADStatus* pad) {
         // Issue #52: if SDL let go of relative mode behind our back (long
         // idle in a menu, screen lock), the cursor stopped until the option
         // was toggled. Re-assert it while the window has focus.
-        if (isRelative && !SDL_GetRelativeMouseMode() && (SDL_GetWindowFlags(sWindow) & SDL_WINDOW_INPUT_FOCUS)) {
+        if (isRelative && captureAllowed() && !SDL_GetRelativeMouseMode() && (SDL_GetWindowFlags(sWindow) & SDL_WINDOW_INPUT_FOCUS)) {
             SDL_SetRelativeMouseMode(SDL_TRUE);
             int dummyX, dummyY;
             SDL_GetRelativeMouseState(&dummyX, &dummyY);
@@ -1744,12 +1760,9 @@ void pc_window_set_control_mode(int mode) {
         sMouseCursorDeltaX = 0.0f;
         sMouseCursorDeltaY = 0.0f;
 
-        if (mode == PC_CONTROL_CLASSIC || sSettingsMenuOpen) {
-            sMouseRelativeMode = false;
-            SDL_SetRelativeMouseMode(SDL_FALSE);
-        } else {
-            sMouseRelativeMode = true;
-            SDL_SetRelativeMouseMode(SDL_TRUE);
+        sMouseRelativeMode = mode != PC_CONTROL_CLASSIC && !sSettingsMenuOpen;
+        applyMouseCapture();
+        if (sMouseRelativeMode) {
             // Consume any pending relative mouse motion on mode entry
             int dummyX, dummyY;
             SDL_GetRelativeMouseState(&dummyX, &dummyY);
@@ -1769,6 +1782,21 @@ float pc_window_get_mouse_sensitivity(void) {
     return sMouseSensitivity;
 }
 
+// GameCoreSection calls this on stage init and exit. Off-level, the pointer stays free.
+void pc_window_set_gameplay_active(bool active) {
+    sGameplayActive = active;
+    sMouseWheelSteps = 0;
+    sMouseCursorDeltaX = 0.0f;
+    sMouseCursorDeltaY = 0.0f;
+    if (captureAllowed()) sMouseRelativeMode = true;
+    applyMouseCapture();
+    if (sMouseRelativeMode && captureAllowed()) {
+        // Consume any pending relative mouse motion on capture start
+        int dummyX, dummyY;
+        SDL_GetRelativeMouseState(&dummyX, &dummyY);
+    }
+}
+
 void pc_window_set_settings_menu_open(bool open) {
     sSettingsMenuOpen = open;
     
@@ -1783,9 +1811,8 @@ void pc_window_set_settings_menu_open(bool open) {
         return;
     }
 
-    SDL_ShowCursor(SDL_DISABLE);
     sMouseRelativeMode = effectiveControlMode() == PC_CONTROL_MOUSE_CURSOR;
-    SDL_SetRelativeMouseMode(sMouseRelativeMode ? SDL_TRUE : SDL_FALSE);
+    applyMouseCapture();
     
     // Consume any pending relative mouse motion after menu closes
     if (sMouseRelativeMode) {

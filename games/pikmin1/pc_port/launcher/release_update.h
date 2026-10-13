@@ -11,7 +11,7 @@ namespace launcher {
 const char* currentVersion();
 
 // Último release publicado en GitHub, con el paquete de este sistema
-// (nectar-linux.tar.gz o nectar-windows.zip).
+// (Pikmin-1-linux.tar.gz o Pikmin-1-windows.zip).
 struct ReleaseInfo {
     std::string version;  // etiqueta, p. ej. "0.9"
     std::string title;    // nombre del release

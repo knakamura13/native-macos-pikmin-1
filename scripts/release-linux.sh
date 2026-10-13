@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # release-linux.sh [--clean]
 #
-# Archivos de Linux de una release de Open Nectar Fusion (ver
+# Archivos de Linux de una release de Pikmin 1 Fusion (ver
 # scripts/release/make_release.py): paquete completo, uno por parte,
 # manifest.json y el AppImage con todo.
 #
@@ -35,9 +35,9 @@ printf '[2/4] Compilando el launcher, Pikmin 1 y Pikmin 2 en el contenedor...\n'
 podman run --rm --userns=keep-id -v "${root}":/src -e OPEN_NECTAR_VERSION="${launcher_version}" \
     "${image}" bash /src/scripts/release/container-build-linux.sh
 
-launcher="${build_dir}/p1-usa/bin/nectar-launcher"
-usa="${build_dir}/p1-usa/bin/nectar"
-pal="${build_dir}/p1-pal/bin/nectar"
+launcher="${build_dir}/p1-usa/bin/Pikmin 1 Launcher"
+usa="${build_dir}/p1-usa/bin/Pikmin 1"
+pal="${build_dir}/p1-pal/bin/Pikmin 1 PAL"
 p2="${build_dir}/p2/pikmin2_pc"
 
 # Solo glibc, libGL y libX11: cualquier otra dependencia es un error de empaquetado.
@@ -55,31 +55,31 @@ done
 printf '[3/4] Montando los archivos de la release...\n'
 stripped="${build_dir}/stripped"
 mkdir -p "${stripped}"
-cp "${launcher}" "${stripped}/nectar-launcher"
-cp "${usa}" "${stripped}/nectar"
-cp "${pal}" "${stripped}/nectar-pal"
+cp "${launcher}" "${stripped}/Pikmin 1 Launcher"
+cp "${usa}" "${stripped}/Pikmin 1"
+cp "${pal}" "${stripped}/Pikmin 1 PAL"
 cp "${p2}" "${stripped}/pikmin2_pc"
 strip "${stripped}"/* 2>/dev/null || true
 python3 "${root}/scripts/release/make_release.py" --os linux --out "${out_dir}" \
-    --launcher "${stripped}/nectar-launcher" --p1-usa "${stripped}/nectar" \
-    --p1-pal "${stripped}/nectar-pal" --p2 "${stripped}/pikmin2_pc" \
+    --launcher "${stripped}/Pikmin 1 Launcher" --p1-usa "${stripped}/Pikmin 1" \
+    --p1-pal "${stripped}/Pikmin 1 PAL" --p2 "${stripped}/pikmin2_pc" \
     --extra "${root}/games/pikmin1/packaging/linux/README.txt" \
     --extra "${root}/games/pikmin1/packaging/linux/LEEME.txt" \
     --extra "${root}/games/pikmin1/packaging/icon/open_nectar.png"
 
-printf '[4/4] Montando Open_Nectar-x86_64.AppImage (todo junto)...\n'
+printf '[4/4] Montando Pikmin-1-x86_64.AppImage (todo junto)...\n'
 appdir="${build_dir}/AppDir"
 rm -rf "${appdir}"
 mkdir -p "${appdir}/usr/bin"
-cp "${out_dir}/staging/nectar-linux"/* "${appdir}/usr/bin/"
-ln -s usr/bin/nectar-launcher "${appdir}/AppRun"
+cp "${out_dir}/staging/Pikmin-1-linux"/* "${appdir}/usr/bin/"
+ln -s "usr/bin/Pikmin 1 Launcher" "${appdir}/AppRun"
 cp "${root}/games/pikmin1/packaging/icon/open_nectar.png" "${appdir}/open-nectar.png"
 cat >"${appdir}/open-nectar.desktop" <<'DESKTOP'
 [Desktop Entry]
 Type=Application
-Name=Open Nectar
+Name=Pikmin 1
 Comment=Native Pikmin and Pikmin 2 ports: install, update and play
-Exec=nectar-launcher
+Exec="Pikmin 1 Launcher"
 Icon=open-nectar
 Terminal=false
 Categories=Game;
@@ -92,5 +92,5 @@ if [[ ! -x "${tool}" ]]; then
 fi
 release="$(python3 -c "import json;print(json.load(open('${root}/versions.json'))['release'])")"
 APPIMAGE_EXTRACT_AND_RUN=1 ARCH=x86_64 VERSION="${release}" \
-    "${tool}" --no-appstream "${appdir}" "${out_dir}/Open_Nectar-x86_64.AppImage" >/dev/null
-printf '  %s\n' "${out_dir}/Open_Nectar-x86_64.AppImage"
+    "${tool}" --no-appstream "${appdir}" "${out_dir}/Pikmin-1-x86_64.AppImage" >/dev/null
+printf '  %s\n' "${out_dir}/Pikmin-1-x86_64.AppImage"

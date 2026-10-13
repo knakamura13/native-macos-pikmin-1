@@ -4,7 +4,7 @@
 Uso:
     texpack-check.py <texture_names.log> <carpeta del pack>
 
-El log lo escribe Nectar al ejecutarse con --dump-texture-names (una línea por
+El log lo escribe Pikmin 1 al ejecutarse con --dump-texture-names (una línea por
 textura: nombre tab ancho tab alto tab formato tab bytes). La carpeta del pack
 es la raíz que contiene los tex1_*.dds / tex1_*.png (se recorre con subcarpetas,
 como hace Dolphin con Load/Textures/<GameID>/).

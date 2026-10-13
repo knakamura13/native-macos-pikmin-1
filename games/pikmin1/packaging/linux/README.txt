@@ -1,4 +1,4 @@
-OPEN NECTAR — NATIVE PIKMIN PORT FOR LINUX (x86-64)
+PIKMIN 1 — NATIVE PIKMIN PORT FOR LINUX (x86-64)
 
 A native Linux build of Pikmin: no emulator. It runs the game's original
 JAudio sound engine, so music, sound effects and cinematic audio all play.
@@ -35,17 +35,17 @@ Everything else (SDL2, the C++ runtime) is built into the executables.
 TWO DOWNLOADS, SAME CONTENT
 -------------------------------------------------------------------
 
-Open_Nectar-x86_64.AppImage
+Pikmin-1-x86_64.AppImage
     One file. Make it executable (right click > Properties > "Allow
-    executing as program", or: chmod +x Open_Nectar-x86_64.AppImage) and
+    executing as program", or: chmod +x Pikmin-1-x86_64.AppImage) and
     open it.
 
-nectar-linux.tar.gz
-    A folder. Extract it (tar -xzf nectar-linux.tar.gz) and open
-    nectar-launcher inside. It holds nectar (USA), nectar-pal (Europe) and
-    nectar-launcher.
+Pikmin-1-linux.tar.gz
+    A folder. Extract it (tar -xzf Pikmin-1-linux.tar.gz) and open
+    Pikmin 1 Launcher inside. It holds Pikmin 1 (USA), Pikmin 1 PAL (Europe) and
+    Pikmin 1 Launcher.
 
-Either one opens the Open Nectar launcher, which installs and updates the
+Either one opens the Pikmin 1 launcher, which installs and updates the
 game. You only need it once: after installing, the launcher that stays in
 the game's folder takes over.
 
@@ -54,17 +54,17 @@ the game's folder takes over.
 INSTALLING
 -------------------------------------------------------------------
 
-1. Open the AppImage or nectar-launcher.
+1. Open the AppImage or Pikmin 1 Launcher.
 2. Press Install under the Pikmin cover.
 3. Choose your disc image and the folder to install to.
 4. The disc is checked and the game data extracted (a few minutes).
 5. Press "Play now".
 
 The folder you chose ends up with the game data (assets), your saves and
-settings, and two programs: nectar (the game, for your disc's region) and
-nectar-launcher.
+settings, and two programs: Pikmin 1 (the game, for your disc's region) and
+Pikmin 1 Launcher.
 
-To play later, open nectar-launcher in that folder and click the cover.
+To play later, open Pikmin 1 Launcher in that folder and click the cover.
 
 
 -------------------------------------------------------------------
@@ -78,7 +78,7 @@ Settings     Every option of the in-game F1 menu, plus texture packs, HD
 Move Install Moves the whole installation (saves and settings included)
              to another folder or disk.
 
-When a new version is published, the launcher says so ("Open Nectar X is
+When a new version is published, the launcher says so ("Pikmin 1 X is
 available") and the Update button downloads and installs it by itself.
 
 
@@ -90,7 +90,7 @@ From the installed launcher: press Update. It downloads the latest release
 from GitHub, installs it and restarts. Your saves, settings, texture packs
 and the extracted game data are not touched.
 
-From a new download: open the new AppImage or nectar-launcher, press
+From a new download: open the new AppImage or Pikmin 1 Launcher, press
 Update and choose the folder where the game is installed. The disc image is
 not needed.
 
@@ -104,7 +104,7 @@ COMMAND LINE
 
 Install without any window (works over SSH, and without zenity/kdialog):
 
-  ./nectar-launcher --rom /path/to/pikmin.iso --install-dir ~/Games/OpenNectar
+  "./Pikmin 1 Launcher" --rom /path/to/pikmin.iso --install-dir ~/Games/"Pikmin 1"
 
 Options:
   --rom FILE         Disc image: Pikmin USA Rev. 1 or Europe, ISO or GCM.
@@ -126,8 +126,8 @@ IF SOMETHING GOES WRONG
 
 The AppImage does not open
     Your system has no FUSE. Run it once from a terminal as:
-      ./Open_Nectar-x86_64.AppImage --appimage-extract-and-run
-    or use nectar-linux.tar.gz instead.
+      ./Pikmin-1-x86_64.AppImage --appimage-extract-and-run
+    or use Pikmin-1-linux.tar.gz instead.
 
 "libGL.so.1: cannot open shared object file"
     No OpenGL driver is installed:

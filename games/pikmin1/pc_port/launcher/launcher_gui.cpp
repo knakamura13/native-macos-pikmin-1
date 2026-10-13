@@ -1,6 +1,6 @@
 // Ventana principal del launcher: Dear ImGui sobre SDL2 + OpenGL 3.
 //
-// Estética: fondo verde Pikmin, el logo de Open Nectar arriba y bordes y letras
+// Estética: fondo verde Pikmin, el logo de Pikmin 1 arriba y bordes y letras
 // en el naranja de su rótulo. Solo el logo y la fuente van dentro del
 // ejecutable. Todo lo que es de Nintendo llega de fuera, como en Dolphin:
 //  - las portadas se descargan de GameTDB y se guardan en caché;
@@ -1116,7 +1116,7 @@ struct Hub {
             } else {
                 // Sin lista: se enseña el valor y, si hace falta, dónde cambiarlo.
                 std::string shown = row.value;
-                if (row.enabled && (row.picker || row.action)) shown += "   (in game: F1)";
+                if (row.enabled && (row.picker || row.action)) shown += "   (in game: F1 or backtick)";
                 ImGui::TextColored(ImVec4(0.62f, 0.58f, 0.44f, 1.0f), "%s", shown.c_str());
             }
             // Ayuda de la fila bajo el ratón.
@@ -1162,15 +1162,15 @@ struct Hub {
     }
 
     // Comprueba la carpeta elegida y decide dónde irá la instalación: si ya
-    // tiene cosas, dentro de una subcarpeta "Open Nectar".
+    // tiene cosas, dentro de una subcarpeta "Pikmin 1".
     bool resolveMoveTarget(const fs::path& chosen, fs::path& target, std::string& problem)
     {
         std::error_code ec;
         const fs::path current = fs::weakly_canonical(state.games[0].directory, ec);
         target = fs::weakly_canonical(chosen, ec);
-        if (fs::exists(target) && !fs::is_empty(target, ec)) target /= "Open Nectar";
+        if (fs::exists(target) && !fs::is_empty(target, ec)) target /= "Pikmin 1";
         if (fs::exists(target) && !fs::is_empty(target, ec)) {
-            problem = "That folder already has an \"Open Nectar\" folder in it. Choose another one.";
+            problem = "That folder already has a \"Pikmin 1\" folder in it. Choose another one.";
             return false;
         }
         const std::string from = current.string(), to = target.string();
@@ -1261,7 +1261,7 @@ struct Hub {
         {
             std::lock_guard<std::mutex> lock(releaseCheck->mutex);
             if (!releaseCheck->newer) return;
-            text = "Open Nectar " + releaseCheck->latest.version + " is available";
+            text = "Pikmin 1 " + releaseCheck->latest.version + " is available";
         }
         const ImVec2 extent = fonts.body->CalcTextSizeA(19.0f, FLT_MAX, 0.0f, text.c_str());
         const ImVec2 b(size.x - 18.0f, 58.0f), a(b.x - extent.x - 40.0f, 18.0f);
@@ -1818,7 +1818,7 @@ bool HubWindow::open(const HubState& state, std::string& error)
     SDL_Window* window = SDL_CreateWindow("Open Nectar", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 0, 0,
                                           SDL_WINDOW_OPENGL | SDL_WINDOW_FULLSCREEN_DESKTOP | SDL_WINDOW_ALLOW_HIGHDPI);
 #else
-    SDL_Window* window = SDL_CreateWindow("Open Nectar", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 1180, 780,
+    SDL_Window* window = SDL_CreateWindow("Pikmin 1", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 1180, 780,
                                           SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI);
 #endif
     if (!window) {
@@ -2033,8 +2033,8 @@ void HubWindow::showComplete(const std::string& installDirectory, bool willLaunc
     m.state.games[0].installed = true;
     m.state.games[0].directory = installDirectory;
     const std::string text = "Pikmin is installed in:\n" + installDirectory
-                           + "\n\nIn game, F1 opens graphics, controls and gameplay settings."
-                             "\nOpen nectar-launcher from that folder to play again.";
+                           + "\n\nIn game, F1 or backtick opens graphics, controls and gameplay settings."
+                             "\nOpen Pikmin 1 Launcher from that folder to play again.";
     m.message("Installation complete", text, willLaunch ? "Play now" : "OK", "", false);
     m.quitRequested = false;
 }

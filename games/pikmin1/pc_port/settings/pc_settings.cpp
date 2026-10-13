@@ -95,7 +95,7 @@ struct PcConfig {
     int fpsMode = 0;
 
     // Control mode (0=Classic, 1=Mouse Cursor)
-    int controlMode = PC_CONTROL_CLASSIC;
+    int controlMode = PC_CONTROL_MOUSE_CURSOR;
 
     // Keyboard bindings (scancodes for each action)
     int keyboardBindings[PC_KEY_ACT_COUNT];
@@ -254,7 +254,7 @@ struct PcConfig {
         renderScale = 2.0f / 3.0f;
         aspectRatioMode = 0;
         fpsMode = 0;
-        controlMode = PC_CONTROL_CLASSIC;
+        controlMode = PC_CONTROL_MOUSE_CURSOR;
         mouseSensitivity = 1.0f;
         gyroEnabled = 0;
         gyroSensitivity = 1.0f;
@@ -1080,7 +1080,7 @@ void saveConfig() {
         printf("[PC Settings] Failed to write %s\n", path.c_str());
         return;
     }
-    out << "# Open Nectar settings (F1 in-game to change)\n";
+    out << "# Pikmin 1 settings (F1 or backtick in-game to change)\n";
     out << "windowWidth = " << sConfig.windowWidth << "\n";
     out << "windowHeight = " << sConfig.windowHeight << "\n";
     out << "displayMode = " << sConfig.displayMode << "\n";
@@ -1924,9 +1924,10 @@ void pollMenuInput() {
         sResolutionIdx = idx >= 0 ? idx : defaultResolutionIndex();
     };
 
-    // F1 always toggles. Select/View can open the menu while it is closed;
-    // closing is handled after video confirmation has had first refusal.
-    if (keyWentDown(SDL_SCANCODE_F1) || toggleRequested) {
+    // F1 or the backtick key (top left on a Mac keyboard, no Fn needed) always
+    // toggles. Select/View can open the menu while it is closed; closing is
+    // handled after video confirmation has had first refusal.
+    if (keyWentDown(SDL_SCANCODE_F1) || keyWentDown(SDL_SCANCODE_GRAVE) || toggleRequested) {
         if (sMenuOpen) closeMenu();
         else {
             sMenuPlayer = 0;

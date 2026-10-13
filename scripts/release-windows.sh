@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # release-windows.sh [--clean]
 #
-# Archivos de Windows de una release de Open Nectar Fusion (ver
+# Archivos de Windows de una release de Pikmin 1 Fusion (ver
 # scripts/release/make_release.py), compilados con MinGW desde Linux.
 # SDL2 y el runtime de C/C++ van dentro de cada .exe: ninguna DLL propia.
 #
@@ -45,17 +45,17 @@ cmake -S "${p2}" -B "${build_dir}/p2" "${common[@]}" -DBUILD_TESTING=OFF \
     -DCMAKE_TOOLCHAIN_FILE="${p2}/cmake/toolchain-mingw64.cmake"
 cmake --build "${build_dir}/p2" --target pikmin2_pc -j"${jobs}"
 
-launcher="${build_dir}/p1-usa/bin/nectar-launcher.exe"
-usa="${build_dir}/p1-usa/bin/nectar.exe"
-pal="${build_dir}/p1-pal/bin/nectar.exe"
+launcher="${build_dir}/p1-usa/bin/Pikmin 1 Launcher.exe"
+usa="${build_dir}/p1-usa/bin/Pikmin 1.exe"
+pal="${build_dir}/p1-pal/bin/Pikmin 1 PAL.exe"
 p2exe="${build_dir}/p2/pikmin2_pc.exe"
 
 printf '[4/4] Montando los archivos de la release...\n'
 stripped="${build_dir}/stripped"
 mkdir -p "${stripped}"
-cp "${launcher}" "${stripped}/nectar-launcher.exe"
-cp "${usa}" "${stripped}/nectar.exe"
-cp "${pal}" "${stripped}/nectar-pal.exe"
+cp "${launcher}" "${stripped}/Pikmin 1 Launcher.exe"
+cp "${usa}" "${stripped}/Pikmin 1.exe"
+cp "${pal}" "${stripped}/Pikmin 1 PAL.exe"
 cp "${p2exe}" "${stripped}/pikmin2_pc.exe"
 x86_64-w64-mingw32-strip "${stripped}"/*.exe
 
@@ -71,6 +71,6 @@ for exe in "${stripped}"/*.exe; do
 done
 
 python3 "${root}/scripts/release/make_release.py" --os windows --out "${out_dir}" \
-    --launcher "${stripped}/nectar-launcher.exe" --p1-usa "${stripped}/nectar.exe" \
-    --p1-pal "${stripped}/nectar-pal.exe" --p2 "${stripped}/pikmin2_pc.exe" \
+    --launcher "${stripped}/Pikmin 1 Launcher.exe" --p1-usa "${stripped}/Pikmin 1.exe" \
+    --p1-pal "${stripped}/Pikmin 1 PAL.exe" --p2 "${stripped}/pikmin2_pc.exe" \
     --extra "${p1}/packaging/windows/README.txt"

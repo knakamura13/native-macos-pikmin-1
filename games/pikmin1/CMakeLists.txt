@@ -497,17 +497,24 @@ file(GLOB PLUGPIKI_YAMASHITA_SOURCES "src/plugPikiYamashita/*.cpp")
 # En Android el mismo árbol se añade dos veces (USA y PAL) desde
 # android/app/jni/CMakeLists.txt; los nombres de target llevan entonces un
 # sufijo para no chocar, y la biblioteca resultante se llama según la
-# versión (libnectar.so / libnectar-pal.so), igual que los ejecutables del
-# paquete de escritorio.
+# versión (libnectar.so / libnectar-pal.so). Estos nombres no son los del
+# ejecutable de escritorio, que se llama "Pikmin 1".
 set(PIKMIN_TARGET_SUFFIX "" CACHE STRING "Suffix for the game targets when the tree is added more than once")
 set(NECTAR_LEGACY pikmin_legacy${PIKMIN_TARGET_SUFFIX})
 set(NECTAR_GAME pikmin_pc${PIKMIN_TARGET_SUFFIX})
-# Solo en Android: en escritorio el ejecutable PAL sigue saliendo como
-# `nectar` en su propio directorio de build y lo renombra el empaquetado.
-if(ANDROID AND PIKMIN_GAME_VERSION STREQUAL "VERSION_GPIP01_00")
-    set(NECTAR_OUTPUT_NAME "nectar-pal")
+# Nombre del ejecutable. En escritorio es "Pikmin 1" (y "Pikmin 1 PAL" para la
+# versión europea). En Android se mantienen libnectar.so y libnectar-pal.so,
+# que carga la actividad Java de SDL por nombre.
+if(ANDROID)
+    if(PIKMIN_GAME_VERSION STREQUAL "VERSION_GPIP01_00")
+        set(NECTAR_OUTPUT_NAME "nectar-pal")
+    else()
+        set(NECTAR_OUTPUT_NAME "nectar")
+    endif()
+elseif(PIKMIN_GAME_VERSION STREQUAL "VERSION_GPIP01_00")
+    set(NECTAR_OUTPUT_NAME "Pikmin 1 PAL")
 else()
-    set(NECTAR_OUTPUT_NAME "nectar")
+    set(NECTAR_OUTPUT_NAME "Pikmin 1")
 endif()
 
 add_library(${NECTAR_LEGACY} STATIC
@@ -710,7 +717,7 @@ if(ANDROID AND NOT TARGET nectar_launcher)
         "${LAUNCHER_EMBED_DIR}"
         ${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb
         ${SDL2_INCLUDE_DIRS})
-    set(OPEN_NECTAR_VERSION "0.9.2" CACHE STRING "Open Nectar version of this build (GitHub release tag)")
+    set(OPEN_NECTAR_VERSION "0.9.2" CACHE STRING "Pikmin 1 version of this build (GitHub release tag)")
     target_compile_definitions(nectar_launcher PRIVATE OPEN_NECTAR_VERSION="${OPEN_NECTAR_VERSION}")
     target_compile_options(nectar_launcher PRIVATE ${NATIVE_COMPILE_OPTIONS})
     target_link_libraries(nectar_launcher PRIVATE launcher_imgui_android pikmin_disc_image ${SDL2_LIBRARIES} GLESv3 EGL log android)
@@ -780,7 +787,7 @@ if(PIKMIN_BUILD_LAUNCHER)
     target_link_libraries(pikmin_launcher PRIVATE launcher_imgui)
     # Versión que el launcher compara con el último release de GitHub para
     # avisar y actualizarse. Súbela en cada release (la etiqueta de GitHub).
-    set(OPEN_NECTAR_VERSION "0.9.2" CACHE STRING "Open Nectar version of this build (GitHub release tag)")
+    set(OPEN_NECTAR_VERSION "0.9.2" CACHE STRING "Pikmin 1 version of this build (GitHub release tag)")
     target_compile_definitions(pikmin_launcher PRIVATE OPEN_NECTAR_VERSION="${OPEN_NECTAR_VERSION}")
     if (WIN32)
         target_sources(pikmin_launcher PRIVATE packaging/windows/nectar.rc)
@@ -793,7 +800,7 @@ if(PIKMIN_BUILD_LAUNCHER)
     endif()
     target_compile_options(pikmin_launcher PRIVATE ${NATIVE_COMPILE_OPTIONS})
     set_target_properties(pikmin_launcher PROPERTIES
-        OUTPUT_NAME "nectar-launcher"
+        OUTPUT_NAME "Pikmin 1 Launcher"
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 
     # Both executables must remain side by side: the launcher resolves the game

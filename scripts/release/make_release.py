@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""Monta los archivos de una release de Open Nectar Fusion para un sistema.
+"""Monta los archivos de una release de Pikmin 1 Fusion para un sistema.
 
 Una release (una sola etiqueta en GitHub) lleva, por sistema:
 
-  nectar-<os>.<ext>            paquete completo: launcher + Pikmin 1 + Pikmin 2.
+  Pikmin-1-<os>.<ext>          paquete completo: launcher + Pikmin 1 + Pikmin 2.
                                Lo que se descarga a mano, y lo que buscan los
                                launchers 0.9.2 y anteriores para actualizarse.
-  nectar-launcher-<os>.<ext>   solo el launcher
-  nectar-pikmin1-<os>.<ext>    Pikmin 1 (USA y PAL)
+  Pikmin-1-launcher-<os>.<ext> solo el launcher
+  Pikmin-1-pikmin1-<os>.<ext>  Pikmin 1 (USA y PAL)
   nectar-pikmin2-<os>.<ext>    Pikmin 2
   manifest.json                versión de cada parte y el archivo de cada una
 
@@ -30,13 +30,18 @@ import zipfile
 PARTS = ("launcher", "pikmin1", "pikmin2")
 
 
+def part_prefix(part):
+    """Pikmin 2 conserva su prefijo; el launcher y Pikmin 1 llevan Pikmin-1."""
+    return "nectar" if part == "pikmin2" else "Pikmin-1"
+
+
 def asset_name(part, os_name):
     ext = "zip" if os_name == "windows" else "tar.gz"
-    return f"nectar-{part}-{os_name}.{ext}"
+    return f"{part_prefix(part)}-{part}-{os_name}.{ext}"
 
 
 def bundle_name(os_name):
-    return "nectar-windows.zip" if os_name == "windows" else "nectar-linux.tar.gz"
+    return "Pikmin-1-windows.zip" if os_name == "windows" else "Pikmin-1-linux.tar.gz"
 
 
 def manifest(versions):
@@ -104,13 +109,13 @@ def main():
     os.makedirs(out, exist_ok=True)
     work = os.path.join(out, "staging")
 
-    launcher_files = [(args.launcher, "nectar-launcher" + exe, True)]
+    launcher_files = [(args.launcher, "Pikmin 1 Launcher" + exe, True)]
     launcher_files += [(f, os.path.basename(f), False) for f in args.extra]
-    p1_files = [(args.p1_usa, "nectar" + exe, True), (args.p1_pal, "nectar-pal" + exe, True)]
+    p1_files = [(args.p1_usa, "Pikmin 1" + exe, True), (args.p1_pal, "Pikmin 1 PAL" + exe, True)]
     p2_files = [(args.p2, "pikmin2_pc" + exe, True)]
 
     if open(args.p1_usa, "rb").read() == open(args.p1_pal, "rb").read():
-        sys.exit("nectar y nectar-pal son el mismo archivo: la build PAL no se hizo.")
+        sys.exit("Pikmin 1 y Pikmin 1 PAL son el mismo archivo: la build PAL no se hizo.")
 
     man = manifest(versions)
     man_path = os.path.join(out, "manifest.json")
@@ -120,7 +125,7 @@ def main():
 
     produced = [man_path]
     for part, files in (("launcher", launcher_files), ("pikmin1", p1_files), ("pikmin2", p2_files)):
-        folder = os.path.join(work, f"nectar-{part}-{args.os}")
+        folder = os.path.join(work, f"{part_prefix(part)}-{part}-{args.os}")
         stage(folder, files)
         dst = os.path.join(out, asset_name(part, args.os))
         archive(folder, dst, windows)
@@ -128,7 +133,7 @@ def main():
 
     # Paquete completo: todo junto en una carpeta, con el manifiesto dentro
     # (el launcher sabe así qué versión de cada parte trae).
-    full = os.path.join(work, f"nectar-{args.os}")
+    full = os.path.join(work, f"Pikmin-1-{args.os}")
     stage(full, launcher_files + p1_files + p2_files)
     shutil.copy2(man_path, os.path.join(full, "manifest.json"))
     dst = os.path.join(out, bundle_name(args.os))

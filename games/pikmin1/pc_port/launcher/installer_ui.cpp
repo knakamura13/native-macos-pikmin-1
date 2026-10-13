@@ -139,7 +139,7 @@ struct InstallerWindow::Impl {
         fillRect(renderer, { 0, 0, 760, 82 }, { 24, 42, 75, 255 });
         fillRect(renderer, { 0, 78, 760, 4 }, { 116, 185, 92, 255 });
 
-        const std::string title = "Open Nectar Installer";
+        const std::string title = "Pikmin 1 Installer";
         drawText(renderer, (760 - textWidth(title, 3)) / 2, 29, title, 3, { 235, 244, 238, 255 });
 
         drawText(renderer, 45, 101, "Disc image", 2, { 174, 203, 221, 255 });
@@ -164,7 +164,7 @@ struct InstallerWindow::Impl {
         drawButton(installButton, installing ? "Installing" : "Install",
                    contains(installButton, mouseX, mouseY), rom.empty() || installDirectory.empty() || installing);
 
-        drawText(renderer, 45, 279, "In game: F1 opens graphics, controls and gameplay settings", 1,
+        drawText(renderer, 45, 279, "In game: F1 or backtick opens graphics, controls and gameplay settings", 1,
                  { 180, 197, 214, 255 });
 
         if (installing) {
@@ -242,7 +242,7 @@ bool InstallerWindow::open(std::string& error)
         error = SDL_GetError();
         return false;
     }
-    mImpl->window = SDL_CreateWindow("Open Nectar Installer", SDL_WINDOWPOS_CENTERED,
+    mImpl->window = SDL_CreateWindow("Pikmin 1 Installer", SDL_WINDOWPOS_CENTERED,
                                      SDL_WINDOWPOS_CENTERED, 760, 430, SDL_WINDOW_SHOWN);
     if (!mImpl->window) {
         error = SDL_GetError();
@@ -337,7 +337,7 @@ bool InstallerWindow::offerRetry(const std::string& message)
         { SDL_MESSAGEBOX_BUTTON_ESCAPEKEY_DEFAULT, 0, "Close" },
         { SDL_MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT, 1, "Back to setup" }
     };
-    const SDL_MessageBoxData data { SDL_MESSAGEBOX_ERROR, mImpl->window, "Open Nectar Installer",
+    const SDL_MessageBoxData data { SDL_MESSAGEBOX_ERROR, mImpl->window, "Pikmin 1 Installer",
                                    message.c_str(), 2, buttons, nullptr };
     int selected = 0;
     return SDL_ShowMessageBox(&data, &selected) == 0 && selected == 1;
@@ -348,7 +348,7 @@ void InstallerWindow::showError(const std::string& message)
     mImpl->installing = false;
     mImpl->status = "Installation did not finish";
     mImpl->render();
-    SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Open Nectar Installer", message.c_str(), mImpl->window);
+    SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Pikmin 1 Installer", message.c_str(), mImpl->window);
 }
 
 void InstallerWindow::showComplete(const std::string& installDirectory, bool willLaunch)
@@ -356,9 +356,9 @@ void InstallerWindow::showComplete(const std::string& installDirectory, bool wil
     mImpl->progress = 100;
     mImpl->status = "Installation complete";
     mImpl->render();
-    std::string message = "Open Nectar is installed in:\n" + installDirectory;
-    message += "\n\nF1 opens graphics, controls and gameplay settings."
-               "\nRun nectar-launcher from this folder to play again.";
+    std::string message = "Pikmin 1 is installed in:\n" + installDirectory;
+    message += "\n\nF1 or backtick opens graphics, controls and gameplay settings."
+               "\nRun Pikmin 1 Launcher from this folder to play again.";
     if (willLaunch) message += "\n\nThe game will start now.";
     SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_INFORMATION, "Installation complete", message.c_str(), mImpl->window);
 }

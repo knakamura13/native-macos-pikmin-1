@@ -409,7 +409,7 @@ void layout_save()
 		printf("[Touch] cannot write %s\n", kLayoutFilename);
 		return;
 	}
-	fprintf(out, "# Open Nectar touch layout: name = x y fromRight scale (x,y in fractions of screen height)\n");
+	fprintf(out, "# Pikmin 1 touch layout: name = x y fromRight scale (x,y in fractions of screen height)\n");
 	fprintf(out, "grid = %d\n", sEditGrid ? 1 : 0);
 	for (int i = 0; i < BTN_COUNT; ++i) {
 		if (!kButtons[i].art || !button_editable(i)) continue;

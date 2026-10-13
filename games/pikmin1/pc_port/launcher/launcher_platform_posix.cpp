@@ -155,7 +155,7 @@ fs::path askForInstallDirectory(const std::string& title)
         if (const char* home = std::getenv("HOME")) initial = fs::path(home).string() + "/";
         const std::string selected = runDialog("zenity", {
             "--file-selection", "--directory",
-            "--title=Open Nectar - " + title,
+            "--title=Pikmin 1 -" + title,
             "--filename=" + initial
         });
         if (!selected.empty()) return selected;
@@ -163,7 +163,7 @@ fs::path askForInstallDirectory(const std::string& title)
         const std::string initial = std::getenv("HOME") ? std::getenv("HOME") : ".";
         const std::string selected = runDialog("kdialog", {
             "--getexistingdirectory", initial,
-            "--title", "Open Nectar - " + title
+            "--title", "Pikmin 1 -" + title
         });
         if (!selected.empty()) return selected;
     }
@@ -174,7 +174,7 @@ fs::path askForImage()
 {
     if (commandExists("zenity")) {
         const std::string selected = runDialog("zenity", {
-            "--file-selection", "--title=Open Nectar - Choose your disc image",
+            "--file-selection", "--title=Pikmin 1 -Choose your disc image",
             "--file-filter=GameCube disc image | *.iso *.ISO *.gcm *.GCM *.rvz *.RVZ *.wia *.WIA *.gcz *.GCZ",
             "--file-filter=All files | *"
         });
@@ -192,7 +192,7 @@ fs::path askForImage()
 fs::path askForFile(const std::string& title, const std::string& filterName, const std::string& patterns)
 {
     if (commandExists("zenity")) {
-        return runDialog("zenity", { "--file-selection", "--title=Open Nectar - " + title,
+        return runDialog("zenity", { "--file-selection", "--title=Pikmin 1 -" + title,
                                      "--file-filter=" + filterName + " | " + patterns, "--file-filter=All files | *" });
     }
     if (commandExists("kdialog")) {
