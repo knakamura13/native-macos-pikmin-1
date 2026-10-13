@@ -95,7 +95,7 @@ struct PcConfig {
     int fpsMode = 0;
 
     // Control mode (0=Classic, 1=Mouse Cursor)
-    int controlMode = PC_CONTROL_MOUSE_CURSOR;
+    int controlMode = PC_CONTROL_CLASSIC;
 
     // Keyboard bindings (scancodes for each action)
     int keyboardBindings[PC_KEY_ACT_COUNT];
@@ -254,7 +254,7 @@ struct PcConfig {
         renderScale = 2.0f / 3.0f;
         aspectRatioMode = 0;
         fpsMode = 0;
-        controlMode = PC_CONTROL_MOUSE_CURSOR;
+        controlMode = PC_CONTROL_CLASSIC;
         mouseSensitivity = 1.0f;
         gyroEnabled = 0;
         gyroSensitivity = 1.0f;

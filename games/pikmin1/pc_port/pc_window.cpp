@@ -248,7 +248,7 @@ static int sMouseCenterY = 0;
 static bool sMouseWarped = false;
 
 // Control mode
-static int sControlMode = PC_CONTROL_MOUSE_CURSOR;
+static int sControlMode = PC_CONTROL_CLASSIC;
 // Speedrun: siempre el esquema clásico (cursor con el stick, como en GameCube).
 static int effectiveControlMode() { return pc_speedrun_active() ? PC_CONTROL_CLASSIC : sControlMode; }
 static float sMouseSensitivity = 2.0f;
