@@ -194,6 +194,11 @@ move and resize them); Bluetooth and USB controllers work too. The
 To update, install the new APK over the old one — assets and saves stay.
 Uninstalling deletes them.
 
+### macOS (no release package yet)
+
+There is no macOS release package yet. Build the app from source instead; see
+[macOS (app bundle)](#macos-app-bundle) under Build from source.
+
 ### Both platforms
 
 The launcher asks for your disc image, extracts the assets it needs and starts the
@@ -269,6 +274,41 @@ cmake --build build --target pikmin_pc pikmin_launcher -j"$(sysctl -n hw.ncpu)"
 ```
 
 The compiler comes from the Xcode command-line tools (`xcode-select --install`). The port requests an OpenGL 4.1 core context, the newest core profile macOS provides.
+
+### macOS (app bundle)
+
+This builds `Open Nectar.app` and installs it in `/Applications`. It has been tested on
+Apple silicon with macOS 27. The app plays the USA Rev. 1 disc only. The European
+build is not in the macOS package yet.
+
+Install the requirements:
+
+```sh
+xcode-select --install   # compiler and tools, if not already installed
+brew install cmake sdl2-compat
+brew install ccache      # optional: faster rebuilds
+```
+
+Then, from the repository root:
+
+```sh
+games/pikmin1/packaging/macos/build-app.sh --install
+```
+
+To install somewhere else, pass a folder, for example `~/Applications`. The folder
+is created if it does not exist.
+
+Open the app from Launchpad or Applications. The launcher asks for your disc
+image on first run, as described under [Both platforms](#both-platforms).
+
+**Keeping it in sync.** Run the same command again after each build. It replaces the
+installed app. It refuses to run while the game is open, so quit the game first.
+
+Saves and settings live in `~/.local/share/pikmin-native`, not in the app, so
+reinstalling keeps them. To remove everything, delete `Open Nectar.app` and that folder.
+
+The app uses Homebrew's `sdl2-compat` at `/opt/homebrew`, so run it on the Mac where
+you built it.
 
 ### Choosing which release to build
 
