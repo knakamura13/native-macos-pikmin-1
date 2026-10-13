@@ -8,6 +8,9 @@
 # --install replaces DIR/Pikmin 1.app (default DIR: /Applications) with the new
 # build. It refuses to run while the app is open, so an open game is not cut off.
 #
+# --install also merges controls.conf (the Mac key layout) into the device settings
+# file, ~/.local/share/pikmin-native/pikmin_settings.conf.
+#
 # The bundle's main executable is the launcher, which
 # asks for the user's own disc image on first run, extracts it under
 # ~/.local/share/pikmin-native, and installs the game beside itself.
@@ -111,6 +114,40 @@ PLIST
 
 echo "Built: ${app}"
 
+# Merges controls.conf into the device settings file. The game reads
+# pikmin_settings.conf from the data folder, the same folder the launcher uses.
+# Only the keys in controls.conf change. Other settings are kept.
+merge_controls() {
+    local controls="${script_dir}/controls.conf"
+    local data_root="${XDG_DATA_HOME:-${HOME}/.local/share}/pikmin-native"
+    local settings="${data_root}/pikmin_settings.conf"
+    mkdir -p "${data_root}"
+    if [[ ! -f "${settings}" ]]; then
+        cp "${controls}" "${settings}"
+    else
+        local merged
+        merged="$(mktemp)"
+        awk -F' *= *' '
+            NR == FNR {
+                if ($0 ~ /^[A-Za-z0-9_]+ *=/) { want[$1] = $0; order[++n] = $1 }
+                next
+            }
+            {
+                if ($1 in want) {
+                    if (!($1 in done)) print want[$1]
+                    done[$1] = 1
+                } else print
+            }
+            END {
+                for (i = 1; i <= n; i++) if (!(order[i] in done)) print want[order[i]]
+            }
+        ' "${controls}" "${settings}" > "${merged}"
+        cat "${merged}" > "${settings}"
+        rm -f "${merged}"
+    fi
+    echo "Controls: ${settings}"
+}
+
 if [[ "${install}" -eq 1 ]]; then
     installed="${install_dir}/${app_name}"
     # Refuse rather than kill: quitting a running game would lose unsaved progress.
@@ -122,4 +159,5 @@ if [[ "${install}" -eq 1 ]]; then
     rm -rf "${installed}"
     cp -R "${app}" "${install_dir}/"
     echo "Installed: ${installed}"
+    merge_controls
 fi
