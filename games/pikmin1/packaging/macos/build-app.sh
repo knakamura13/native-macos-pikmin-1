@@ -157,6 +157,7 @@ if [[ "${install}" -eq 1 ]]; then
     fi
     # cp -R onto an existing bundle nests the copy inside it, so remove the old one first.
     rm -rf "${installed}"
+    mkdir -p "${install_dir}"
     cp -R "${app}" "${install_dir}/"
     echo "Installed: ${installed}"
     merge_controls
