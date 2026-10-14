@@ -139,6 +139,7 @@ endif()
 option(PIKMIN_BUILD_LAUNCHER "Build the standalone first-run launcher" ${PIKMIN_DESKTOP_DEFAULT})
 option(PIKMIN_BUILD_TESTS "Build the host-run test executables" ${PIKMIN_DESKTOP_DEFAULT})
 option(NECTAR_BUILD_MAPMAKER "Build the VS map editor (tools/mapmaker)" ${PIKMIN_DESKTOP_DEFAULT})
+option(NECTAR_ONLINE "Build the experimental direct online co-op layer" OFF)
 
 if(PIKMIN_BUILD_TESTS)
     enable_testing()
@@ -290,8 +291,10 @@ set(PC_PORT_SOURCES
     pc_port/mods/pc_vs_map.cpp
     # Mapas VS: formato y compilador compartidos con el editor de mapas.
     ${NECTAR_LIBS_DIR}/nectar_mapcore/src/map_json.cpp
+    ${NECTAR_LIBS_DIR}/nectar_mapcore/src/i18n.cpp
     ${NECTAR_LIBS_DIR}/nectar_mapcore/src/compile.cpp
     ${NECTAR_LIBS_DIR}/nectar_assets/src/mod.cpp
+    ${NECTAR_LIBS_DIR}/nectar_assets/src/gen.cpp
     ${NECTAR_LIBS_DIR}/nectar_assets/src/image.cpp
     ${PC_PORT_DIR}/launcher/bti_decode.cpp
     pc_port/pc_vs.cpp
@@ -308,6 +311,13 @@ set(PC_PORT_SOURCES
     pc_port/timing/pc_visual_runtime.cpp
     pc_port/timing/pc_render_packet.cpp
     pc_port/timing/pc_tick_profiler.cpp
+    # Netplay determinism seams. Inert unless a netplay switch is set (see
+    # pc_netplay_det.h, pc_input_log.h and pc_state_hash.h).
+    pc_port/netplay/pc_netplay_det.cpp
+    pc_port/netplay/pc_netplay_policy.cpp
+    pc_port/netplay/pc_sim_rng.cpp
+    pc_port/netplay/pc_input_log.cpp
+    pc_port/netplay/pc_state_hash.cpp
     pc_port/audio/pc_audio.cpp
     pc_port/audio/pc_envelope.cpp
     pc_port/audio/pc_jam.cpp
@@ -353,6 +363,7 @@ include_directories(
 # Cabeceras internas de nectar_assets solo para sus fuentes.
 set_source_files_properties(
     ${NECTAR_LIBS_DIR}/nectar_assets/src/mod.cpp
+    ${NECTAR_LIBS_DIR}/nectar_assets/src/gen.cpp
     ${NECTAR_LIBS_DIR}/nectar_assets/src/image.cpp
     PROPERTIES INCLUDE_DIRECTORIES
     "${NECTAR_LIBS_DIR}/nectar_assets/src;${NECTAR_LIBS_DIR}/nectar_assets/third_party;${PC_PORT_DIR}/launcher")
@@ -540,6 +551,15 @@ else()
 endif()
 target_compile_options(${NECTAR_GAME} PRIVATE ${NATIVE_COMPILE_OPTIONS})
 target_link_libraries(${NECTAR_GAME} PRIVATE ${NECTAR_LEGACY})
+if(NECTAR_ONLINE)
+    if(NOT TARGET nectar_net)
+        add_subdirectory("${NECTAR_LIBS_DIR}/nectar_net" "${CMAKE_BINARY_DIR}/nectar_net")
+    endif()
+    target_link_libraries(${NECTAR_GAME} PRIVATE nectar_net)
+    target_compile_definitions(${NECTAR_GAME} PRIVATE PIKI_NECTAR_ONLINE=1)
+else()
+    target_compile_definitions(${NECTAR_GAME} PRIVATE PIKI_NECTAR_ONLINE=0)
+endif()
 
 # GX display lists, game logic and the software audio mixer execute on the host
 # CPU. Keep optimization level, machine-specific ISA and link-time optimization
@@ -571,6 +591,50 @@ if(PIKMIN_NATIVE_OPTIMIZE AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     foreach(target IN LISTS PIKMIN_OPTIMIZED_TARGETS)
         target_compile_options(${target} PRIVATE -march=native)
     endforeach()
+endif()
+
+# Deterministic netplay build. OFF by default, so the default build's flags
+# and libm are unchanged. -ffp-contract=off forbids fused multiply-add (the
+# same binary gives the same FP results on any CPU) and
+# -ftrivial-auto-var-init=zero removes uninitialised-stack garbage from the
+# decompiled code. -march=native would make two machines run different code,
+# so the two options exclude each other.
+option(PIKMIN_NETPLAY_BUILD "Deterministic netplay build" OFF)
+if(PIKMIN_NETPLAY_BUILD AND PIKMIN_NATIVE_OPTIMIZE)
+    message(FATAL_ERROR "PIKMIN_NETPLAY_BUILD cannot be combined with PIKMIN_NATIVE_OPTIMIZE")
+endif()
+if(PIKMIN_NETPLAY_BUILD)
+    foreach(target IN LISTS PIKMIN_OPTIMIZED_TARGETS)
+        if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+            target_compile_options(${target} PRIVATE -ffp-contract=off -ftrivial-auto-var-init=zero)
+        endif()
+        target_compile_definitions(${target} PRIVATE PIKI_NETPLAY_BUILD=1)
+    endforeach()
+endif()
+
+# Software libm for the netplay build. pc_netplay_libm.c defines sinf, cosf,
+# atan2f, powf, sqrtf... (and the double versions) as strong symbols, so the
+# static link never pulls the mingw-w64 members that use x87 transcendentals,
+# whose results differ between CPU vendors. It is an OBJECT library so the game
+# and its test share one object and one set of flags. -fno-builtin-<name> keeps
+# GCC from lowering those names back to x87 code (memcpy and sqrt stay
+# builtins). -fno-lto keeps it out of LTO, which can discard builtin-named
+# definitions that other partitions still reference. tools/netplay/fp_gate.py
+# checks the result.
+set(PC_NETPLAY_LIBM_NO_BUILTIN_FLAGS
+    -fno-builtin-sinf -fno-builtin-cosf -fno-builtin-sincosf -fno-builtin-tanf
+    -fno-builtin-atanf -fno-builtin-atan2f -fno-builtin-asinf -fno-builtin-acosf
+    -fno-builtin-expf -fno-builtin-logf -fno-builtin-log10f -fno-builtin-log2f
+    -fno-builtin-exp2f -fno-builtin-powf -fno-builtin-fmodf -fno-builtin-hypotf
+    -fno-builtin-sin -fno-builtin-cos -fno-builtin-sincos -fno-builtin-tan
+    -fno-builtin-asin -fno-builtin-acos -fno-builtin-atan -fno-builtin-atan2
+    -fno-builtin-exp -fno-builtin-log -fno-builtin-log10 -fno-builtin-log2
+    -fno-builtin-exp2 -fno-builtin-pow -fno-builtin-fmod -fno-builtin-hypot)
+if(PIKMIN_NETPLAY_BUILD AND NOT ANDROID)
+    add_library(pc_netplay_libm_obj OBJECT pc_port/netplay/pc_netplay_libm.c)
+    target_compile_options(pc_netplay_libm_obj PRIVATE
+        ${PC_NETPLAY_LIBM_NO_BUILTIN_FLAGS} -fno-lto -ffp-contract=off -ftrivial-auto-var-init=zero)
+    target_sources(${NECTAR_GAME} PRIVATE $<TARGET_OBJECTS:pc_netplay_libm_obj>)
 endif()
 
 option(PIKMIN_ENABLE_IPO "Enable portable interprocedural/link-time optimization" ON)
@@ -632,7 +696,7 @@ set_target_properties(${NECTAR_GAME} PROPERTIES
     OUTPUT_NAME "${NECTAR_OUTPUT_NAME}"
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
 )
-if (NOT ANDROID)
+if (NOT ANDROID AND NOT WIN32)
     add_custom_command(TARGET ${NECTAR_GAME} POST_BUILD
         COMMAND /bin/chmod 775 "$<TARGET_FILE:${NECTAR_GAME}>"
         COMMENT "Ensuring the native Pikmin executable is runnable")
@@ -989,10 +1053,59 @@ if(PIKMIN_BUILD_TESTS)
 
     add_executable(pc_tick_profiler_test
         pc_port/timing/pc_tick_profiler_test.cpp
-        pc_port/timing/pc_tick_profiler.cpp)
+        pc_port/timing/pc_tick_profiler.cpp
+        pc_port/netplay/pc_netplay_det.cpp
+        pc_port/netplay/pc_sim_rng.cpp)
     target_include_directories(pc_tick_profiler_test PRIVATE pc_port/timing)
     target_compile_options(pc_tick_profiler_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
     add_test(NAME pc_tick_profiler_test COMMAND pc_tick_profiler_test)
+
+    # Netplay determinism seams (engine-free). They also check that every
+    # helper is a pass-through with the deterministic switch off.
+    add_executable(pc_sim_rng_test
+        pc_port/netplay/pc_sim_rng_test.cpp
+        pc_port/netplay/pc_sim_rng.cpp
+        pc_port/netplay/pc_netplay_det.cpp)
+    target_compile_options(pc_sim_rng_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME pc_sim_rng_test COMMAND pc_sim_rng_test)
+
+    add_executable(pc_netplay_policy_test
+        pc_port/netplay/pc_netplay_policy_test.cpp
+        pc_port/netplay/pc_netplay_policy.cpp
+        pc_port/netplay/pc_netplay_det.cpp
+        pc_port/netplay/pc_sim_rng.cpp)
+    target_compile_options(pc_netplay_policy_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME pc_netplay_policy_test COMMAND pc_netplay_policy_test)
+
+    # PKNI input-file format, yaw quantisation and the per-tick yaw slots.
+    add_executable(pc_input_log_test
+        pc_port/netplay/pc_input_log_test.cpp
+        pc_port/netplay/pc_input_log.cpp)
+    target_compile_options(pc_input_log_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME pc_input_log_test COMMAND pc_input_log_test)
+    # A stray switch in the caller's environment would load a real file.
+    set_tests_properties(pc_input_log_test PROPERTIES ENVIRONMENT "PIKMIN_INPUT_RECORD=;PIKMIN_INPUT_REPLAY=")
+endif()
+
+# Netplay-only checks. The libm test compares against the platform libm
+# (msvcrt.dll on Windows), which varies with the OS version, so it is not
+# part of the default test run. fp_gate disassembles the linked game and
+# fails on any x87 transcendental or fsqrt, any FMA, and any math import
+# from the C runtime.
+if(PIKMIN_NETPLAY_BUILD AND PIKMIN_BUILD_TESTS AND NOT ANDROID)
+    add_executable(pc_netplay_libm_test
+        pc_port/netplay/pc_netplay_libm_test.cpp
+        $<TARGET_OBJECTS:pc_netplay_libm_obj>)
+    target_compile_options(pc_netplay_libm_test PRIVATE ${NATIVE_COMPILE_OPTIONS}
+        ${PC_NETPLAY_LIBM_NO_BUILTIN_FLAGS} -ffp-contract=off)
+    add_test(NAME pc_netplay_libm_test COMMAND pc_netplay_libm_test)
+
+    find_package(Python3 COMPONENTS Interpreter)
+    if(Python3_Interpreter_FOUND AND CMAKE_OBJDUMP)
+        add_test(NAME netplay_fp_gate
+            COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/tools/netplay/fp_gate.py"
+                    --objdump "${CMAKE_OBJDUMP}" "$<TARGET_FILE:${NECTAR_GAME}>")
+    endif()
 endif()
 
 message(STATUS "")
