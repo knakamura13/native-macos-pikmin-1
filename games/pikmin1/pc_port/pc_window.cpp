@@ -1223,6 +1223,28 @@ void pc_window_poll_events(PADStatus* pad) {
         }
     }
 
+    // Sample the pointer once per logical tick, after the click edge. Menus
+    // read this to move the highlight. It is not a button press.
+    if (pad) {
+        if (sSettingsMenuOpen || !sWindow) {
+            pc_menu_click_clear_pointer();
+        } else {
+            int ww = 0;
+            int wh = 0;
+            SDL_GetWindowSize(sWindow, &ww, &wh);
+            int mx = 0;
+            int my = 0;
+            SDL_GetMouseState(&mx, &my);
+            const bool inside = (SDL_GetWindowFlags(sWindow) & SDL_WINDOW_MOUSE_FOCUS) != 0 && ww > 0 && wh > 0 && mx >= 0
+                                && my >= 0 && mx < ww && my < wh;
+            if (inside) {
+                pc_menu_click_set_pointer(float(mx) / float(ww), float(my) / float(wh));
+            } else {
+                pc_menu_click_clear_pointer();
+            }
+        }
+    }
+
     if (!pad) return;
 
     // Reset pad status for Channel 0

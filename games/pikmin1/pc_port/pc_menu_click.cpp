@@ -5,6 +5,9 @@ static float sNx     = 0.0f;
 static float sNy     = 0.0f;
 static int sTick     = 0;
 static int sPostedTick = -100;
+static bool sHasPointer = false;
+static float sPointerNx = 0.0f;
+static float sPointerNy = 0.0f;
 
 bool pc_menu_click_is_button_rect(PcMenuClickRect pane, PcMenuClickRect root)
 {
@@ -37,13 +40,36 @@ int pc_menu_click_hit(float x, float y, const PcMenuClickRect* rects, const int*
 	return -1;
 }
 
+static bool pc_menu_click_is_menu_screen(int screen)
+{
+	return screen == PC_MENU_CLICK_TITLE || screen == PC_MENU_CLICK_MAIN;
+}
+
+PcMenuClickResult pc_menu_click_hover(int screen, float x, float y, const PcMenuClickRect* rects, const int* active,
+                                      int count, float margin)
+{
+	PcMenuClickResult result;
+	result.action = PC_MENU_CLICK_IGNORE;
+	result.index  = -1;
+	if (!pc_menu_click_is_menu_screen(screen)) {
+		return result;
+	}
+	const int hit = pc_menu_click_hit(x, y, rects, active, count, margin);
+	if (hit < 0) {
+		return result;
+	}
+	result.index  = hit;
+	result.action = PC_MENU_CLICK_HIGHLIGHT;
+	return result;
+}
+
 PcMenuClickResult pc_menu_click_resolve(int screen, float x, float y, const PcMenuClickRect* rects, const int* active,
                                         int count, float margin)
 {
 	PcMenuClickResult result;
 	result.action = PC_MENU_CLICK_IGNORE;
 	result.index  = -1;
-	if (screen != PC_MENU_CLICK_TITLE && screen != PC_MENU_CLICK_MAIN) {
+	if (!pc_menu_click_is_menu_screen(screen)) {
 		return result;
 	}
 	const int hit = pc_menu_click_hit(x, y, rects, active, count, margin);
@@ -62,6 +88,35 @@ void pc_menu_click_reset(void)
 	sNy         = 0.0f;
 	sTick       = 0;
 	sPostedTick = -100;
+	sHasPointer = false;
+	sPointerNx  = 0.0f;
+	sPointerNy  = 0.0f;
+}
+
+void pc_menu_click_set_pointer(float nx, float ny)
+{
+	sHasPointer = true;
+	sPointerNx  = nx;
+	sPointerNy  = ny;
+}
+
+void pc_menu_click_clear_pointer(void)
+{
+	sHasPointer = false;
+}
+
+bool pc_menu_click_read_pointer_graph(int virtW, int virtH, float* x, float* y)
+{
+	if (!sHasPointer || virtW <= 0 || virtH <= 0) {
+		return false;
+	}
+	if (x) {
+		*x = sPointerNx * float(virtW);
+	}
+	if (y) {
+		*y = sPointerNy * float(virtH);
+	}
+	return true;
 }
 
 void pc_menu_click_begin_tick(void)

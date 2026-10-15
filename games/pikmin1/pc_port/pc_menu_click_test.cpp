@@ -143,6 +143,73 @@ int main()
 	check(!pc_menu_click_take_graph(0, 480, &graphX, &graphY), "a bad menu size does not consume a click");
 	check(pc_menu_click_take(&nx, &ny) && nx == 0.5f, "the click is still pending after a bad menu size");
 
+	// Moving the pointer across buttons changes the highlight and does not activate.
+	// A later click on the highlighted button activates it. Empty space does not.
+	const int titleActiveFollow[] = { 1, 1 };
+	PcMenuClickResult titleHover0
+	    = pc_menu_click_hover(PC_MENU_CLICK_TITLE, 300.0f, 380.0f, kTitleButtons, titleActiveFollow, 2, kPcMenuClickMargin);
+	check(titleHover0.action == PC_MENU_CLICK_HIGHLIGHT && titleHover0.index == 0,
+	      "title pointer over button 0 highlights it");
+	check(titleHover0.action != PC_MENU_CLICK_PRESS_START, "title hover does not press Start");
+	PcMenuClickResult titleHover1
+	    = pc_menu_click_hover(PC_MENU_CLICK_TITLE, 300.0f, 420.0f, kTitleButtons, titleActiveFollow, 2, kPcMenuClickMargin);
+	check(titleHover1.action == PC_MENU_CLICK_HIGHLIGHT && titleHover1.index == 1,
+	      "title pointer moving to button 1 changes the highlight");
+	check(titleHover1.action != PC_MENU_CLICK_PRESS_START, "the moved title highlight still does not press Start");
+	PcMenuClickResult titleHoverGap
+	    = pc_menu_click_hover(PC_MENU_CLICK_TITLE, 10.0f, 10.0f, kTitleButtons, titleActiveFollow, 2, kPcMenuClickMargin);
+	check(titleHoverGap.action == PC_MENU_CLICK_IGNORE && titleHoverGap.index == -1,
+	      "title pointer on empty space highlights no button");
+	PcMenuClickResult titleClick1
+	    = pc_menu_click_resolve(PC_MENU_CLICK_TITLE, 300.0f, 420.0f, kTitleButtons, titleActiveFollow, 2, kPcMenuClickMargin);
+	check(titleClick1.action == PC_MENU_CLICK_PRESS_START && titleClick1.index == 1,
+	      "a click activates the highlighted title button");
+	PcMenuClickResult titleClickGap
+	    = pc_menu_click_resolve(PC_MENU_CLICK_TITLE, 10.0f, 10.0f, kTitleButtons, titleActiveFollow, 2, kPcMenuClickMargin);
+	check(titleClickGap.action == PC_MENU_CLICK_IGNORE, "a title click on empty space does not activate");
+
+	int mainHighlight = -1;
+	PcMenuClickResult mainHover0
+	    = pc_menu_click_hover(PC_MENU_CLICK_MAIN, 300.0f, 150.0f, kMainButtons, kMainActive, 3, kPcMenuClickMargin);
+	check(mainHover0.action == PC_MENU_CLICK_HIGHLIGHT && mainHover0.index == 0, "main menu pointer highlights row 0");
+	check(mainHover0.action != PC_MENU_CLICK_ACTIVATE, "main menu hover does not activate row 0");
+	mainHighlight = mainHover0.index;
+	PcMenuClickResult mainHover2
+	    = pc_menu_click_hover(PC_MENU_CLICK_MAIN, 300.0f, 230.0f, kMainButtons, kMainActive, 3, kPcMenuClickMargin);
+	check(mainHover2.action == PC_MENU_CLICK_HIGHLIGHT && mainHover2.index == 2, "main menu pointer highlights row 2");
+	check(mainHover2.index != mainHighlight, "moving across main-menu rows changes the highlight");
+	check(mainHover2.action != PC_MENU_CLICK_ACTIVATE, "the moved main-menu highlight does not activate");
+	mainHighlight = mainHover2.index;
+	PcMenuClickResult mainHoverLocked
+	    = pc_menu_click_hover(PC_MENU_CLICK_MAIN, 300.0f, 190.0f, kMainButtons, kMainActive, 3, kPcMenuClickMargin);
+	check(mainHoverLocked.action == PC_MENU_CLICK_IGNORE, "an inactive main-menu row is not highlighted");
+	PcMenuClickResult mainHoverGap
+	    = pc_menu_click_hover(PC_MENU_CLICK_MAIN, 10.0f, 10.0f, kMainButtons, kMainActive, 3, kPcMenuClickMargin);
+	check(mainHoverGap.action == PC_MENU_CLICK_IGNORE && mainHoverGap.index == -1,
+	      "main menu pointer on empty space highlights no row");
+	PcMenuClickResult mainClick2
+	    = pc_menu_click_resolve(PC_MENU_CLICK_MAIN, 300.0f, 230.0f, kMainButtons, kMainActive, 3, kPcMenuClickMargin);
+	check(mainClick2.action == PC_MENU_CLICK_ACTIVATE && mainClick2.index == mainHighlight,
+	      "a click activates the highlighted main-menu row");
+	PcMenuClickResult mainClickGap
+	    = pc_menu_click_resolve(PC_MENU_CLICK_MAIN, 10.0f, 10.0f, kMainButtons, kMainActive, 3, kPcMenuClickMargin);
+	check(mainClickGap.action == PC_MENU_CLICK_IGNORE, "a main-menu click on empty space does not activate");
+	PcMenuClickResult otherHover
+	    = pc_menu_click_hover(PC_MENU_CLICK_NONE, 300.0f, 150.0f, kMainButtons, kMainActive, 3, kPcMenuClickMargin);
+	check(otherHover.action == PC_MENU_CLICK_IGNORE, "another screen does not highlight from the pointer");
+
+	// A pointer move is not a click, and a later move replaces the position.
+	pc_menu_click_reset();
+	pc_menu_click_set_pointer(0.2f, 0.25f);
+	check(!pc_menu_click_take(&nx, &ny), "moving the pointer does not post a click");
+	pc_menu_click_set_pointer(0.75f, 0.5f);
+	float movedX = 0.0f;
+	float movedY = 0.0f;
+	check(pc_menu_click_read_pointer_graph(640, 480, &movedX, &movedY), "the menu can read the pointer");
+	check(movedX == 480.0f && movedY == 240.0f, "a later pointer move replaces the highlight position");
+	pc_menu_click_clear_pointer();
+	check(!pc_menu_click_read_pointer_graph(640, 480, &movedX, &movedY), "clearing the pointer leaves nothing to highlight");
+
 	if (sFailures == 0) {
 		std::printf("pc_menu_click_test: all checks passed\n");
 		return 0;
