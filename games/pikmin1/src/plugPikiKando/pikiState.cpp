@@ -2868,11 +2868,12 @@ void PikiNukareState::exec(Piki* piki)
 
 #if defined(PIKI_PC_PORT)
 /**
- * @brief Unlocks a yellow or blue Pikmin colour on its first auto pluck (cursor nuki or whistle pluck).
+ * @brief Unlocks a yellow or blue Pikmin colour on its first whistle pluck (Whistle Pluck mod).
  *
- * Hand plucks unlock through PikiNukareState::cleanup, which also plays the first-time demo. Auto plucks go through
- * PikiAutoNukiState, whose cleanup used to be empty, so a whistled first yellow or blue Pikmin never unlocked its Onion.
- * It also plays the first-time demo, so the first whistled Pikmin of a colour behaves like the first hand pluck.
+ * Hand plucks unlock through PikiNukareState::cleanup, which also plays the first-time demo. The Whistle Pluck mod
+ * leaves through PikiAutoNukiState, whose cleanup used to be empty, so a whistled first yellow or blue Pikmin never
+ * unlocked its Onion. It also plays the first-time demo, so the first whistled Pikmin of a colour behaves like the
+ * first hand pluck. The GameCube cursor nuki shares PikiAutoNukiState, so only pikis flagged mPcWhistleNuki get here.
  *
  * Port only. The matching build also compiles this file, so the whole helper is guarded.
  */
@@ -3040,12 +3041,16 @@ void PikiAutoNukiState::exec(Piki* piki)
 }
 
 /**
- * @brief Unlocks yellow or blue Pikmin on their first auto pluck, as a hand pluck does.
+ * @brief Unlocks yellow or blue Pikmin on their first whistle pluck, as a hand pluck does.
  */
 void PikiAutoNukiState::cleanup(Piki* piki)
 {
 #if defined(PIKI_PC_PORT)
-	pcUnlockColourFromAutoPluck(piki);
+	// Only the Whistle Pluck mod unlocks here. The GameCube cursor nuki shares this state and keeps its empty cleanup.
+	if (piki->mPcWhistleNuki) {
+		piki->mPcWhistleNuki = false;
+		pcUnlockColourFromAutoPluck(piki);
+	}
 #endif
 }
 
