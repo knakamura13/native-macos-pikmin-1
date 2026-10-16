@@ -2867,6 +2867,44 @@ void PikiNukareState::exec(Piki* piki)
 }
 
 /**
+ * @brief Unlocks a yellow or blue Pikmin colour on its first auto pluck (cursor nuki or whistle pluck).
+ *
+ * Hand plucks unlock through PikiNukareState::cleanup, which also plays the first-time demo. Auto plucks go through
+ * PikiAutoNukiState, whose cleanup used to be empty, so a whistled first yellow or blue Pikmin never unlocked its Onion.
+ * It also plays the first-time demo, so the first whistled Pikmin of a colour behaves like the first hand pluck.
+ */
+static void pcUnlockColourFromAutoPluck(Piki* piki)
+{
+	if (piki->mColor == Yellow && !playerState->mDemoFlags.isFlag(DEMOFLAG_PluckYellowPikmin)) {
+#if defined(PIKI_PC_PORT)
+		if (piki->mNavi) naviMgr->setMovieNavi(piki->mNavi);
+#endif
+		playerState->mDemoFlags.setFlag(DEMOFLAG_PluckYellowPikmin, piki);
+#if defined(PIKI_PC_PORT)
+		pc_achievement_unlock(PC_ACH_PIKMIN_YELLOW);
+#endif
+		playerState->mResultFlags.setOn(zen::RESFLAG_MeetYellowPikminNoBomb);
+		playerState->mResultFlags.setOn(zen::RESFLAG_Onyons);
+		playerState->setContainer(Yellow);
+		playerState->setDisplayPikiCount(Yellow);
+	} else if (piki->mColor == Blue && !playerState->mDemoFlags.isFlag(DEMOFLAG_PluckBluePikmin)) {
+#if defined(PIKI_PC_PORT)
+		if (piki->mNavi) naviMgr->setMovieNavi(piki->mNavi);
+#endif
+		playerState->mDemoFlags.setFlag(DEMOFLAG_PluckBluePikmin, piki);
+#if defined(PIKI_PC_PORT)
+		pc_achievement_unlock(PC_ACH_PIKMIN_BLUE);
+#endif
+		playerState->mResultFlags.setOn(zen::RESFLAG_MeetBluePikmin);
+		playerState->setContainer(Blue);
+		playerState->setDisplayPikiCount(Blue);
+		gameflow.mGamePrefs.openStage(CHALSTAGE_Practice);
+		gameflow.mGamePrefs.openStage(CHALSTAGE_Forest);
+		gameflow.mGamePrefs.openStage(CHALSTAGE_Cave);
+	}
+}
+
+/**
  * @brief Updates tutorial flags/unlocks after a successful pluck.
  */
 void PikiNukareState::cleanup(Piki* piki)
@@ -3006,10 +3044,11 @@ void PikiAutoNukiState::exec(Piki* piki)
 }
 
 /**
- * @brief No explicit cleanup.
+ * @brief Unlocks yellow or blue Pikmin on their first auto pluck, as a hand pluck does.
  */
 void PikiAutoNukiState::cleanup(Piki* piki)
 {
+	pcUnlockColourFromAutoPluck(piki);
 }
 
 /**
