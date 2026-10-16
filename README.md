@@ -664,6 +664,8 @@ cmake --build build -j"$(nproc)"
 ctest --test-dir build --output-on-failure
 ```
 
+**Upstream policy.** Port bugfixes, mouse and keyboard features, and fixes for upstream-introduced features go upstream from a `fix/<name>` branch. Fork-only additions stay on `kyle-develop`. Before claiming a fix works on every platform, compile it on Windows and Linux. Details: [AGENTS.md](AGENTS.md).
+
 ## License
 
 The code is offered under [CC0 1.0](LICENSE.MD). This license does not grant rights over *Pikmin*, its resources, trademarks, or any other material from Nintendo or other third parties.
