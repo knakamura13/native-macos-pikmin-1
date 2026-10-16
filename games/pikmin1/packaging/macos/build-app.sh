@@ -83,7 +83,15 @@ for size in 16 32 128 256; do
 done
 iconutil -c icns "${iconset}" -o "${contents}/Resources/AppIcon.icns"
 
-cat > "${contents}/Info.plist" <<'PLIST'
+# The launcher only looks for game files next to its own executable, so point
+# it at the data folder and at the game binary inside the app it will run from.
+# Info.plist values are literal, so the home path is fixed at build time.
+game_app="${app}"
+if [[ "${install}" -eq 1 ]]; then
+    game_app="${install_dir}/${app_name}"
+fi
+
+cat > "${contents}/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -108,6 +116,13 @@ cat > "${contents}/Info.plist" <<'PLIST'
     <string>13.0</string>
     <key>NSHighResolutionCapable</key>
     <true/>
+    <key>LSEnvironment</key>
+    <dict>
+        <key>NECTAR_PIKMIN1_DIR</key>
+        <string>${HOME}/.local/share/pikmin-native</string>
+        <key>NECTAR_PIKMIN1_EXECUTABLE</key>
+        <string>${game_app}/Contents/MacOS/nectar</string>
+    </dict>
 </dict>
 </plist>
 PLIST
