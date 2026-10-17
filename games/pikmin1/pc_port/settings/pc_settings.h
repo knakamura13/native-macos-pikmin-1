@@ -336,6 +336,14 @@ void pc_save_transfer_finished(bool ok, const char* message);
 // hash. The text is valid until the next call.
 const char* pc_settings_sim_config_text(void);
 unsigned long long pc_settings_sim_config_hash(void);
+// Deterministic recording: called when a day starts in deterministic mode.
+// Until the game leaves that day, those settings keep the values they have
+// now: their F1 rows are greyed with the reason, and any other change to
+// them is undone when the settings save. Does nothing while a netplay
+// session holds its own lock.
+void pc_settings_sim_lock_day_begin(void);
+// 1 while that lock holds.
+int pc_settings_sim_locked(void);
 
 // Netplay builds: the sim-relevant settings both peers must share, as
 // "key=value;" pairs (the session hashes it in the handshake). Valid until
