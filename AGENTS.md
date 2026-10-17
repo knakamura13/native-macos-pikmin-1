@@ -10,6 +10,22 @@ This fork (`knakamura13/native-macos-pikmin-1`) tracks the upstream project `SSu
 
 Never rebase `kyle-develop` or force-push it. Merge into it.
 
+## What goes upstream
+
+Goal: a Mac Pikmin 1 that matches GameCube as closely as possible. Classify each change first:
+
+1. GameCube fidelity: original logic, content, progression, timing, and unlocks. Original bugs stay, unless a mouse or keyboard feature cannot work without the fix.
+2. Port bugfixes: fixes for bugs the port introduced. Upstream PR.
+3. Input features: features that exist because of the mouse or keyboard, such as cursor-aimed throw. Upstream PR, active only while that device drives the game. Controller players keep GameCube behavior.
+4. Upstream-introduced features (Whistle Pluck, Infinite Day, No Day Limit, Hide Olimar's Messages): fix, support, and enhance them upstream. They have no input gate. Removing one stays fork-only.
+5. Fork-only additions: `kyle-develop` only.
+
+Bugs:
+
+- A bug the upstream introduced: fix it, and open the upstream PR from a `fix/<name>` branch cut from `main` (synced to `upstream/main`).
+- A platform-agnostic fix covers every platform in one change. Before claiming it works on all platforms, compile it on Windows and Linux.
+- A macOS-only fix that certainly also affects Linux or Windows: open the upstream PR first, then one upstream issue per affected OS. Each issue links the PR and claims no fix for its OS.
+
 ## Sync `main` with upstream
 
 ```sh
