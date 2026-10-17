@@ -72,6 +72,7 @@ PcLocalInput scriptedLocal(int t, int pad)
 		if ((t / 8) % 2 == 1) in.ext |= pc_input_log::kExtSwarm;
 	} else if (pad == 1) {
 		if (t % 7 == 0) in.flags = pc_input_log::kLocalFirstPerson;
+		if (t % 11 >= 5) in.flags |= pc_input_log::kLocalPadDpadDown;
 		if (t % 5 == 4) in.ext = pc_input_log::kExtBomb | pc_input_log::kExtSwarm;
 	}
 	return in;

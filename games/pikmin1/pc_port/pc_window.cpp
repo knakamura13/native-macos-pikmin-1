@@ -1609,6 +1609,7 @@ static void pcWindowCaptureLocalInput(PcLocalInput out[4]) {
     if (!pc_netplay_deterministic()) return;
     for (int p = 0; p < 2; p++) {
         if (pc_first_person_active_for(p)) out[p].flags |= pc_input_log::kLocalFirstPerson;
+        if (sPadDpadDownHeld[p]) out[p].flags |= pc_input_log::kLocalPadDpadDown;
         // Each player's Bomb, Lock-On and Charge presses and held Swarm
         // button, from the queues the sim drains outside deterministic mode
         // (player 1's are captain 1's, as there).

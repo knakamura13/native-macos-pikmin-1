@@ -46,7 +46,8 @@
 // Local inputs (v4): in deterministic mode the sim reads the Mouse Cursor
 // path from these per-pad slots only: whether the pad's cursor follows the
 // mouse this tick, the cursor delta, the wheel's colour-pick notches and
-// whether First Person pins the cursor. A live tick fills them through the
+// whether First Person pins the cursor. It also reads from them whether the
+// D-pad Down in the pad came from a gamepad. A live tick fills them through the
 // local capture hook (the engine takes what the window gathered since the
 // last tick); a v4 replay fills them from the file. Either way the sim
 // runs the same code on the same values. The sim takes the delta and the
@@ -146,7 +147,8 @@ constexpr size_t kPadBytesV4      = 26;
 constexpr size_t kRecordBytesV4   = kPadCount * kPadBytesV4; // 104
 constexpr uint8_t kLocalMouseCursor = 0x01; // the pad's cursor follows the mouse delta this tick
 constexpr uint8_t kLocalFirstPerson = 0x02; // First Person is on: the cursor is pinned ahead of the view
-constexpr uint8_t kLocalKnown       = 0x03;
+constexpr uint8_t kLocalPadDpadDown = 0x04; // D-pad Down held on this player's gamepad (its swarm button, not a lie-down)
+constexpr uint8_t kLocalKnown       = 0x07;
 } // namespace pc_input_log
 
 // Pure encode/decode API (no globals, no files).
