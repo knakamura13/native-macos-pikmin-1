@@ -46,7 +46,9 @@ q::File sample(uint32_t ticks)
 	f.stateHash = 0xF00DFACECAFEBEEFull;
 	for (int i = 0; i < 300; ++i) f.view.push_back((uint8_t)(i * 7));
 	for (int i = 0; i < 17; ++i) f.local.push_back((uint8_t)(255 - i));
-	for (int i = 0; i < 0x8000; ++i) f.card.push_back((uint8_t)((i * 31) ^ (i >> 8)));
+	// A short card block keeps the every-truncation loops quick; the format
+	// does not depend on its size.
+	for (int i = 0; i < 0x800; ++i) f.card.push_back((uint8_t)((i * 31) ^ (i >> 8)));
 	f.recordVersion = 4;
 	f.recordSize    = 104;
 	for (uint32_t t = 0; t < ticks; ++t) {
