@@ -6,6 +6,7 @@
 #include "pc_gyro.h"
 #include "pc_icon.h"
 #include "netplay/pc_netplay_det.h"
+#include "netplay/pc_input_log.h"
 #if PIKI_PC_TOUCH
 #include "gl/pc_gfx.h"
 #include "touch/pc_touch.h"
@@ -1596,6 +1597,38 @@ int pc_window_take_wheel_steps(void) {
     sMouseWheelSteps = 0;
     return steps;
 }
+
+// Deterministic mode: the sim reads the Mouse Cursor path from the per-tick
+// input (pc_input_log.h, PKNI v4), never from here, so a replay feeds it the
+// same values from the same place. pc_input_log_tick runs this after PADRead:
+// it takes what the window gathered since the last tick and files it under the
+// keyboard owner's pad, whose captain the mouse drives (the same test
+// Navi::makeVelocity makes outside deterministic mode). Outside deterministic
+// mode it takes nothing, and the sim reads the window as before.
+static void pcWindowCaptureLocalInput(PcLocalInput out[4]) {
+    if (!pc_netplay_deterministic()) return;
+    for (int p = 0; p < 2; p++) {
+        if (pc_first_person_active_for(p)) out[p].flags |= pc_input_log::kLocalFirstPerson;
+    }
+    const float dx = sMouseCursorDeltaX;
+    const float dy = sMouseCursorDeltaY;
+    sMouseCursorDeltaX = 0.0f;
+    sMouseCursorDeltaY = 0.0f;
+    const int owner = sKeyboardOwner;
+    if (owner < 0 || owner > 3) return;
+    PcLocalInput& in = out[owner];
+    if (effectiveControlMode() == PC_CONTROL_MOUSE_CURSOR || dx != 0.0f || dy != 0.0f) {
+        in.flags |= pc_input_log::kLocalMouseCursor;
+    }
+    in.cursorDx = dx;
+    in.cursorDy = dy;
+    // The wheel picks the throw colour only when set to; otherwise the
+    // camera zooms with it (local view state) and takes the notches itself.
+    if (pc_settings_get_mouse_wheel_action() == 0) {
+        in.wheelSteps = static_cast<int8_t>(std::clamp(pc_window_take_wheel_steps(), -127, 127));
+    }
+}
+static const bool sPcLocalCaptureRegistered = (pc_input_log_set_local_capture_fn(&pcWindowCaptureLocalInput), true);
 
 void pc_window_set_swap_interval(int interval) {
     // 0 is meaningful here: it is the port's 120 Hz mode. Only negatives are
