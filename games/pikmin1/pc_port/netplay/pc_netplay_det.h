@@ -41,6 +41,8 @@ float pc_netplay_fixed_dt(int frameClamp);
 // deterministic mode is on. The seed is FNV-1a over PIKMIN_NETPLAY_SEED (u32,
 // default 0), the day index and the stage id.
 void pc_netplay_det_reseed_for_new_day(int dayIndex, int stageId);
+// The session seed that reseed reads (PIKMIN_NETPLAY_SEED, default 0).
+unsigned pc_netplay_det_session_seed(void);
 
 // PIKMIN_NETPLAY_PROFILE_LOG value, or nullptr when unset/empty. Cached.
 const char* pc_netplay_det_profile_path(void);

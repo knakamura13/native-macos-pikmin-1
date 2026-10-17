@@ -7119,6 +7119,11 @@ void pc_first_person_toggle_for(int player) {
     fp = !fp;
 }
 
+void pc_first_person_set_active_for(int player, int on) {
+    if (!sConfig.firstPerson) on = 0;
+    sFirstPersonActive[player == 1 ? 1 : 0] = on ? 1 : 0;
+}
+
 int pc_first_person_active(void) { return pc_first_person_active_for(0); }
 void pc_first_person_toggle(void) { pc_first_person_toggle_for(0); }
 

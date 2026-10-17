@@ -153,10 +153,12 @@ float pc_netplay_fixed_dt(int frameClamp)
 	return float(frameClamp) / 60.0f;
 }
 
+unsigned pc_netplay_det_session_seed(void) { return readU32Env("PIKMIN_NETPLAY_SEED", 0); }
+
 void pc_netplay_det_reseed_for_new_day(int dayIndex, int stageId)
 {
 	if (!sDeterministic) return;
-	const unsigned sessionSeed = readU32Env("PIKMIN_NETPLAY_SEED", 0);
+	const unsigned sessionSeed = pc_netplay_det_session_seed();
 	// FNV-1a/32 over the session seed, day index and stage id as u32 words.
 	// Every peer computes the same words from the same save.
 	unsigned hash = 2166136261u;

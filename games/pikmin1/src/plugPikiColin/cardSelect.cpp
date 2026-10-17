@@ -28,6 +28,7 @@
 #include "pc_window.h"
 #include "settings/pc_settings.h"
 #include "netplay/pc_coop_switch.h"
+#include "quicksave/pc_quicksave.h"
 #endif
 
 // Macros for packing and unpacking the section compression flag.
@@ -96,7 +97,32 @@ struct CardSelectSetupSection : public Node {
 		pc_erased_notice_open_if_queued();
 		// El selector 1P/2P va antes del slot (PLAN_COOP fase 0b). En el
 		// Challenge Mode es 1 jugador / Cooperativo / 1 vs 1.
-		if (pc_speedrun_take_restart()) {
+		if (pc_quicksave_take_setup()) {
+			// Quick save load (pc_quicksave.h): back into the recorded story
+			// run without menus, as the co-op direct boot goes into its run.
+			// The load set the co-op switch and the captains from the save;
+			// the save's card file is taken as this run's, so the day's end
+			// saves to it, and the exit puts the recorded day's start back.
+			pc_coop_take_chosen_at_title();
+			pc_permadeath_set_pending(false);
+			pc_hardmode_set_pending(false);
+			pc_randomizer_set_menu_pending(false);
+			gameflow.mGamePrefs.mHasSaveGame = false;
+			if (const int slot = pc_quicksave_setup_slot()) {
+				MemoryCard& memcard = gameflow.mMemoryCard;
+				memcard.getMemoryCardState(false);
+				if (memcard.getMemoryCardState(true) == 0 && memcard.mSaveFileIndex >= 0) {
+					CardQuickInfo infos[4];
+					memcard.getQuickInfos(infos);
+					commitSelectedFile(infos[slot - 1], slot - 1);
+				} else {
+					printf("[quicksave] the memory card is not usable; the day's end will not save to file %d\n", slot);
+				}
+			}
+			mNextSectionsFlag = 0; // no destination: the exit enters the recorded day
+			mState            = Exit;
+			gsys->setFade(0.0f);
+		} else if (pc_speedrun_take_restart()) {
 			// Speedrun: reset rápido, otra run de la misma categoría sin menús.
 			pc_window_input_reset_assignment();
 			pc_coop_set_captain(0, PC_CAPTAIN_OLIMAR);
@@ -522,6 +548,13 @@ struct CardSelectSetupSection : public Node {
 				// we picked a destination!
 				gameflow.mNextOnePlayerSectionID = UNPACK_NEXT_ONEPLAYER(mNextSectionsFlag);
 			} else {
+#if defined(PIKI_PC_PORT)
+				if (pc_quicksave_take_enter()) {
+					// Quick save load: the recorded day's start is back in
+					// memory (card block, clock, stage); straight into it.
+					gameflow.mNextOnePlayerSectionID = ONEPLAYER_NewPikiGame;
+				} else
+#endif
 				if (!gameflow.mIsChallengeMode) {
 					PRINT("NORMAL MODE!!!\n");
 

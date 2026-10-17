@@ -120,6 +120,8 @@ void pc_first_person_toggle(void);
 /// Coop/VS: primera persona de cada jugador (las de arriba son las de J1).
 int pc_first_person_active_for(int player);
 void pc_first_person_toggle_for(int player);
+/// Quick save load: puts back the state the recorded run had.
+void pc_first_person_set_active_for(int player, int on);
 /// Daño a un enemigo, ya escalado por "Enemy Health".
 float pc_mods_teki_damage(float damage);
 /// Contador de Pikmin ociosos sobre el juego. Lo llama vi_stubs en el retrace,

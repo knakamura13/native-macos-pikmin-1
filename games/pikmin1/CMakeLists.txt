@@ -324,6 +324,10 @@ set(PC_PORT_SOURCES
     pc_port/netplay/pc_netplay_camlead.cpp
     # Co-op switch and direct boot (--coop-direct, netplay).
     pc_port/netplay/pc_coop_switch.cpp
+    # Quick Save (experimental). Inert unless the setting is on.
+    pc_port/quicksave/pc_quicksave.cpp
+    pc_port/quicksave/pc_quicksave_file.cpp
+    pc_port/quicksave/pc_quicksave_io.cpp
     pc_port/audio/pc_audio.cpp
     pc_port/audio/pc_envelope.cpp
     pc_port/audio/pc_jam.cpp
