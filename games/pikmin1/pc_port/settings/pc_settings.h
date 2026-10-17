@@ -131,6 +131,10 @@ void pc_settings_draw_vs_hud(void);
 void pc_settings_draw_achievement_toast(void);
 /// VS: pasa las reglas guardadas (menú previo) a la partida.
 void pc_settings_apply_vs_rules(void);
+#if defined(PIKI_PC_PORT)
+/// VS: el mapa elegido en el menú previo (id de pc_vs_map_list; "" = la arena de serie).
+const char* pc_settings_get_vs_map(void);
+#endif
 /// VS: menú previo con la explicación y las reglas. Resultado: PC_DEVASSIGN_*.
 void pc_vsrules_prompt_open(void);
 bool pc_vsrules_prompt_active(void);
@@ -193,6 +197,8 @@ int  pc_settings_get_speedrun_livesplit(void);
 int  pc_settings_get_speedrun_ls_hide_clock(void);
 const char* pc_settings_get_speedrun_ls_host(void);
 int  pc_settings_get_speedrun_ls_port(void);
+/// Online rooms may use a public STUN server (F1 > Data > Online over the Internet).
+int  pc_settings_get_online_stun(void);
 // Explicación del modo Randomizer al elegirlo en el título. CONTINUE = seguir
 // a capitán y slots, BACK = volver al título.
 enum { PC_RANDOMIZER_INTRO_PENDING = 0, PC_RANDOMIZER_INTRO_CONTINUE = 1, PC_RANDOMIZER_INTRO_BACK = 2 };
@@ -265,6 +271,11 @@ int  pc_devassign_prompt_result(void);
 
 /// Debug shortcuts F5 and F6, off by default.
 int pc_settings_get_debug_keys(void);
+/// Atajo de grabación (Ctrl+2): 1 = aspecto del juego original (sin sombras,
+/// AO, bloom, desenfoque, FXAA, luz por píxel, anisotrópico, gradación ni
+/// modelos HD); 0 = vuelve a lo que había. En vivo y sin guardar el .conf.
+/// El pack de texturas no cambia: se aplica al reiniciar.
+void pc_settings_record_original_look(int original);
 /// Modelo HD de esa fila del selector (0 Olimar, 1 Louie, 2 Louie HD,
 /// 3 Pikmin, 4 Bulborb, 5 Dwarf Bulborb): 0 = apagado, se usa el original.
 int pc_settings_get_hd_model_enabled(int row);
@@ -317,6 +328,20 @@ void pc_texpack_install_progress(int files);
    importación Android (SaveTransfer.java), entregado desde un hilo Java para
    que el submenú F1 Save Data lo pinte unos segundos. */
 void pc_save_transfer_finished(bool ok, const char* message);
+
+#if defined(PIKI_PC_PORT)
+// Netplay builds: the sim-relevant settings both peers must share, as
+// "key=value;" pairs (the session hashes it in the handshake). Valid until
+// the next call.
+const char* pc_settings_netplay_config_text(void);
+// Netplay builds: locks those settings for the session. A save keeps them
+// at the values the session started with, so an F1 edit of a sim row
+// reverts when the menu closes; presentation settings still save. With
+// adoptConfigText (the host's pc_settings_netplay_config_text) the session
+// takes those values instead, and the settings file keeps this player's own.
+// Only the first call takes effect.
+void pc_settings_netplay_session_begin(const char* adoptConfigText);
+#endif
 
 #ifdef __cplusplus
 }

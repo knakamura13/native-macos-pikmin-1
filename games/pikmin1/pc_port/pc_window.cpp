@@ -58,6 +58,27 @@ static SDL_JoystickID sAutoPadId[2] = { -1, -1 };
 static bool sPlayerPadLost[2] = { false, false };
 static int  sKeyboardOwner = 0; // jugador que recibe teclado (0 salvo asignación)
 
+// Netplay session: strong-defined by pc_netplay_session.cpp in netplay builds
+// only, null otherwise.
+__attribute__((weak)) bool pc_netplay_session_active(void);
+#if PIKI_NETPLAY_BUILD
+// Netplay input ownership (--netplay-input). A `keyboard` peer samples only
+// keys and mouse; a `gamepad` peer samples only its pad (keys and mouse are
+// ignored). `auto` keeps the normal behaviour (both flags false).
+static bool sNetplayIgnoreKeyboard = false;
+static bool sNetplayIgnoreGamepads = false;
+// --netplay-input gamepad:N: the player it feeds and N, re-resolved on every
+// controller hotplug until the Nth pad is open.
+static int sNetplayPadPlayer = -1;
+static int sNetplayPadIndex  = -1;
+static void netplayResolvePendingPad();
+#define PC_NETPLAY_IGNORE_KEYBOARD sNetplayIgnoreKeyboard
+#define PC_NETPLAY_IGNORE_GAMEPADS sNetplayIgnoreGamepads
+#else
+#define PC_NETPLAY_IGNORE_KEYBOARD false
+#define PC_NETPLAY_IGNORE_GAMEPADS false
+#endif
+
 // Última pulsación vista en el bucle de eventos, para el menú "pulsa un botón".
 static int            sLastPressKind   = PC_INPUT_DEV_NONE;
 static SDL_JoystickID sLastPressId     = -1;
@@ -154,6 +175,9 @@ static bool pc_controller_open_slot(int index)
 	printf("[PC Port] Opened Game Controller #%d (id %d): %s\n", (int)sOpenPads.size(), (int)id, SDL_GameControllerName(ctl));
 	fflush(stdout);
 	resolvePlayerPads();
+#if PIKI_NETPLAY_BUILD
+	netplayResolvePendingPad();
+#endif
 	return true;
 }
 
@@ -177,9 +201,15 @@ static void pc_controller_close_instance(SDL_JoystickID which)
 		break;
 	}
 	resolvePlayerPads();
+#if PIKI_NETPLAY_BUILD
+	netplayResolvePendingPad();
+#endif
 }
 static int sWindowWidth = 1280;
 static int sWindowHeight = 720;
+// Size last passed to SDL_SetWindowSize (see pc_window_set_window_size).
+static int sRequestedWidth = 1280;
+static int sRequestedHeight = 720;
 static int sLogicalRetraceInterval = 1;
 
 // Mouse wheel notches accumulated since the last consumer read them. The wheel
@@ -217,10 +247,12 @@ static bool sPadDpadDownHeld[2] = { false, false };
 static bool sLockOnWasDown = false;
 static bool sFirstPersonWasDown = false;
 static bool sGyroRecenterWasDown = false;
-static bool sSwarmWasDown  = false;
-static bool sLockOnPending = false;
-static bool sBombPending[2] = { false, false }; // mod "Bomb Control", por jugador
-static bool sSwarmPending  = false;
+static bool sSwarmWasDown[2]  = { false, false };
+// Pulsaciones encoladas por jugador (0/1): en cooperativo cada capitán tiene
+// sus mods Lock-On, Charge y Bomb Control.
+static bool sLockOnPending[2] = { false, false };
+static bool sBombPending[2]   = { false, false };
+static bool sSwarmPending[2]  = { false, false };
 
 bool pc_window_swarm_held(void) { return sSwarmHeld; }
 
@@ -776,6 +808,8 @@ bool pc_window_init(const char* title, int width, int height) {
 
     sWindowWidth = width;
     sWindowHeight = height;
+    sRequestedWidth = width;
+    sRequestedHeight = height;
     sShouldClose = false;
 
 #if defined(__linux__) && !defined(__ANDROID__)
@@ -1038,6 +1072,10 @@ static bool pc_window_read_gamepad(SDL_GameController* ctl, u16& button, s8& sti
         const bool bombDown = boundButtonPressed(PC_KEY_ACT_BOMB);
         if (bombDown && !sBombPadWasDown[pi]) sBombPending[pi] = true;
         sBombPadWasDown[pi] = bombDown;
+        static bool sLockPadWasDown[2] = { false, false };
+        const bool lockDown = boundButtonPressed(PC_KEY_ACT_LOCKON);
+        if (lockDown && !sLockPadWasDown[pi]) sLockOnPending[pi] = true;
+        sLockPadWasDown[pi] = lockDown;
     }
 
     const int noticeZone = axisDeadZone < 16384 ? 16384 : axisDeadZone;
@@ -1308,16 +1346,22 @@ void pc_window_poll_events(PADStatus* pad) {
     substickX = (s8)(cdirX * 127);
     substickY = (s8)(cdirY * 127);
 
-    const bool usedKeyboard = button != 0 || dirX != 0 || dirY != 0 || cdirX != 0 || cdirY != 0;
+    bool usedKeyboard = button != 0 || dirX != 0 || dirY != 0 || cdirX != 0 || cdirY != 0;
     bool usedGamepad = false;
     sSwarmHeld = held(PC_KEY_ACT_SWARM);
+    // Netplay input ownership: a `gamepad` peer ignores every key.
+    if (PC_NETPLAY_IGNORE_KEYBOARD) {
+        button = 0;
+        stickX = stickY = substickX = substickY = 0;
+        triggerL = triggerR = 0;
+        sSwarmHeld   = false;
+        usedKeyboard = false;
+    }
 
     {
         const bool lockDown = held(PC_KEY_ACT_LOCKON);
-        if (lockDown && !sLockOnWasDown) sLockOnPending = true;
+        if (lockDown && !sLockOnWasDown) sLockOnPending[sKeyboardOwner == 1 ? 1 : 0] = true;
         sLockOnWasDown = lockDown;
-        if (sSwarmHeld && !sSwarmWasDown) sSwarmPending = true;
-        sSwarmWasDown = sSwarmHeld;
         // Este no se encola: entra y sale de la vista en el acto.
         const bool fpDown = held(PC_KEY_ACT_FIRSTPERSON);
         if (fpDown && !sFirstPersonWasDown) pc_first_person_toggle_for(sKeyboardOwner);
@@ -1339,10 +1383,14 @@ void pc_window_poll_events(PADStatus* pad) {
     }
 
     // ── Gamepad Mapping (overrides / merges if controller connected) ──
-    if (sController) {
+    // Netplay input ownership: a `keyboard` peer ignores every gamepad.
+    if (sController && !PC_NETPLAY_IGNORE_GAMEPADS) {
         usedGamepad = pc_window_read_gamepad(sController, button, stickX, stickY, substickX, substickY,
                                              triggerL, triggerR, sSwarmHeld);
     }
+    // Flanco del swarm de P1 una vez juntos teclado y mando (Charge).
+    if (sSwarmHeld && !sSwarmWasDown[0]) sSwarmPending[0] = true;
+    sSwarmWasDown[0] = sSwarmHeld;
     if (usedGamepad)
         sLastInputIsGamepad = true;
     else if (usedKeyboard)
@@ -1469,7 +1517,7 @@ void pc_window_poll_events(PADStatus* pad) {
     sSwarmHeldP2 = kbSwarm2;
     if (sControllers[1] || sKeyboardOwner == 1) {
         u16 b2 = kbButton2; s8 sx2 = kbStickX2, sy2 = kbStickY2, cx2 = kbSubX2, cy2 = kbSubY2; u8 tl2 = kbTrigL2, tr2 = kbTrigR2;
-        if (sControllers[1])
+        if (sControllers[1] && !PC_NETPLAY_IGNORE_GAMEPADS)
             pc_window_read_gamepad(sControllers[1], b2, sx2, sy2, cx2, cy2, tl2, tr2, sSwarmHeldP2, 1);
         pad[1].err          = PAD_ERR_NONE;
         pad[1].button       = b2;
@@ -1480,6 +1528,8 @@ void pc_window_poll_events(PADStatus* pad) {
         pad[1].triggerLeft  = tl2;
         pad[1].triggerRight = tr2;
     }
+    if (sSwarmHeldP2 && !sSwarmWasDown[1]) sSwarmPending[1] = true;
+    sSwarmWasDown[1] = sSwarmHeldP2;
 #if defined(PIKI_PC_PORT) && defined(PIKI_PC_SETTINGS_MENU)
     // While the settings menu is open, consume the pad so the game underneath
     // does not react to the same input.
@@ -1512,8 +1562,10 @@ void pc_window_swap_buffers(void) {
 #endif
         // VSync Off must not retain the software presentation limiter. Game
         // simulation uses the fixed-step scheduler independently. Netplay's
-        // unthrottled replay bypasses it too.
-        if (sVsyncEnabled && !pc_netplay_unthrottled()) {
+        // unthrottled replay bypasses it too, and a netplay session owns the
+        // single 30 Hz schedule (two stacked pacers would lose slots).
+        const bool netplayOwnsPacing = pc_netplay_session_active != nullptr && pc_netplay_session_active();
+        if (sVsyncEnabled && !pc_netplay_unthrottled() && !netplayOwnsPacing) {
             // The interval is the game's setFrameClamp: retraces per logical
             // frame against a 60 Hz base, so 1 is 60 Hz and 2 is 30 Hz. The
             // port adds 0 for 120 Hz, which has no 60 Hz divisor. Mirror
@@ -1652,7 +1704,27 @@ void pc_window_set_window_size(int w, int h) {
         sWindowHeight = h;
         return;
     }
+    // Compare with the size asked for last time, not with SDL's size: a display
+    // shorter than the window makes the OS shorten it, and SDL then reports the
+    // shorter size, which would look like a change on every settings apply.
+    const bool sizeChanged = w != sRequestedWidth || h != sRequestedHeight;
     SDL_SetWindowSize(sWindow, w, h);
+    sRequestedWidth = w;
+    sRequestedHeight = h;
+    if (sizeChanged) {
+        // SDL keeps the top-left corner when a window grows, so a window created
+        // centered at 1280x720 ends up off-center and past the right edge at a
+        // larger size. Re-center it on its own display, inside the usable area
+        // (below the menu bar, above the Dock). SDL_WINDOWPOS_CENTERED would move
+        // it to the primary display instead.
+        SDL_Rect usable {};
+        const int display = SDL_GetWindowDisplayIndex(sWindow);
+        if (display >= 0 && SDL_GetDisplayUsableBounds(display, &usable) == 0) {
+            SDL_SetWindowPosition(sWindow,
+                usable.x + std::max(0, (usable.w - w) / 2),
+                usable.y + std::max(0, (usable.h - h) / 2));
+        }
+    }
     sWindowWidth = w;
     sWindowHeight = h;
 }
@@ -1719,6 +1791,43 @@ int pc_window_input_get_assignment(int player, int* gamepadId) {
     return sPlayerDevice[player].kind;
 }
 
+#if PIKI_NETPLAY_BUILD
+void pc_window_set_netplay_input_filter(bool ignoreKeyboard, bool ignoreGamepads) {
+    sNetplayIgnoreKeyboard = ignoreKeyboard;
+    sNetplayIgnoreGamepads = ignoreGamepads;
+}
+
+static void netplayResolvePendingPad() {
+    if (sNetplayPadPlayer < 0 || sNetplayPadIndex < 0) return;
+    const PcPlayerDevice& dev = sPlayerDevice[sNetplayPadPlayer];
+    if (dev.kind == PC_INPUT_DEV_GAMEPAD && pc_find_open_pad(dev.id) != nullptr) return; // bound and open
+    if (sNetplayPadIndex >= (int)sOpenPads.size()) return; // keep waiting for pad N
+    const PcOpenPad& pad = sOpenPads[(size_t)sNetplayPadIndex];
+    sPlayerDeviceExplicit = true;
+    sPlayerDevice[sNetplayPadPlayer].kind = PC_INPUT_DEV_GAMEPAD;
+    sPlayerDevice[sNetplayPadPlayer].id   = pad.id;
+    sPlayerPadLost[sNetplayPadPlayer]     = false;
+    resolvePlayerPads();
+    printf("[netplay] input: gamepad #%d (id %d, %s) feeds %s\n", sNetplayPadIndex, (int)pad.id,
+           SDL_GameControllerName(pad.ctl), sNetplayPadPlayer == 0 ? "host/P1" : "joiner/P2");
+    fflush(stdout);
+}
+
+void pc_window_set_netplay_gamepad(int player, int index) {
+    if (player < 0 || player > 1 || index < 0) return;
+    sNetplayPadPlayer = player;
+    sNetplayPadIndex  = index;
+    // Owned by a pad even before it is open: the slot stays neutral (never
+    // the keyboard) until pad N connects, then resolves on the hotplug.
+    sPlayerDeviceExplicit = true;
+    sPlayerDevice[player].kind = PC_INPUT_DEV_GAMEPAD;
+    sPlayerDevice[player].id   = -1;
+    sPlayerPadLost[player]     = false;
+    resolvePlayerPads();
+    netplayResolvePendingPad();
+}
+#endif
+
 const char* pc_window_gamepad_name(int gamepadId) {
     SDL_GameController* ctl = pc_find_open_pad(gamepadId);
     const char* name = ctl ? SDL_GameControllerName(ctl) : nullptr;
@@ -1737,10 +1846,22 @@ void pc_window_discard_button_presses(void) { sLastPressTaken = sLastPressSerial
 
 bool pc_window_swarm_held_p2(void) { return sSwarmHeldP2; }
 
-bool pc_window_take_lockon_press(void) { const bool v = sLockOnPending; sLockOnPending = false; return v; }
-bool pc_window_take_swarm_press(void) { const bool v = sSwarmPending; sSwarmPending = false; return v; }
+bool pc_window_take_lockon_press(int player)
+{
+    const int pi = player == 1 ? 1 : 0;
+    const bool v = sLockOnPending[pi];
+    sLockOnPending[pi] = false;
+    return v;
+}
+bool pc_window_take_swarm_press(int player)
+{
+    const int pi = player == 1 ? 1 : 0;
+    const bool v = sSwarmPending[pi];
+    sSwarmPending[pi] = false;
+    return v;
+}
 
-void pc_window_request_lockon_press(void) { sLockOnPending = true; }
+void pc_window_request_lockon_press(int player) { sLockOnPending[player == 1 ? 1 : 0] = true; }
 bool pc_window_take_bomb_press(int player)
 {
     const int pi = player == 1 ? 1 : 0;
@@ -1749,7 +1870,7 @@ bool pc_window_take_bomb_press(int player)
     return v;
 }
 void pc_window_request_firstperson_press(void) { pc_first_person_toggle(); }
-void pc_window_request_charge_press(void) { sSwarmPending = true; }
+void pc_window_request_charge_press(int player) { sSwarmPending[player == 1 ? 1 : 0] = true; }
 void pc_window_request_bomb_press(int player) { sBombPending[player == 1 ? 1 : 0] = true; }
 
 // Control mode functions

@@ -46,6 +46,7 @@
 #include "pc_coop.h"
 #include "pc_vs.h"
 #include "mods/pc_vs_map.h"
+#include "netplay/pc_netplay_det.h"
 #include "pc_achievements.h"
 #include "pc_speedrun.h"
 #include "pc_livesplit.h"
@@ -164,6 +165,7 @@ struct PcConfig {
     int speedrunLsHideClock = 0; // con LiveSplit conectado, sin reloj ni splits propios
     char speedrunLsHost[64] = "127.0.0.1";
     int speedrunLsPort = 16834; // splits visibles bajo el reloj del modo Speedrun (1-10)
+    int onlineStun = 1;         // online: servidor STUN público para jugar entre redes distintas
     int onionStep10 = 0;        // Y + arriba/abajo en la cebolla mueve de 10 en 10
     int instantWhistle = 0;     // los Pikmin silbados se unen sin la reacción de girarse
     // Cheats.
@@ -1073,7 +1075,90 @@ void pc_settings_set_language(unsigned char language) {
 
 namespace {
 
+#if PIKI_NETPLAY_BUILD
+// Netplay: every setting that changes the simulation. Both peers hash these
+// in the handshake and they are locked for the session. Window, graphics,
+// audio, bindings, camera feel and other local-only rows are not here.
+#define PC_NETPLAY_SESSION_FIELDS(X)                                                          \
+    X(fpsMode) X(chainActions) X(holdToPluck) X(betterPathfinding) X(bluesOnlyWater)         \
+    X(idleCounter) X(naviHealthPct) X(tekiHealthPct) X(infiniteDay) X(freeCamera)            \
+    X(whistleRadiusPct) X(throwSpeedPct) X(throwCancelB) X(quickGrab) X(noTrip)              \
+    X(whistlePluck) X(bombControl) X(hideOlimarText) X(onionStep10) X(instantWhistle)        \
+    X(pikiInvincible) X(allFlowers) X(carrySpeedPct) X(naviSpeedPct) X(unlockZones)          \
+    X(noDayAdvance) X(allOnions) X(breakableGates) X(eternalNight) X(fireflies)              \
+    X(p2Selection) X(vsDuration) X(vsRocketWin) X(vsRocketHp) X(vsBigPiece) X(vsPikiLimit)   \
+    X(vsPellets) X(lockOn) X(charge) X(throwWhileMoving) X(firstPerson) X(pikiLimit)         \
+    X(dayMinutes) X(coopSplit) X(coopMergeCamera) X(debugKeys) X(gyroEnabled)
+
+bool sNetplaySessionLocked = false;
+PcConfig sNetplaySessionConfig;
+// The joiner of a launcher session adopted the host's values: the file keeps
+// this player's own (sNetplayDiskConfig), never the adopted ones.
+bool sNetplayAdopted = false;
+PcConfig sNetplayDiskConfig;
+
+void netplayRelockSessionFields() {
+    if (!sNetplaySessionLocked) return;
+#define PC_NETPLAY_RELOCK(f) sConfig.f = sNetplaySessionConfig.f; sPending.f = sNetplaySessionConfig.f;
+    PC_NETPLAY_SESSION_FIELDS(PC_NETPLAY_RELOCK)
+#undef PC_NETPLAY_RELOCK
+    sConfig.vsMap  = sNetplaySessionConfig.vsMap;
+    sPending.vsMap = sNetplaySessionConfig.vsMap;
+}
+
+// While saveConfig writes, the session fields hold this player's own values.
+struct NetplayDiskValuesScope {
+    bool active = false;
+    PcConfig live;
+    NetplayDiskValuesScope() {
+        if (!sNetplaySessionLocked || !sNetplayAdopted) return;
+        active = true;
+        live = sConfig;
+#define PC_NETPLAY_DISK(f) sConfig.f = sNetplayDiskConfig.f;
+        PC_NETPLAY_SESSION_FIELDS(PC_NETPLAY_DISK)
+#undef PC_NETPLAY_DISK
+        sConfig.vsMap = sNetplayDiskConfig.vsMap;
+    }
+    ~NetplayDiskValuesScope() {
+        if (active) sConfig = live;
+    }
+};
+
+// Inverse of pc_settings_netplay_config_text: sets every session field the
+// text names. Unknown or malformed pairs are ignored.
+int netplayApplyConfigText(const char* text) {
+    int applied = 0;
+    std::string s(text != nullptr ? text : "");
+    size_t pos = 0;
+    while (pos < s.size()) {
+        size_t semi = s.find(';', pos);
+        const std::string pair = s.substr(pos, semi == std::string::npos ? std::string::npos : semi - pos);
+        pos = semi == std::string::npos ? s.size() : semi + 1;
+        const size_t eq = pair.find('=');
+        if (eq == std::string::npos) continue;
+        const std::string key = pair.substr(0, eq);
+        const std::string val = pair.substr(eq + 1);
+        if (key == "vsMap") {
+            sConfig.vsMap = val;
+            ++applied;
+            continue;
+        }
+        char* end = nullptr;
+        const long v = std::strtol(val.c_str(), &end, 10);
+        if (val.empty() || end == nullptr || *end != '\0') continue;
+#define PC_NETPLAY_ADOPT(f) if (key == #f) { sConfig.f = (int)v; ++applied; continue; }
+        PC_NETPLAY_SESSION_FIELDS(PC_NETPLAY_ADOPT)
+#undef PC_NETPLAY_ADOPT
+    }
+    return applied;
+}
+#endif
+
 void saveConfig() {
+#if PIKI_NETPLAY_BUILD
+    netplayRelockSessionFields();
+    NetplayDiskValuesScope netplayDiskValues;
+#endif
     std::string path = std::string(kConfigFilename);
     std::ofstream out(path, std::ios::out | std::ios::trunc);
     if (!out) {
@@ -1125,6 +1210,7 @@ void saveConfig() {
     out << "speedrunLsHideClock = " << sConfig.speedrunLsHideClock << "\n";
     out << "speedrunLsHost = " << sConfig.speedrunLsHost << "\n";
     out << "speedrunLsPort = " << sConfig.speedrunLsPort << "\n";
+    out << "onlineStun = " << sConfig.onlineStun << "\n";
     out << "onionStep10 = " << sConfig.onionStep10 << "\n";
     out << "instantWhistle = " << sConfig.instantWhistle << "\n";
     out << "pikiInvincible = " << sConfig.pikiInvincible << "\n";
@@ -1330,6 +1416,9 @@ void loadConfig() {
         }
         else if (key == "speedrunLsPort") {
             sConfig.speedrunLsPort = std::clamp(atoi(val.c_str()), 1, 65535);
+        }
+        else if (key == "onlineStun") {
+            sConfig.onlineStun = atoi(val.c_str()) != 0 ? 1 : 0;
         }
         else if (key == "speedrunSplitsShown") {
             sConfig.speedrunSplitsShown = std::clamp(atoi(val.c_str()), 1, 10);
@@ -1896,7 +1985,9 @@ void pollMenuInput() {
 #if PIKI_PC_TOUCH
         pc_touch_claim_game_menu();
 #endif
-        pcVsEndScreenInput();
+        // Netplay: the choice comes from both players' synced pads, in the
+        // sim (pc_vs_end_screen_sim_input); the local devices only feed them.
+        if (!pc_netplay_deterministic()) pcVsEndScreenInput();
         return;
     }
     // Menú de cristal del título (Advanced Options): es dueño de la entrada
@@ -5734,6 +5825,7 @@ int pc_settings_in_gameplay(void) {
 
 void pc_settings_note_gameplay_frame(void) {
     sLastGameplayFrameMs = SDL_GetTicks();
+    pc_vs_note_gameplay_tick();
 }
 
 // El objetivo fijado se marca en el mundo (anillo y marcador, en navi.cpp);
@@ -5872,6 +5964,8 @@ constexpr Uint32 kVsEndScreenDelayMs = 2500;
 
 bool vsEndScreenShown()
 {
+    // Netplay: the end screen is sim state (pc_vs_det_end_screen_shown).
+    if (pc_netplay_deterministic()) return pc_vs_det_end_screen_shown();
     return pc_vs_active() && pc_vs_match_over() && sVsOverSince && SDL_GetTicks() - sVsOverSince >= kVsEndScreenDelayMs;
 }
 
@@ -5967,6 +6061,8 @@ void pc_settings_apply_vs_rules(void) {
     r.pelletSeconds = kVsPellets[std::clamp(sConfig.vsPellets, 0, 3)];
     pc_vs_set_rules(r);
 }
+
+const char* pc_settings_get_vs_map(void) { return sConfig.vsMap.c_str(); }
 
 void pc_vsrules_prompt_open(void) {
     sVsRulesOpen   = true;
@@ -6221,11 +6317,15 @@ void pc_settings_draw_vs_hud(void) {
         sVsOverSince = 0;
         sVsEndChoice = 0;
     }
+    // Netplay (deterministic mode): the countdown, the pause and the end
+    // screen are sim state (pc_vs_det_tick_end); this only draws and plays
+    // the local sounds. A local menu never holds the shared countdown.
+    const bool det = pc_netplay_deterministic();
     // Con un menú del port encima, la cuenta atrás espera (va con reloj real).
     const bool menuOver = sMenuOpen || pc_glass_menu_active();
-    pc_vs_countdown_set_frozen(menuOver);
+    if (!det) pc_vs_countdown_set_frozen(menuOver);
     if (menuOver) return;
-    const bool live = sLastGameplayFrameMs != 0 && SDL_GetTicks() - sLastGameplayFrameMs <= 250;
+    const bool live = det ? pc_vs_det_live() : sLastGameplayFrameMs != 0 && SDL_GetTicks() - sLastGameplayFrameMs <= 250;
     if (!live && !sPausedByVs) return;
     if (!gsys || !gsys->mDGXGfx) return;
 
@@ -6233,7 +6333,7 @@ void pc_settings_draw_vs_hud(void) {
     const int phase    = pc_vs_countdown_phase();
     const bool over    = pc_vs_match_over();
     const bool wantPause = phase > 0 || over;
-    if (wantPause != sPausedByVs) {
+    if (!det && wantPause != sPausedByVs) {
         gameflow.mPauseAll = wantPause ? TRUE : FALSE;
         sPausedByVs        = wantPause;
     }
@@ -6296,7 +6396,7 @@ void pc_settings_draw_vs_hud(void) {
         }
         const char* opts[2] = { es ? "Revancha" : "Rematch", es ? "Volver al título" : "Back to title" };
         for (int i = 0; i < 2; i++) {
-            const bool sel = i == sVsEndChoice;
+            const bool sel = i == (pc_netplay_deterministic() ? pc_vs_end_choice() : sVsEndChoice);
             char o[40];
             snprintf(o, sizeof(o), sel ? "> %s <" : "%s", opts[i]);
             const int ox = i == 0 ? panelX + 130 : panelX + panelW - 130;
@@ -6825,6 +6925,7 @@ int pc_settings_get_speedrun_livesplit(void) { return sConfig.speedrunLiveSplit;
 int pc_settings_get_speedrun_ls_hide_clock(void) { return sConfig.speedrunLsHideClock; }
 const char* pc_settings_get_speedrun_ls_host(void) { return sConfig.speedrunLsHost; }
 int pc_settings_get_speedrun_ls_port(void) { return sConfig.speedrunLsPort; }
+int pc_settings_get_online_stun(void) { return sConfig.onlineStun; }
 int pc_settings_get_fps_mode(void) { if (pc_speedrun_active()) return 0;
     return sConfig.fpsMode;
 }
@@ -7034,6 +7135,93 @@ int pc_settings_get_hd_model_enabled(int row) {
 int pc_settings_get_debug_keys(void) { if (pc_speedrun_active()) return 0;
     return sConfig.debugKeys;
 }
+
+void pc_settings_record_original_look(int original) {
+    // Copia de lo que había antes de pasar al aspecto original; se repone tal cual.
+    static PcConfig sBefore;
+    static bool sInOriginal = false;
+    if (original && !sInOriginal) {
+        sBefore = sConfig;
+        sConfig.shadows = 0;
+        sConfig.ssao = 0;
+        sConfig.bloom = 0;
+        sConfig.dof = 0;
+        sConfig.antialiasing = 0;
+        sConfig.perPixelLighting = 0;
+        sConfig.anisotropy = 0;
+        sConfig.colourGrading = 0;
+        sConfig.fog = 1;
+        sConfig.hdModelsDisabled = 0x3F; // las seis filas del selector de modelos HD
+        sInOriginal = true;
+    } else if (!original && sInOriginal) {
+        sConfig.shadows = sBefore.shadows;
+        sConfig.ssao = sBefore.ssao;
+        sConfig.bloom = sBefore.bloom;
+        sConfig.dof = sBefore.dof;
+        sConfig.antialiasing = sBefore.antialiasing;
+        sConfig.perPixelLighting = sBefore.perPixelLighting;
+        sConfig.anisotropy = sBefore.anisotropy;
+        sConfig.colourGrading = sBefore.colourGrading;
+        sConfig.fog = sBefore.fog;
+        sConfig.hdModelsDisabled = sBefore.hdModelsDisabled;
+        sInOriginal = false;
+    }
+    applyGraphics(sConfig);
+    fprintf(stderr, "[RECORD] graphics: %s\n", sInOriginal ? "original" : "Open Nectar");
+    fflush(stderr);
+}
+
+#if PIKI_NETPLAY_BUILD
+const char* pc_settings_netplay_config_text(void) {
+    static std::string text;
+    text.clear();
+    char cell[96];
+#define PC_NETPLAY_TEXT_FIELD(f)                                        \
+    snprintf(cell, sizeof(cell), "%s=%d;", #f, (int)sConfig.f);        \
+    text += cell;
+    PC_NETPLAY_SESSION_FIELDS(PC_NETPLAY_TEXT_FIELD)
+#undef PC_NETPLAY_TEXT_FIELD
+    text += "vsMap=" + sConfig.vsMap + ";";
+    return text.c_str();
+}
+
+void pc_settings_netplay_session_begin(const char* adoptConfigText) {
+    if (sNetplaySessionLocked) return;
+    if (adoptConfigText != nullptr) {
+        sNetplayDiskConfig = sConfig;
+        const std::string own = pc_settings_netplay_config_text();
+        const int applied = netplayApplyConfigText(adoptConfigText);
+        const std::string adopted = pc_settings_netplay_config_text();
+        sNetplayAdopted = true;
+        sPending = sConfig;
+        printf("[PC Settings] netplay session: adopted the host's sim settings for this session only "
+               "(%d keys, %s); the settings file keeps this player's own values\n",
+               applied, own == adopted ? "same as this player's" : "some differ from this player's");
+        if (own != adopted) {
+            printf("[PC Settings] netplay session: own   %s\n", own.c_str());
+            printf("[PC Settings] netplay session: host  %s\n", adopted.c_str());
+        }
+    }
+    // The session ticks at 30 Hz, and each tick advances the game by the
+    // frame clamp's period: 60/120 FPS mode would play at half/quarter speed.
+    // Both peers force 30 FPS for the session; the settings file keeps the
+    // player's own mode (the disk values are restored when saving).
+    if (sConfig.fpsMode != 0) {
+        if (!sNetplayAdopted) {
+            sNetplayDiskConfig = sConfig;
+            sNetplayAdopted    = true;
+        }
+        printf("[PC Settings] netplay session: %d FPS mode -> 30 FPS for the session (the netplay tick is 30 Hz)\n",
+               sConfig.fpsMode == 1 ? 60 : 120);
+        sConfig.fpsMode  = 0;
+        sPending.fpsMode = 0;
+    }
+    sNetplaySessionConfig = sConfig;
+    sNetplaySessionLocked = true;
+    printf("[PC Settings] netplay session: sim-relevant settings locked for the session\n");
+    fflush(stdout);
+}
+#endif
 
 // ---------------------------------------------------------------------------
 // Modelo de filas para otras interfaces (pc_settings_rows.h)
@@ -7326,7 +7514,7 @@ const GroupRow kGameplayRows[] = {
 
 // Infinite Day (fila 13) vive dentro de Day Length como su última opción.
 const GroupRow kCheatsRows[] = {
-    { SRC_MODS, 5, "Day Length", "Minutes of daylight per day. 13.5 is the original; Infinite stops the sun." },
+    { SRC_MODS, 5, "Day Length", "Minutes of daylight per day. 13.5 is the original; Infinite stops the sun, except on the last day." },
     { SRC_MODS, 11, "Olimar Health", "Olimar's toughness, as a share of the original. Infinite takes no damage." },
     { SRC_MODS, 12, "Enemy Health", "Enemy toughness, as a share of the original. Insta Kill drops them in one hit." },
     { SRC_MODS, 4, "Pikmin Limit", "Most Pikmin on the field at once. 100 is the original; more costs performance." },
@@ -7343,7 +7531,7 @@ const GroupRow kCheatsRows[] = {
 #if PIKI_DEBUG_KEYS
     { SRC_MODS, 19, "Debug Keys (F5-F8)",
       "F5: add up to 20 red leaf Pikmin to the red Onion (requires an Onion and respects the Pikmin limit).\n"
-      "F6: advance the clock by one in-game hour, capped just before sunset (with Infinite Day it only moves the lighting).\n"
+      "F6: advance the clock by one in-game hour, capped just before sunset (with Infinite Day it only moves the lighting, except on the last day).\n"
       "F7: grant the Main Engine, top red Onion stock up to 20, and trigger the normal end-of-day sequence.\n"
       "F8 (VS only): append both captains' XYZ coordinates to vs_positions.txt." },
 #endif
@@ -7357,6 +7545,8 @@ const GroupRow kDataRows[] = {
     { SRC_DATA, 0, "Open Save Folder", "Opens the folder with your saves (card0, card1). Copy it to back up your progress or move it to another computer." },
 #endif
     { SRC_DATA, 2, "Reset all settings to defaults", "Puts every setting back to its default. Saves are not touched." },
+    { SRC_DATA, 3, "Online co-op: leave / rejoin", "As an online guest: stop playing and watch the host's captain while keeping your place. Choose it again, or press Start, to ask to rejoin; the host lets you back in outside menus and cutscenes." },
+    { SRC_DATA, 4, "Online over the Internet", "On: when you create or join an online room, the game asks a free public server (Google or Cloudflare STUN) for this connection's Internet address, so a friend on another network can connect. Only that address is exchanged; the game itself goes directly between the two players. Some networks still block it (often mobile data on both sides). Off: no outside server is contacted, and only players on the same network or a VPN can connect." },
 };
 
 template <size_t N> constexpr int countOf(const GroupRow (&)[N]) { return (int)N; }
@@ -7495,6 +7685,17 @@ bool hardLocked(const GroupRow& r) {
 }
 
 // Motivo por el que una fila no se puede cambiar ahora, o nullptr si se puede.
+// Online co-op lives in the netplay session (netplay builds only): weak
+// references, so builds without it link and simply never enable the row.
+}
+__attribute__((weak)) bool pc_netplay_online_is_guest(void);
+__attribute__((weak)) bool pc_netplay_online_spectating(void);
+__attribute__((weak)) void pc_netplay_online_request_leave(void);
+__attribute__((weak)) void pc_netplay_online_request_rejoin(void);
+namespace {
+bool online_guest() { return pc_netplay_online_is_guest != nullptr && pc_netplay_online_is_guest(); }
+bool online_spectating() { return pc_netplay_online_spectating != nullptr && pc_netplay_online_spectating(); }
+
 const char* disabledReason(const GroupRow& r) {
     if (hardLocked(r)) return "Locked by Hard mode for this save file.";
     switch (r.src) {
@@ -7516,6 +7717,9 @@ const char* disabledReason(const GroupRow& r) {
         break;
     case SRC_MODS:
         if (r.idx == 16 && !sPending.lockOn) return "Turn on Lock-On first.";
+        break;
+    case SRC_DATA:
+        if (r.idx == 3 && !online_guest()) return "Only while you are the guest of an online co-op session.";
         break;
     default:
         break;
@@ -7595,7 +7799,7 @@ bool pc_settings_row_enabled(int group, int row) {
 bool pc_settings_row_is_action(int group, int row) {
     if (group == PC_SET_PICKER_TEXPACKS || group == PC_SET_PICKER_HDMODELS) return true;
     const GroupRow* r = groupRow(group, row);
-    return r && (r->src == SRC_DATA || (r->src == SRC_ADV && r->idx == 7));
+    return r && ((r->src == SRC_DATA && r->idx != 4) || (r->src == SRC_ADV && r->idx == 7));
 }
 
 const char* pc_settings_row_help(int group, int row) {
@@ -7688,7 +7892,9 @@ void pc_settings_row_value(int group, int row, char* out, unsigned long n) {
 #else
             if (r->idx < 2) snprintf(out, n, "A: open");
 #endif
-            else snprintf(out, n, "A: reset");
+            else if (r->idx == 2) snprintf(out, n, "A: reset");
+            else if (r->idx == 4) snprintf(out, n, "%s", sPending.onlineStun ? "On" : "Off");
+            else snprintf(out, n, "%s", online_guest() ? (online_spectating() ? "A: rejoin" : "A: leave") : "-");
             break;
         case SRC_ACH: snprintf(out, n, "%d pts", pc_achievement_info(r->idx).points); break;
         case SRC_KEYS:
@@ -7758,9 +7964,17 @@ void pc_settings_row_change(int group, int row, int dir, bool ok) {
             break;
         case SRC_MODS: modsRowChange(r->idx, left, right); break;
         case SRC_DATA:
+            if (r->idx == 4) {
+                if (ok || left || right) sPending.onlineStun = !sPending.onlineStun;
+                return;
+            }
             if (!ok) return;
             if (r->idx < 2) saveDataRowAction(r->idx);
-            else resetToDefaults();
+            else if (r->idx == 2) resetToDefaults();
+            else if (online_guest()) {
+                if (online_spectating()) pc_netplay_online_request_rejoin();
+                else pc_netplay_online_request_leave();
+            }
             break;
         default: break; // selectores
         }

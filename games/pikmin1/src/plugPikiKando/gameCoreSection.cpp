@@ -4,12 +4,17 @@
 #include <cstdlib>
 #include <cstdio>
 #include <cmath>
+#include <cstring>
 #endif
 #if defined(PIKI_PC_PORT)
 #include "settings/pc_settings.h"
 #include "netplay/pc_netplay_det.h"
+#include "netplay/pc_netplay_present.h"
+#include "netplay/pc_coop_switch.h"
+#include "netplay/pc_state_hash.h"
 #if defined(PIKI_PC_PORT)
 #include "pc_photo_mode.h"
+#include "pc_record.h"
 #include "pc_coop.h"
 #include "randomizer/pc_randomizer_catalog.h"
 #include "mods/pc_vs_arena.h"
@@ -1000,6 +1005,10 @@ ASM void asmTest(f32, f32)
 // entre 5 y 10 Pikmin las medianas y la más pesada la gorda. Cada pareja
 // simétrica del mapa usa la misma pieza, así los dos cargan lo mismo.
 static u32 sVsPieceIds[PC_VS_PIECE_KINDS];
+// Refuerzos (pcVsUpdate): estado por partida.
+static int sVsSerial       = -1;
+static f32 sEmptyFor[2]    = { 0.0f, 0.0f };
+static f32 sReinforceCd[2] = { 0.0f, 0.0f };
 
 // Fuentes de néctar: cada una deja caer una gota (FallWater, sin usar en el
 // juego original) cuando no hay néctar cerca; al tocar el suelo se vuelve un
@@ -1009,6 +1018,20 @@ struct PcVsNectar {
 };
 static PcVsNectar sVsNectar[16];
 static int sVsNectarCount = 0;
+
+enum PcVsReactionTrigger { VS_TRIGGER_Defeated, VS_TRIGGER_Building, VS_TRIGGER_Work, VS_TRIGGER_Hidden, VS_TRIGGER_Door };
+struct PcVsReactionWatch {
+	Creature* source;
+	PcVsReaction reaction;
+	PcVsReactionTrigger trigger;
+	bool fired;
+};
+static std::vector<PcVsReactionWatch> sVsReactions;
+
+static void pcVsWatch(Creature* source, const PcVsReaction& reaction, PcVsReactionTrigger trigger)
+{
+	if (source && reaction.kind != PC_VS_REACT_NONE) sVsReactions.push_back({ source, reaction, trigger, false });
+}
 
 static void pcVsChoosePieces()
 {
@@ -1047,6 +1070,21 @@ static void pcVsChoosePieces()
 	}
 }
 
+static void pcVsPreloadReaction(const PcVsReaction& reaction)
+{
+	if (reaction.kind == PC_VS_REACT_PELLET && reaction.pelletId) pelletMgr->addUseList(reaction.pelletId);
+	if (reaction.kind != PC_VS_REACT_ENEMY) return;
+	if (reaction.teki >= 0) tekiMgr->mUsingType[reaction.teki] = true;
+	if (reaction.boss >= 0) {
+		GenObjectBoss gen;
+		gen.mBossID = reaction.boss;
+		// Casi todos los jefes ignoran el parámetro `count` y reservan una
+		// instancia por llamada. Repetirlo garantiza que una reacción de 2–8
+		// jefes tenga nodos suficientes en BossMgr.
+		for (int i = 0; i < reaction.count; i++) gen.updateUseList(nullptr, 1);
+	}
+}
+
 static Pellet* pcVsSpawnPellet(MapMgr* map, u32 id, f32 x, f32 z)
 {
 	if (!id) return nullptr;
@@ -1059,9 +1097,109 @@ static Pellet* pcVsSpawnPellet(MapMgr* map, u32 id, f32 x, f32 z)
 	return pellet;
 }
 
+static Creature* pcVsSpawnEnemy(MapMgr* map, int tekiType, int bossType, f32 x, f32 z, f32 face)
+{
+	Vector3f pos(x, map->getMinY(x, z, true), z);
+	if (bossType >= 0) {
+		GenObjectBoss gen;
+		gen.mBossID          = bossType;
+		gen.mItemCount       = 0;
+		gen.mPelletConfigIdx = -1;
+		BirthInfo info;
+		info.set(pos, Vector3f(0.0f, face, 0.0f), Vector3f(1.0f, 1.0f, 1.0f), nullptr);
+		return bossMgr->create(bossType, info, &gen);
+	}
+	Teki* teki = tekiMgr->newTeki(tekiType);
+	if (!teki) return nullptr;
+	TekiPersonality pers;
+	pers.mPosition      = pos;
+	pers.mNestPosition  = pos;
+	pers.mFaceDirection = face;
+	pers.setF(TekiPersonality::FLT_TerritoryRange, 250.0f);
+	teki->mPersonality->input(pers);
+	teki->reset();
+	teki->startAI(0);
+	teki->mSRT.r.set(0.0f, face, 0.0f);
+	return teki;
+}
+
+static void pcVsRunReaction(MapMgr* map, const PcVsReactionWatch& watch)
+{
+	const Vector3f center = watch.source->mSRT.t;
+	for (int i = 0; i < watch.reaction.count; i++) {
+		const f32 angle = watch.reaction.count > 1 ? f32(i) * 6.2831853f / f32(watch.reaction.count) : 0.0f;
+		const f32 distance = watch.reaction.count > 1 ? watch.reaction.radius : 0.0f;
+		const f32 x = center.x + cosf(angle) * distance, z = center.z + sinf(angle) * distance;
+		if (watch.reaction.kind == PC_VS_REACT_ENEMY)
+			pcVsSpawnEnemy(map, watch.reaction.teki, watch.reaction.boss, x, z, angle);
+		else if (watch.reaction.kind == PC_VS_REACT_PELLET)
+			pcVsSpawnPellet(map, watch.reaction.pelletId, x, z);
+		else if (watch.reaction.kind == PC_VS_REACT_BOMB) {
+			if (BombItem* bomb = static_cast<BombItem*>(itemMgr->birth(OBJTYPE_Bomb))) {
+				Vector3f pos(x, map->getMinY(x, z, true), z);
+				bomb->init(pos);
+				bomb->startAI(0);
+			}
+		} else if (watch.reaction.kind == PC_VS_REACT_NECTAR) {
+			if (Creature* drop = itemMgr->birth(OBJTYPE_FallWater)) {
+				Vector3f pos(x, map->getMinY(x, z, true) + 120.0f, z);
+				drop->init(pos);
+				drop->startAI(0);
+			}
+		}
+	}
+}
+
 // Reloj y eventos, cada fotograma de juego.
 static void pcVsUpdate(MapMgr* map)
 {
+	for (PcVsReactionWatch& watch : sVsReactions) {
+		if (watch.fired || !watch.source) continue;
+		bool fire = false;
+		switch (watch.trigger) {
+		case VS_TRIGGER_Defeated: fire = !watch.source->isAlive(); break;
+		case VS_TRIGGER_Building: fire = static_cast<BuildingItem*>(watch.source)->isCompleted(); break;
+		case VS_TRIGGER_Work: fire = static_cast<WorkObject*>(watch.source)->isFinished(); break;
+		case VS_TRIGGER_Hidden: fire = !watch.source->isVisible(); break;
+		case VS_TRIGGER_Door: fire = static_cast<DoorItem*>(watch.source)->mStateId == DoorState::Vanishing
+		                                  || static_cast<DoorItem*>(watch.source)->mStateId == DoorState::Killed; break;
+		}
+		if (!fire) continue;
+		watch.fired = true;
+		pcVsRunReaction(map, watch);
+	}
+	// Test evidence (PIKMIN_NETPLAY_DEBUG_VS=1, deterministic mode): where each
+	// VS piece is and how many Pikmin carry it, every 150 ticks.
+	static const bool kPieceTrace = getenv("PIKMIN_NETPLAY_DEBUG_VS") != nullptr;
+	if (kPieceTrace && pc_netplay_deterministic() && pc_netplay_tick() % 150 == 0) {
+		Iterator it(pelletMgr);
+		CI_LOOP(it)
+		{
+			Pellet* p = static_cast<Pellet*>(*it);
+			if (!p->mConfig || !pc_vs_piece_points(p->mConfig->mPelletId.mId)) continue;
+			fprintf(stderr, "[VS] piece tick %u: %s at %.0f %.0f carriers %d\n", pc_netplay_tick(), p->mConfig->mPelletId.mStringID,
+			        p->mSRT.t.x, p->mSRT.t.z, int(p->mCarrierCount));
+		}
+		for (int player = 0; player < 2; player++) {
+			int n = 0, grouped = 0;
+			f32 x = 0.0f, z = 0.0f;
+			Iterator pit(pikiMgr);
+			CI_LOOP(pit)
+			{
+				Piki* piki = static_cast<Piki*>(*pit);
+				if (!piki->isAlive() || piki->mPlayerId != player) continue;
+				if (piki->mMode == PikiMode::FormationMode) {
+					grouped++;
+					continue;
+				}
+				n++;
+				x += piki->mSRT.t.x;
+				z += piki->mSRT.t.z;
+			}
+			fprintf(stderr, "[VS] pikmin tick %u: P%d %d in the group, %d out (mean %.0f %.0f)\n", pc_netplay_tick(), player + 1,
+			        grouped, n, n ? x / n : 0.0f, n ? z / n : 0.0f);
+		}
+	}
 	const bool wasOver = pc_vs_match_over();
 	pc_vs_match_update(gsys->getFrameTime());
 
@@ -1154,9 +1292,6 @@ static void pcVsUpdate(MapMgr* map)
 	}
 	// Refuerzos: un jugador sin ningún Pikmin (campo, brotes, cebollas) no
 	// puede recuperarse; a los 3 s recibe 3 en cada una de sus cebollas.
-	static int sVsSerial        = -1;
-	static f32 sEmptyFor[2]     = { 0.0f, 0.0f };
-	static f32 sReinforceCd[2]  = { 0.0f, 0.0f };
 	if (sVsSerial != pc_vs_match_serial()) {
 		sVsSerial = pc_vs_match_serial();
 		sEmptyFor[0] = sEmptyFor[1] = sReinforceCd[0] = sReinforceCd[1] = 0.0f;
@@ -1208,10 +1343,59 @@ static void pcVsUpdate(MapMgr* map)
 	}
 }
 
+// Netplay: the VS state the per-tick hash covers (its mode column): the
+// pc_vs globals, this file's per-match state and every object's VS owner.
+static u64 pcVsHashMode()
+{
+	if (!pc_vs_active()) return 0;
+	u64 h = pc_vs_state_hash();
+	auto mix = [&h](u32 v) {
+		for (int i = 0; i < 4; i++) {
+			h ^= (v >> (i * 8)) & 0xFF;
+			h *= 1099511628211ULL;
+		}
+	};
+	auto mixF = [&mix](f32 v) {
+		u32 bits;
+		memcpy(&bits, &v, sizeof(bits));
+		mix(bits);
+	};
+	for (u32 id : sVsPieceIds) mix(id);
+	mix(u32(sVsSerial));
+	for (int p = 0; p < 2; p++) {
+		mixF(sEmptyFor[p]);
+		mixF(sReinforceCd[p]);
+	}
+	mix(u32(sVsReactions.size()));
+	for (const PcVsReactionWatch& reaction : sVsReactions) mix(reaction.fired ? 1u : 0u);
+	if (!naviMgr) return h; // no live stage (see pc_state_hash.h)
+	if (pikiMgr) {
+		Iterator it(pikiMgr);
+		CI_LOOP(it)
+		{
+			Piki* piki = static_cast<Piki*>(*it);
+			mix(u32(piki->mPlayerId));
+			mix(piki->mPcSieging ? 1u : 0u);
+		}
+	}
+	if (itemMgr) {
+		Iterator it(itemMgr);
+		CI_LOOP(it)
+		{
+			Creature* c = *it;
+			if (c->mObjType == OBJTYPE_Goal) mix(u32(static_cast<GoalItem*>(c)->mPcOwner));
+			else if (c->mObjType == OBJTYPE_Ufo) mix(u32(static_cast<UfoItem*>(c)->mPcOwner));
+			else if (c->mObjType == OBJTYPE_Pikihead) mix(u32(static_cast<PikiHeadItem*>(c)->mPcOwner));
+		}
+	}
+	return h;
+}
+
 /// VS (fase 2): cada jugador recibe sus tres cebollas, 15 Pikmin (5 de cada
 /// color) en su grupo, y aparecen las pastillas de prueba del mapa.
 static void pcVsSetupBases(MapMgr* map)
 {
+	sVsReactions.clear();
 	// Cuenta atrás 3, 2, 1, START con el mundo en pausa (la lleva el HUD).
 	pc_vs_countdown_arm();
 	if (pc_vs_missing_pieces()) pc_vs_announce("NO SHIP PARTS FOUND - CHECK GAME FILES", 60.0f);
@@ -1311,6 +1495,7 @@ static void pcVsSetupBases(MapMgr* map)
 			// startAI no cierra el paso (solo lo hace al restaurar una partida):
 			// cerrada, los caminos rodean por las salidas hasta que se rompa.
 			if (gate->mWayPoint) gate->mWayPoint->setFlag(false);
+			pcVsWatch(gate, pc_vs_arena_gate_reaction(player), VS_TRIGGER_Building);
 		}
 		pc_vs_arena_bomb_pile(player, pos);
 		pos.y = map->getMinY(pos.x, pos.z, true);
@@ -1323,14 +1508,13 @@ static void pcVsSetupBases(MapMgr* map)
 	}
 
 	// Bulborbs grandes durmiendo junto a las medianas custodiadas.
-	Vector3f guards[4];
+	PcVsGuardSpot guards[4];
 	const int ng = pc_vs_arena_guard_spots(guards, 4);
 	for (int i = 0; i < ng; i++) {
 		Teki* teki = tekiMgr->newTeki(TEKI_Swallow);
 		if (!teki) continue;
 		TekiPersonality pers;
-		pers.mPosition = guards[i];
-		pers.mPosition.y = map->getMinY(guards[i].x, guards[i].z, true);
+		pers.mPosition.set(guards[i].x, map->getMinY(guards[i].x, guards[i].z, true), guards[i].z);
 		pers.mNestPosition  = pers.mPosition;
 		pers.mFaceDirection = i == 0 ? 1.5707963f : -1.5707963f;
 		pers.setF(TekiPersonality::FLT_TerritoryRange, 250.0f);
@@ -1338,35 +1522,15 @@ static void pcVsSetupBases(MapMgr* map)
 		teki->reset();
 		teki->startAI(0);
 		teki->mSRT.r.set(0.0f, pers.mFaceDirection, 0.0f);
+		pcVsWatch(teki, guards[i].reaction, VS_TRIGGER_Defeated);
 	}
 
 	// Enemigos y jefes puestos en el editor.
 	PcVsEnemySpot enemies[48];
 	const int ne = pc_vs_arena_enemy_spots(enemies, 48);
 	for (int i = 0; i < ne; i++) {
-		Vector3f pos(enemies[i].x, 0.0f, enemies[i].z);
-		pos.y = map->getMinY(pos.x, pos.z, true);
-		if (enemies[i].boss >= 0) {
-			GenObjectBoss gen; // sin generador de verdad: no suelta nada
-			gen.mBossID          = enemies[i].boss;
-			gen.mItemCount       = 0;
-			gen.mPelletConfigIdx = -1;
-			BirthInfo info;
-			info.set(pos, Vector3f(0.0f, enemies[i].face, 0.0f), Vector3f(1.0f, 1.0f, 1.0f), nullptr);
-			bossMgr->create(enemies[i].boss, info, &gen);
-			continue;
-		}
-		Teki* teki = tekiMgr->newTeki(enemies[i].teki);
-		if (!teki) continue;
-		TekiPersonality pers;
-		pers.mPosition      = pos;
-		pers.mNestPosition  = pos;
-		pers.mFaceDirection = enemies[i].face;
-		pers.setF(TekiPersonality::FLT_TerritoryRange, 250.0f);
-		teki->mPersonality->input(pers);
-		teki->reset();
-		teki->startAI(0);
-		teki->mSRT.r.set(0.0f, enemies[i].face, 0.0f);
+		Creature* enemy = pcVsSpawnEnemy(map, enemies[i].teki, enemies[i].boss, enemies[i].x, enemies[i].z, enemies[i].face);
+		pcVsWatch(enemy, enemies[i].reaction, VS_TRIGGER_Defeated);
 	}
 
 	// Construcciones: puentes y rampas que construyen los Pikmin, bloques que
@@ -1395,6 +1559,7 @@ static void pcVsSetupBases(MapMgr* map)
 			// Sin vida, la colisión las ignora (isAlive mira mHealth > 0).
 			obj->mHealth = obj->mMaxHealth = 1.0f;
 			obj->startAI(0);
+			pcVsWatch(obj, o.reaction, o.kind == PC_VS_OBJ_KEY ? VS_TRIGGER_Hidden : VS_TRIGGER_Door);
 			continue;
 		}
 		if (o.kind >= PC_VS_OBJ_GATE_SOFT) {
@@ -1406,6 +1571,7 @@ static void pcVsSetupBases(MapMgr* map)
 				gate->mSRT.r.set(0.0f, o.face, 0.0f);
 				gate->startAI(0);
 				if (gate->mWayPoint) gate->mWayPoint->setFlag(false);
+				pcVsWatch(gate, o.reaction, VS_TRIGGER_Building);
 			}
 			continue;
 		}
@@ -1427,6 +1593,7 @@ static void pcVsSetupBases(MapMgr* map)
 		obj->mHealth    = f32(o.work);
 		obj->mMaxHealth = obj->mHealth;
 		obj->startAI(0);
+		pcVsWatch(obj, o.reaction, VS_TRIGGER_Work);
 	}
 }
 #endif
@@ -1719,7 +1886,12 @@ void GameCoreSection::initStage()
 				gen.mBossID = enemies[i].boss;
 				gen.updateUseList(nullptr, 1);
 			}
+			pcVsPreloadReaction(enemies[i].reaction);
 		}
+		PcVsGuardSpot guards[4];
+		const int ng = pc_vs_arena_guard_spots(guards, 4);
+		for (int i = 0; i < ng; i++) pcVsPreloadReaction(guards[i].reaction);
+		for (int player = 0; player < 2; player++) pcVsPreloadReaction(pc_vs_arena_gate_reaction(player));
 		PcVsObjectSpot objects[32];
 		const int no = pc_vs_arena_object_spots(objects, 32);
 		for (int i = 0; i < no; i++) {
@@ -1727,6 +1899,7 @@ void GameCoreSection::initStage()
 			if (objects[i].kind <= PC_VS_OBJ_PUSH_ROCK) workObjectMgr->addUseList(kShape[objects[i].kind]);
 			else if (objects[i].kind == PC_VS_OBJ_GATE_SOFT) itemMgr->addUseList(OBJTYPE_SluiceSoft);
 			else if (objects[i].kind == PC_VS_OBJ_GATE_HARD) itemMgr->addUseList(OBJTYPE_SluiceHard);
+			pcVsPreloadReaction(objects[i].reaction);
 		}
 	}
 #endif
@@ -2017,6 +2190,8 @@ GameCoreSection::GameCoreSection(Controller* controller, MapMgr* mgr, Camera& ca
 	// unless deterministic mode is on.
 	pc_netplay_det_reseed_for_new_day(gameflow.mWorldClock.mCurrentDay,
 	    flowCont.mCurrentStage != nullptr ? static_cast<int>(flowCont.mCurrentStage->mStageID) : 0);
+	// The state hash's mode column: the VS state (0 outside VS).
+	pc_state_hash_set_mode_fn(&pcVsHashMode);
 #endif
 	mDrawHideType = 0;
 	textDemoState = 0;
@@ -2151,6 +2326,11 @@ GameCoreSection::GameCoreSection(Controller* controller, MapMgr* mgr, Camera& ca
 	mNavi = static_cast<Navi*>(naviMgr->birth());
 	// mNaviID 1 -> Kontroller(2) -> pad 1 (segundo mando, fase 0).
 	mNavi2 = pc_coop_active() ? static_cast<Navi*>(naviMgr->birth()) : nullptr;
+	// One marker line for runs the co-op switch armed (--coop-direct or
+	// netplay); ordinary logs are unchanged.
+	if (pc_coop_switch_active()) {
+		printf("[NETPLAY] coop_active=%d navis=%d\n", pc_coop_active() ? 1 : 0, naviMgr->getNaviCount());
+	}
 #else
 	naviMgr->create(1);
 	mNavi = static_cast<Navi*>(naviMgr->birth());
@@ -2412,6 +2592,57 @@ static void pcVsMarkKey()
 	wasDown = isDown;
 }
 
+// Atajos de grabación (pc_record.h): la luz de una hora del día, sin mover el
+// reloj de juego. La luz, el sol y el cielo leen el reloj visual, que avanza
+// por su cuenta, así que basta con fijarlo: el día ni avanza ni se acaba.
+static void pcRecordSetLight(f32 hour)
+{
+	gPcVisualTimeOfDay = hour;
+	fprintf(stderr, "[RECORD] light -> %.1f h\n", hour);
+	fflush(stderr);
+}
+
+// Ctrl+6: Pikmin nuevos, ya en el grupo del capitán, repartidos en espiral a
+// su alrededor y alternando colores. Como en la preparación del modo VS. No
+// pasa del límite de Pikmin: los pools se dimensionan con él al cargar el
+// nivel, así que para 999 hay que subir el límite y volver a entrar.
+static void pcRecordSpawnPikis(int count)
+{
+	Navi* navi = naviMgr ? naviMgr->getNavi() : nullptr;
+	if (navi == nullptr || pikiMgr == nullptr || mapMgr == nullptr) {
+		return;
+	}
+	const int limit = pc_settings_get_piki_limit();
+	const int room  = limit - int(GameStat::allPikis);
+	if (count > room) {
+		count = room;
+	}
+	int born = 0;
+	for (int i = 0; i < count; i++) {
+		Piki* piki = static_cast<Piki*>(pikiMgr->birth());
+		if (piki == nullptr) {
+			break;
+		}
+		const int color = Blue + (i % 3);
+		GameStat::workPikis.inc(color);
+		piki->init(navi);
+		const int k     = int(GameStat::allPikis) + i;
+		const f32 angle = f32(k) * 2.3999632f; // ángulo áureo: sin filas ni huecos
+		const f32 dist  = 25.0f + 7.0f * sqrtf(f32(k));
+		Vector3f at     = navi->mSRT.t;
+		at.x += dist * sinf(angle);
+		at.z += dist * cosf(angle);
+		at.y = mapMgr->getMinY(at.x, at.z, true);
+		piki->Creature::init(at);
+		piki->initColor(color);
+		piki->changeMode(PikiMode::FormationMode, navi);
+		born++;
+	}
+	GameStat::update();
+	fprintf(stderr, "[RECORD] +%d Pikmin (limit %d)\n", born, limit);
+	fflush(stderr);
+}
+
 static void pcDebugKeys()
 {
 	// Off unless asked for: a stray F5 would otherwise fill someone's Onion
@@ -2419,6 +2650,11 @@ static void pcDebugKeys()
 	// frame, so the switch takes effect at once.
 	if (!pc_settings_get_debug_keys()) {
 		return;
+	}
+
+	// Ctrl+1..5 y 7/8 se leen en updateAI, que sigue corriendo con el modo foto.
+	if (pc_record_ctrl_pressed(6)) {
+		pcRecordSpawnPikis(100);
 	}
 
 	const Uint8* keys = SDL_GetKeyboardState(nullptr);
@@ -2469,8 +2705,10 @@ static void pcDebugKeys()
 		WorldClock& clock = gameflow.mWorldClock;
 		const f32 next    = clock.mTimeOfDay + 1.0f;
 		// Under "Infinite Day" the playable clock stays held (pushing it would
-		// reach sunset and end the day); only the visual clock moves on.
-		const bool clockHeld = pc_settings_get_infinite_day() != 0 && clock.mCurrentDay != 1;
+		// reach sunset and end the day); only the visual clock moves on. The last
+		// day is not held, so its sunset ends the game and plays the ending.
+		const bool clockHeld = pc_settings_get_infinite_day() != 0 && clock.mCurrentDay != 1
+		    && clock.mCurrentDay != MAX_DAYS;
 		const f32 visualBefore = gPcVisualTimeOfDay;
 		if (!clockHeld) {
 			clock.setTime(next >= clock.mHoursInDay ? clock.mHoursInDay - 0.01f : next);
@@ -2547,8 +2785,12 @@ void GameCoreSection::update()
 	}
 #endif
 #if defined(PIKI_PC_PORT) && PIKI_DEBUG_KEYS
-	pcDebugKeys();
-	pcVsMarkKey();
+	// The debug keys read the local keyboard inside the sim: never in
+	// deterministic (netplay) mode.
+	if (!pc_netplay_deterministic()) {
+		pcDebugKeys();
+		pcVsMarkKey();
+	}
 #endif
 	if (!gameflow.mMoviePlayer->mIsActive && !mDoneSundownWarn && gameflow.mWorldClock.mTimeOfDay >= gameflow.mParameters->mNightWarning()
 	    && (flowCont.mGameEndFlag != GAMEEND_PikminExtinction || flowCont.mGameEndFlag != GAMEEND_NaviDown)) {
@@ -2782,6 +3024,37 @@ void GameCoreSection::updateAI()
 		}
 	}
 
+#if PIKI_DEBUG_KEYS
+	// Atajos de grabación (pc_record.h). Aquí y no en pcDebugKeys porque update()
+	// no corre con el mundo congelado, y el antes/después se graba justo así: con
+	// el modo foto, desde exactamente el mismo sitio.
+	if (pc_settings_get_debug_keys() && !pc_netplay_deterministic()) {
+		if (pc_record_ctrl_pressed(1)) {
+			pc_record_toggle_hud();
+		}
+		if (pc_record_ctrl_pressed(2)) {
+			static bool original = false;
+			original             = !original;
+			pc_settings_record_original_look(original ? 1 : 0);
+		}
+		if (pc_record_ctrl_pressed(3)) {
+			pcRecordSetLight(gameflow.mParameters->mStartHour()); // amanecer, 7:00
+		}
+		if (pc_record_ctrl_pressed(4)) {
+			pcRecordSetLight(12.0f);
+		}
+		if (pc_record_ctrl_pressed(5)) {
+			pcRecordSetLight(gameflow.mParameters->mEndHour() - 0.6f); // atardecer, ~18:25
+		}
+		if (pc_record_ctrl_pressed(7) && pc_photo_mode_active()) {
+			pc_record_save_camera();
+		}
+		if (pc_record_ctrl_pressed(8) && pc_photo_mode_active()) {
+			pc_record_load_camera();
+		}
+	}
+#endif
+
 	if (pc_photo_mode_active()) {
 		PcamCamera* pcam = cameraMgr->mCamera;
 		if (pcam) {
@@ -3008,7 +3281,9 @@ void GameCoreSection::updateCoopCameras()
 void GameCoreSection::updateDynamicSplit(f32 dt)
 {
 	Camera* own[2] = { mNavi->mNaviCamera, mGameCamera2 };
-	if (!pc_settings_get_coop_merge_camera()) {
+	// Netplay: each peer shows its own captain, so the merged camera is off;
+	// both captains' cameras are still simulated.
+	if (pc_netplay_present_two_pass_active() || !pc_settings_get_coop_merge_camera()) {
 		// Pantalla partida fija: J1 izquierda/arriba, cámaras propias.
 		mSplitBlend = 1.0f;
 		mP1Side     = 0;
@@ -3120,7 +3395,9 @@ void GameCoreSection::setActiveView(int view)
 
 Camera* GameCoreSection::getViewCamera(int view)
 {
-	if (!pc_settings_get_coop_merge_camera()) {
+	// Netplay presentation pass: the merged views are never built (see
+	// updateDynamicSplit), so present the captain's own camera.
+	if (!pc_settings_get_coop_merge_camera() || !pc_netplay_present_sim_side()) {
 		return view == 1 ? mGameCamera2 : mNavi->mNaviCamera;
 	}
 	return &mViewCam[view == 1 ? 1 : 0];
@@ -3128,6 +3405,18 @@ Camera* GameCoreSection::getViewCamera(int view)
 
 void GameCoreSection::drawGameInfoHud(Graphics& gfx)
 {
+	// Netplay: no HUD work in the sim pass (the widgets animate per draw, so
+	// drawing there would make it depend on the followed captain); the
+	// presentation pass draws only the local captain's HUD, full screen.
+	if (pc_netplay_present_sim_pass()) {
+		return;
+	}
+	if (pc_netplay_present_two_pass_active() && isSplitScreen() && !gameflow.mMoviePlayer->mIsActive) {
+		const int local        = pc_netplay_present_local_player();
+		zen::DrawGameInfo* hud = (local == 1 && mDrawGameInfo2) ? mDrawGameInfo2 : mDrawGameInfo;
+		hud->draw(gfx);
+		return;
+	}
 	if (!isSplitScreen() || !mDrawGameInfo2 || gameflow.mMoviePlayer->mIsActive) {
 		mDrawGameInfo->draw(gfx);
 		return;
@@ -3166,6 +3455,16 @@ void GameCoreSection::drawGameInfoHud(Graphics& gfx)
 // de su mitad, con el mismo espacio virtual que su HUD.
 void GameCoreSection::drawContainerWindows(Graphics& gfx)
 {
+	// Netplay: as drawGameInfoHud, the local player's window only.
+	if (pc_netplay_present_sim_pass()) {
+		return;
+	}
+	if (pc_netplay_present_two_pass_active() && isSplitScreen() && !gameflow.mMoviePlayer->mIsActive) {
+		const int local         = pc_netplay_present_local_player();
+		zen::DrawContainer* win = (local == 1 && containerWindow2) ? containerWindow2 : containerWindow;
+		win->draw(gfx);
+		return;
+	}
 	if (!isSplitScreen() || !containerWindow2 || gameflow.mMoviePlayer->mIsActive) {
 		containerWindow->draw(gfx);
 		return;
@@ -3298,6 +3597,22 @@ void GameCoreSection::draw(Graphics& gfx)
 	if (mRenderPass != 0) advanceState = false;
 #endif
 	gsys->mTimer->start("se updt", true);
+#if defined(PIKI_PC_PORT)
+	// Netplay: audio is local output, updated in the presentation pass with
+	// the listener at the local captain; the sim pass never touches it.
+	if (pc_netplay_present_two_pass_active()) {
+		if (!pc_netplay_present_sim_side() && mRenderPass == 0) {
+			if (gameflow.mMoviePlayer->mIsActive) {
+				Vector3f pos;
+				gameflow.mMoviePlayer->getLookAtPos(pos);
+				seSystem->update(gfx, pos);
+			} else {
+				Navi* listener = (pc_netplay_present_local_player() == 1 && mNavi2) ? mNavi2 : mNavi;
+				seSystem->update(gfx, listener->mSRT.t);
+			}
+		}
+	} else
+#endif
 	if (advanceState && gameflow.mMoviePlayer->mIsActive) {
 		Vector3f pos;
 		gameflow.mMoviePlayer->getLookAtPos(pos);
@@ -3531,23 +3846,31 @@ void GameCoreSection::draw2D(Graphics& gfx)
 		Navi* navi      = naviMgr->getNavi();
 		AState<Navi>* s = navi->getCurrState();
 		int state       = s->getID();
-		if (state != NAVISTATE_DemoSunset) {
 #if defined(PIKI_PC_PORT)
+		// Atajo de grabación Ctrl+1: nada de HUD encima del juego.
+		const bool hudShown = !pc_record_hud_hidden();
+		if (state != NAVISTATE_DemoSunset && hudShown) {
 			drawGameInfoHud(gfx);
-#else
-			mDrawGameInfo->draw(gfx);
-#endif
 		}
 		gfx.setOrthogonal(orthoMtx.mMtx, AREA_FULL_SCREEN(gfx));
-#if defined(PIKI_PC_PORT)
-		drawContainerWindows(gfx);
+		if (hudShown) {
+			drawContainerWindows(gfx);
+			if (!gameflow.mMoviePlayer->mIsActive && !gameflow.mIsUIOverlayActive) {
+				hurryupWindow->draw(gfx);
+			}
+			accountWindow->draw(gfx);
+		}
 #else
+		if (state != NAVISTATE_DemoSunset) {
+			mDrawGameInfo->draw(gfx);
+		}
+		gfx.setOrthogonal(orthoMtx.mMtx, AREA_FULL_SCREEN(gfx));
 		containerWindow->draw(gfx);
-#endif
 		if (!gameflow.mMoviePlayer->mIsActive && !gameflow.mIsUIOverlayActive) {
 			hurryupWindow->draw(gfx);
 		}
 		accountWindow->draw(gfx);
+#endif
 	}
 
 	// this function requires an UNGODLY amount of stack from inlines, plus some

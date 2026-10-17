@@ -130,6 +130,14 @@ uint64_t hashNavi(void)
 		mixF32(h, n->mHealth);
 		AState<Navi>* st = n->getCurrState();
 		mixS32(h, st != nullptr ? (int32_t)st->getID() : (int32_t)-1);
+		// Lock-On / Charge: mixed only while in use, so a session that never
+		// locks hashes exactly as before.
+		if (n->mPcLockTarget != nullptr || n->mPcChargeTime > 0.0f) {
+			mixS32(h, n->mPcLockTarget != nullptr ? (int32_t)n->mPcLockTarget->mObjType : (int32_t)-1);
+			if (n->mPcLockTarget != nullptr) mixVec(h, n->mPcLockTarget->mSRT.t);
+			mixF32(h, n->mPcChargeTime);
+			mixVec(h, n->mPcAimOffset);
+		}
 	}
 	return h;
 }
@@ -345,6 +353,21 @@ uint64_t pc_state_hash_tick(void) { return sTick; }
 void pc_state_hash_set_netplay_capture(bool on) { sNetplayCapture = on; }
 
 void pc_state_hash_set_mode_fn(PcStateHashModeFn fn) { sModeFn = fn; }
+
+void pc_state_hash_print_navi_positions(uint64_t tick)
+{
+	if (naviMgr == nullptr) return;
+	Iterator it(naviMgr);
+	CI_LOOP(it)
+	{
+		Navi* n = static_cast<Navi*>(*it);
+		if (n == nullptr) continue;
+		std::printf("[netplay-navi] tick=%llu navi=%d pos=(%.2f %.2f %.2f) cursor=(%.2f %.2f)\n",
+		            (unsigned long long)tick, n->mNaviID, n->mSRT.t.x, n->mSRT.t.y, n->mSRT.t.z, n->mCursorPosition.x,
+		            n->mCursorPosition.z);
+	}
+	std::fflush(stdout);
+}
 
 bool pc_state_hash_current(uint64_t* total, uint64_t subs[7], uint64_t* tick)
 {

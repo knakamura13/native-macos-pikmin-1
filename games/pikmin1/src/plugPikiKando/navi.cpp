@@ -5,12 +5,15 @@
 #if defined(PIKI_PC_PORT)
 #include "GameStat.h"
 #include "pc_permadeath.h"
+#include "pc_record.h"
 #include "pc_coop.h"
 #include "pc_window.h"
 #include "pc_gyro.h"
 #include "settings/pc_settings.h"
 #include "mods/pc_hd_models.h"
 #include "gl/pc_gfx.h"
+#include "netplay/pc_netplay_camlead.h"
+#include "netplay/pc_netplay_present.h"
 #if PIKI_PC_TOUCH
 #include "touch/pc_touch.h"
 #endif
@@ -58,6 +61,7 @@ static f32 pcNaviHurt(f32 damage) { return damage; }
 #include "timing/pc_render_phase.h"
 #include "netplay/pc_netplay_det.h"
 #include "netplay/pc_input_log.h"
+#include "audio/pc_audio_source.h"
 #endif
 #include "NaviState.h"
 #include "Pcam/Camera.h"
@@ -394,6 +398,9 @@ bool Navi::isRopable()
  */
 bool Navi::startDamage()
 {
+#if defined(PIKI_PC_PORT)
+	PcAudioSource audioSource(mNaviID); // whose sounds these are (netplay audio ownership)
+#endif
 	int stateID      = mStateMachine->getCurrID(this);
 	NaviState* state = mStateMachine->getNaviState(this);
 	if (state->invincible(this)) {
@@ -411,6 +418,9 @@ bool Navi::startDamage()
  */
 void Navi::startDamageEffect()
 {
+#if defined(PIKI_PC_PORT)
+	PcAudioSource audioSource(mNaviID); // whose sounds these are (netplay audio ownership)
+#endif
 	CollPart* part = mCollInfo->getSphere('cent');
 	if (!part) {
 		return;
@@ -465,6 +475,9 @@ void Navi::startDamageEffect()
  */
 void Navi::finishDamage()
 {
+#if defined(PIKI_PC_PORT)
+	PcAudioSource audioSource(mNaviID); // whose sounds these are (netplay audio ownership)
+#endif
 	resetStateDamaged();
 	mStateMachine->restart(this);
 
@@ -675,6 +688,7 @@ void Navi::reset()
 	mPcLockIgnore = nullptr;
 	mPcChargeTime = 0.0f;
 	mPcAimOffset.set(0.0f, 0.0f, 0.0f);
+	mPcCursorMtx.makeIdentity();
 	mPcPinnedOffset.set(0.0f, 0.0f, 0.0f);
 #endif
 	mWalkAnimPrevDir = mFaceDirection;
@@ -744,10 +758,16 @@ bool pcIsLastNaviStanding(Navi* navi)
 	return true;
 }
 
+#if defined(PIKI_PC_PORT)
+// Netplay: which captain's throw preference is the keyboard's is sim state,
+// so deterministic mode fixes it to captain 0 on every peer.
+static int pcThrowKeyboardOwner() { return pc_netplay_deterministic() ? 0 : pc_window_get_keyboard_owner(); }
+#endif
+
 int pc_preferred_throw_color_for(Navi* navi)
 {
 	if (!navi) return -1;
-	if (navi->mNaviID == pc_window_get_keyboard_owner()) return sPreferredThrowColor;
+	if (navi->mNaviID == pcThrowKeyboardOwner()) return sPreferredThrowColor;
 	return sPreferredThrowColorP2;
 }
 
@@ -760,7 +780,7 @@ static int sPreferredThrowKind[2] = { -1, -1 };
 static bool sPreferredFromPad[2]   = { false, false };
 static int sPreferredBeforePad[2]  = { -1, -1 };
 
-static int pcThrowSlot(Navi* navi) { return navi && navi->mNaviID == pc_window_get_keyboard_owner() ? 0 : 1; }
+static int pcThrowSlot(Navi* navi) { return navi && navi->mNaviID == pcThrowKeyboardOwner() ? 0 : 1; }
 
 static bool pcKindMatches(Piki* piki, int kind)
 {
@@ -851,7 +871,7 @@ static bool pcSquadHasColor(int color)
  */
 static bool pcUpdatePreferredThrowColor(Navi* navi, bool allowKind = false)
 {
-	const bool keyboardOwner = navi->mNaviID == pc_window_get_keyboard_owner();
+	const bool keyboardOwner = navi->mNaviID == pcThrowKeyboardOwner();
 	int& preferred = keyboardOwner ? sPreferredThrowColor : sPreferredThrowColorP2;
 
 	// Tocar el icono del HUD cuenta como una muesca, y funciona aunque la
@@ -860,6 +880,14 @@ static bool pcUpdatePreferredThrowColor(Navi* navi, bool allowKind = false)
 #if PIKI_PC_TOUCH
 	if (keyboardOwner) touchSteps = pc_touch_take_color_taps();
 #endif
+	// Netplay: the wheel and the touch icon live outside PADStatus, so
+	// deterministic mode drains and ignores them (the D-pad still steps). The
+	// wheel's job is a local control setting, so the sim takes its default
+	// (the colour), as every peer's does.
+	const bool detMode = pc_netplay_deterministic();
+	if (detMode) {
+		touchSteps = 0;
+	}
 	// Cruceta izquierda/derecha como en Pikmin 2 (issue #43): vale para
 	// mando y teclado, con o sin A pulsado. Abajo sigue siendo el original.
 	int padSteps = 0;
@@ -881,7 +909,7 @@ static bool pcUpdatePreferredThrowColor(Navi* navi, bool allowKind = false)
 		sPreferredFromPad[pcThrowSlot(navi)]   = true;
 	}
 
-	const bool wheelOn = keyboardOwner && pc_settings_get_mouse_wheel_action() == 0;
+	const bool wheelOn = keyboardOwner && (detMode || pc_settings_get_mouse_wheel_action() == 0);
 	if (!wheelOn && touchSteps == 0 && padSteps == 0 && preferred < 0) {
 		return kindChanged;
 	}
@@ -908,8 +936,9 @@ static bool pcUpdatePreferredThrowColor(Navi* navi, bool allowKind = false)
 	}
 
 	int steps = touchSteps + padSteps;
-	if (wheelOn) {
-		steps += pc_window_take_wheel_steps();
+	if (wheelOn && pc_settings_get_mouse_wheel_action() == 0) {
+		const int wheelSteps = pc_window_take_wheel_steps();
+		if (!detMode) steps += wheelSteps;
 	}
 	if (steps != 0) {
 		index = ((index + steps) % presentCount + presentCount) % presentCount;
@@ -1140,12 +1169,11 @@ void Navi::postUpdate(int unused, f32 deltaTime)
 void Navi::pcUpdateBombCommand()
 {
 	// Se consume siempre, como Lock-On, para que no salte sola al activarlo.
-	const bool pressed = pc_window_take_bomb_press(mNaviID == 1 ? 1 : 0);
-	// Netplay: the Bomb button lives outside PADStatus, so deterministic mode
-	// drains and ignores it.
-	if (pc_netplay_deterministic()) {
-		return;
-	}
+	// Netplay: deterministic mode takes the press from this captain's synced
+	// input instead (the session drains the local queue into it).
+	const bool detMode = pc_netplay_deterministic();
+	const bool pressed = detMode ? (pc_netplay_ext_bits(mNaviID) & pc_input_log::kExtBomb) != 0
+	                             : pc_window_take_bomb_press(mNaviID == 1 ? 1 : 0);
 	if (!pressed || !pc_settings_get_bomb_control() || !pikiMgr) {
 		return;
 	}
@@ -1204,6 +1232,10 @@ void Navi::pcUpdateBombCommand()
 
 	ActPutBomb* act = static_cast<ActPutBomb*>(piki->mActiveAction->mChildActions[PikiAction::PutBomb].mAction);
 	act->pcCommand(throwIt, target);
+	if (detMode && pc_netplay_ext_trace()) {
+		printf("[EXT] tick=%u navi=%d bomb command: %s piki at (%.1f %.1f) to (%.1f %.1f)\n", pc_netplay_tick(), mNaviID,
+		       throwIt ? "throw" : "drop", piki->mSRT.t.x, piki->mSRT.t.z, target.x, target.z);
+	}
 }
 
 /**
@@ -1321,19 +1353,17 @@ void Navi::pcUpdateLockOn()
 {
 	// Se consume siempre, esté activo el mod o no, para que una pulsación no
 	// quede encolada y salte sola al activarlo.
-	const bool lockPressed   = pc_window_take_lockon_press();
-	const bool chargePressed = pc_window_take_swarm_press();
+	// Cada capitán tiene su propio Lock-On y Charge, en local y online.
+	// Netplay: deterministic mode takes both presses from this captain's
+	// synced input. The target comes from the sim cursor and the managers'
+	// order only.
+	const bool detMode       = pc_netplay_deterministic();
+	const uint8_t ext        = detMode ? pc_netplay_ext_bits(mNaviID) : 0;
+	const bool lockPressed   = detMode ? (ext & pc_input_log::kExtLockOn) != 0 : pc_window_take_lockon_press(mNaviID);
+	const bool chargePressed = detMode ? (ext & pc_input_log::kExtCharge) != 0 : pc_window_take_swarm_press(mNaviID);
 	const int mode           = pc_settings_get_lock_on();
-
-	// Netplay: the lock-on and charge presses live outside PADStatus, and the
-	// automatic mode follows the local cursor, so deterministic mode drains
-	// them and never locks.
-	if (pc_netplay_deterministic()) {
-		mPcLockTarget = nullptr;
-		mPcLockIgnore = nullptr;
-		pc_settings_note_lock_on(0);
-		return;
-	}
+	const bool extTrace      = detMode && pc_netplay_ext_trace();
+	Creature* const lockBefore = mPcLockTarget;
 
 	static const bool kDebug = getenv("NECTAR_LOCKON_DEBUG") != nullptr;
 	if (kDebug && lockPressed) {
@@ -1342,7 +1372,7 @@ void Navi::pcUpdateLockOn()
 		fflush(stderr);
 	}
 
-	if (!mode || mNaviID != 0) {
+	if (!mode) {
 		mPcLockTarget = nullptr;
 		mPcLockIgnore = nullptr;
 		pc_settings_note_lock_on(0);
@@ -1432,6 +1462,14 @@ void Navi::pcUpdateLockOn()
 		mPcAimOffset    = mCursorPosition;
 		mPcPinnedOffset = mCursorPosition;
 	}
+	if (extTrace && mPcLockTarget != lockBefore) {
+		if (mPcLockTarget) {
+			printf("[EXT] tick=%u navi=%d lock acquired: type %d at (%.1f %.1f)\n", pc_netplay_tick(), mNaviID,
+			       (int)mPcLockTarget->mObjType, mPcLockTarget->mSRT.t.x, mPcLockTarget->mSRT.t.z);
+		} else {
+			printf("[EXT] tick=%u navi=%d lock released\n", pc_netplay_tick(), mNaviID);
+		}
+	}
 
 	pc_settings_note_lock_on(mPcLockTarget != nullptr);
 
@@ -1443,6 +1481,10 @@ void Navi::pcUpdateLockOn()
 	}
 	if (chargePressed) {
 		mPcChargeTime = 2.5f;
+		if (extTrace) {
+			printf("[EXT] tick=%u navi=%d charge started at type %d\n", pc_netplay_tick(), mNaviID,
+			       (int)mPcLockTarget->mObjType);
+		}
 	}
 	if (mPcChargeTime <= 0.0f) {
 		return;
@@ -1456,6 +1498,7 @@ void Navi::pcUpdateLockOn()
 	const bool last      = mPcChargeTime <= 0.0f;
 	const Vector3f goal  = mPcLockTarget->getCentre();
 	const f32 reach      = pc_lock_target_radius(mPcLockTarget) + 40.0f;
+	int charged          = 0;
 	Iterator iterPiki(pikiMgr);
 	CI_LOOP(iterPiki)
 	{
@@ -1471,7 +1514,11 @@ void Navi::pcUpdateLockOn()
 		const f32 dz = piki->mSRT.t.z - goal.z;
 		if (last || dx * dx + dz * dz < reach * reach) {
 			piki->pcChargeAt(mPcLockTarget);
+			++charged;
 		}
+	}
+	if (extTrace && charged > 0) {
+		printf("[EXT] tick=%u navi=%d charge released %d pikmin\n", pc_netplay_tick(), mNaviID, charged);
 	}
 }
 #endif
@@ -1555,6 +1602,10 @@ void Navi::pcDrawLockRing(Graphics& gfx)
 /// Reloj monotónico en ms para el swarm (vale con varias vistas por frame).
 static u32 pcSwarmNowMs()
 {
+	// Netplay: mPcSwarmMs is written in the sim, so deterministic mode counts ticks.
+	if (pc_netplay_deterministic()) {
+		return u32(pc_netplay_tick() * 1000.0 * pc_netplay_fixed_dt(gsys ? gsys->mFrameRate : 2)) + 1;
+	}
 	const u32 ms = u32(std::chrono::duration_cast<std::chrono::milliseconds>(
 	                       std::chrono::steady_clock::now().time_since_epoch())
 	                       .count());
@@ -2149,9 +2200,33 @@ void Navi::pcPinCursorFirstPerson()
 	mCursorNaviDist       = reach;
 }
 
+#if defined(PIKI_PC_PORT)
+// Netplay: in deterministic mode the free-camera drag's cursor rotation is
+// this captain's synced input (the camera only notes it, PcamCamera::control).
+static void pcApplySyncedCursorRotate(Navi* navi)
+{
+	if (!pc_netplay_deterministic()) {
+		return;
+	}
+	const uint8_t ext  = pc_netplay_ext_bits(navi->mNaviID);
+	const int16_t turn = pc_netplay_ext_cursor_rotate(navi->mNaviID);
+	if (turn != 0) {
+		navi->pcRotateCursor((f32)turn * pc_input_log::kYawTurnsToRad);
+	}
+	if (pc_netplay_ext_trace() && ((ext & ~pc_input_log::kExtSwarm) != 0 || turn != 0)) {
+		printf("[EXT] tick=%u navi=%d input ext=0x%02x rotate=%d cursor=(%.2f %.2f)\n", pc_netplay_tick(), navi->mNaviID,
+		       (unsigned)ext, (int)turn, navi->mCursorPosition.x, navi->mCursorPosition.z);
+	}
+}
+#endif
+
 void Navi::update()
 {
 #if defined(PIKI_PC_PORT)
+	PcAudioSource audioSource(mNaviID); // whose sounds these are (netplay audio ownership)
+#endif
+#if defined(PIKI_PC_PORT)
+	pcApplySyncedCursorRotate(this);
 	pcUpdateLockOn();
 	pcUpdateBombCommand();
 #endif
@@ -2287,6 +2362,9 @@ void Navi::update()
  */
 void Navi::animationKeyUpdated(immut PaniAnimKeyEvent& event)
 {
+#if defined(PIKI_PC_PORT)
+	PcAudioSource audioSource(mNaviID); // whose sounds these are (netplay audio ownership)
+#endif
 	// sure kando.
 	int lowerMotionID = mNaviAnimMgr.getLowerAnimator().getCurrentMotionIndex();
 	int upperMotionID = mNaviAnimMgr.getUpperAnimator().getCurrentMotionIndex();
@@ -2677,6 +2755,9 @@ void Navi::releasePikis()
  */
 void Navi::doAI()
 {
+#if defined(PIKI_PC_PORT)
+	PcAudioSource audioSource(mNaviID); // whose sounds these are (netplay audio ownership)
+#endif
 	if (gameflow.mDemoFlags & CinePlayerFlags::NaviNoAI) {
 		return;
 	}
@@ -2992,6 +3073,9 @@ void Navi::letPikiWork()
  */
 void Navi::collisionCallback(immut CollEvent& event)
 {
+#if defined(PIKI_PC_PORT)
+	PcAudioSource audioSource(mNaviID); // whose sounds these are (netplay audio ownership)
+#endif
 	Creature* collider = event.mCollider;
 	if (collider != mCollidedWorkObj) {
 		switch (collider->mObjType) {
@@ -3171,7 +3255,9 @@ static void pcNaviCaptureControlYaw()
 		if (navi == nullptr) continue;
 		const int pad = navi->mNaviID;
 		if (pad < 0 || pad > 3 || pc_input_log_yaw_valid(pad)) continue;
-		Camera* cam = navi->controlCamera();
+		// In a lockstep session this peer's own pad samples the camera it
+		// presents (the lead camera while it is shown).
+		Camera* cam = pc_netplay_camlead_control_camera(pad, navi->controlCamera());
 		if (cam == nullptr) {
 			if (detMode) pc_input_log_yaw_set(pad, 0, pc_input_log::kFlagsNone);
 			continue;
@@ -3539,9 +3625,10 @@ void Navi::makeCStick(bool isSunset)
 	// Con el Charge activo el botón de swarm pasa a lanzar la carga contra el
 	// objetivo fijado, así que aquí deja de dirigir al pelotón.
 	const bool swarmIsCharge = pc_settings_get_charge() != 0;
-	// Netplay: the held swarm button lives outside PADStatus, so
-	// deterministic mode treats it as released.
-	const bool swarmHeld = !pc_netplay_deterministic() && (mNaviID == 0 ? pc_window_swarm_held() : pc_window_swarm_held_p2());
+	// Netplay: deterministic mode takes the held swarm button from this
+	// captain's synced input.
+	const bool swarmHeld = pc_netplay_deterministic() ? (pc_netplay_ext_bits(mNaviID) & pc_input_log::kExtSwarm) != 0
+	                                                  : (mNaviID == 0 ? pc_window_swarm_held() : pc_window_swarm_held_p2());
 	// Durante el Charge el empuje va al objetivo fijado en vez de al cursor.
 	const bool charging = mPcChargeTime > 0.0f && mPcLockTarget;
 	// Con el Charge activo el botón solo carga si hay a quién: sin objetivo
@@ -3740,6 +3827,13 @@ void Navi::refresh(Graphics& gfx)
 		f32 unusedVal2 = cosf(mFaceDirection);
 		STACK_PAD_VAR(1);
 
+#if defined(PIKI_PC_PORT)
+		// Netplay: mCursorWorldPos is sim (the whistle, lock-on and swarm read
+		// it), so only the sim side computes it; the presentation pass draws
+		// the cursor from the stored mWorldMtx.
+		const bool simSide = pc_netplay_present_sim_side();
+		if (simSide) {
+#endif
 		mCursorWorldPos   = mCursorPosition + mSRT.t;
 		mCursorWorldPos.y = mapMgr->getMinY(mCursorWorldPos.x, mCursorWorldPos.z, true) + 1.0f;
 
@@ -3781,15 +3875,23 @@ void Navi::refresh(Graphics& gfx)
 		mWorldMtx = orientMatrix;
 		mWorldMtx.setTranslation(mCursorWorldPos);
 #if defined(PIKI_PC_PORT)
+		mPcCursorMtx = mWorldMtx;
+		}
+#endif
+#if defined(PIKI_PC_PORT)
 		// Lock-On: el aro del cursor se sustituye por uno propio alrededor del
 		// objetivo (pcDrawLockRing), de trazo fijo sea cual sea su tamaño.
-		const bool pcLocked = mPcLockTarget && pc_settings_get_lock_on() && mNaviID == 0;
+		const bool pcLocked = mPcLockTarget && pc_settings_get_lock_on();
 #endif
 
 		// Estela: emite mientras el cursor se desplaza; quieto, deja de emitir
 		// y las partículas que quedan se desvanecen solas.
+#if defined(PIKI_PC_PORT)
+		if (simSide)
+#endif
 		{
-			const bool cursorShown = mIsCursorVisible && getCurrState()->getID() != NAVISTATE_DemoSunset;
+			// Ctrl+1 (atajo de grabación) oculta el cursor con el HUD.
+			const bool cursorShown = mIsCursorVisible && getCurrState()->getID() != NAVISTATE_DemoSunset && !pc_record_hud_hidden();
 			Vector3f trailPos(mCursorWorldPos.x, mCursorWorldPos.y + 2.0f, mCursorWorldPos.z);
 			Vector3f moved = trailPos - mCursorTrailLastPos;
 			const bool moving = cursorShown && moved.length() > 0.5f;
@@ -3811,9 +3913,17 @@ void Navi::refresh(Graphics& gfx)
 			if (cursorShown) mCursorTrailLastPos = trailPos;
 		}
 
+#if defined(PIKI_PC_PORT)
+		if (mIsCursorVisible && getCurrState()->getID() != NAVISTATE_DemoSunset && !pc_record_hud_hidden()) {
+#else
 		if (mIsCursorVisible && getCurrState()->getID() != NAVISTATE_DemoSunset) {
+#endif
 			gfx.useMatrix(Matrix4f::ident, 0);
+#if defined(PIKI_PC_PORT)
+			gfx.mCamera->mLookAtMtx.multiplyTo(mPcCursorMtx, viewMtx);
+#else
 			gfx.mCamera->mLookAtMtx.multiplyTo(mWorldMtx, viewMtx);
+#endif
 
 			gfx.useMatrix(viewMtx, 0);
 
@@ -4016,7 +4126,10 @@ bool Navi::pcDrawAsPikmin(Graphics& gfx)
 
 	Vector3f tip(6.0f, 0.0f, 0.0f);
 	obj->mShape->calcJointWorldPos(gfx, 6, tip);
-	mPcPikiLeafTip = tip;
+	// Netplay: the leaf-tip anchor is sim.
+	if (pc_netplay_present_sim_side()) {
+		mPcPikiLeafTip = tip;
+	}
 	return true;
 }
 #endif
@@ -4056,6 +4169,12 @@ void Navi::demoDraw(Graphics& gfx, immut Matrix4f* mtx)
 	if (tinted) pc_gfx_clear_mat_color_tint();
 #endif
 	mCollInfo->updateInfo(gfx, false);
+#if defined(PIKI_PC_PORT)
+	// Netplay: the light anchor is sim; the presentation pass reuses it.
+	if (!pc_netplay_present_sim_side()) {
+		return;
+	}
+#endif
 	CollPart* antenna = mCollInfo->getSphere('ante');
 	if (antenna) {
 		mNaviLightPosition = antenna->mCentre;
@@ -4204,6 +4323,11 @@ void Navi::procDamage(f32)
  */
 bool Navi::stimulate(immut Interaction& interaction)
 {
+#if defined(PIKI_PC_PORT)
+	// The hurt and fired sounds of Interact*::actNavi belong to the captain
+	// that is hit, not to the enemy code that raised them.
+	PcAudioSource audioSource(mNaviID);
+#endif
 	if (interaction.actCommon(this)) {
 		return interaction.actNavi(this);
 	}

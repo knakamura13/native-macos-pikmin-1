@@ -268,6 +268,7 @@ set(PC_PORT_SOURCES
     pc_port/pc_pad_axis.cpp
     pc_port/pc_menu_repeat.cpp
     pc_port/pc_photo_mode.cpp
+    pc_port/pc_record.cpp
     pc_port/pc_permadeath.cpp
     pc_port/randomizer/pc_randomizer.cpp
     pc_port/randomizer/pc_randomizer_catalog.cpp
@@ -318,6 +319,11 @@ set(PC_PORT_SOURCES
     pc_port/netplay/pc_sim_rng.cpp
     pc_port/netplay/pc_input_log.cpp
     pc_port/netplay/pc_state_hash.cpp
+    # Two-pass sim/presentation frame and the session lead camera.
+    pc_port/netplay/pc_netplay_present.cpp
+    pc_port/netplay/pc_netplay_camlead.cpp
+    # Co-op switch and direct boot (--coop-direct, netplay).
+    pc_port/netplay/pc_coop_switch.cpp
     pc_port/audio/pc_audio.cpp
     pc_port/audio/pc_envelope.cpp
     pc_port/audio/pc_jam.cpp
@@ -343,7 +349,8 @@ if (ANDROID)
     list(APPEND PC_PORT_SOURCES
         pc_port/android/pc_android.cpp
         pc_port/android/pc_texpack_android.cpp
-        pc_port/android/pc_save_android.cpp)
+        pc_port/android/pc_save_android.cpp
+        pc_port/android/pc_net_gateway_android.cpp)
 endif()
 if (PIKMIN_TOUCH)
     list(APPEND PC_PORT_SOURCES pc_port/touch/pc_touch.cpp)
@@ -557,6 +564,9 @@ if(NECTAR_ONLINE)
     endif()
     target_link_libraries(${NECTAR_GAME} PRIVATE nectar_net)
     target_compile_definitions(${NECTAR_GAME} PRIVATE PIKI_NECTAR_ONLINE=1)
+    if(PIKMIN_NETPLAY_BUILD)
+        target_sources(${NECTAR_GAME} PRIVATE pc_port/netplay/pc_online_navi.cpp)
+    endif()
 else()
     target_compile_definitions(${NECTAR_GAME} PRIVATE PIKI_NECTAR_ONLINE=0)
 endif()
@@ -604,6 +614,44 @@ if(PIKMIN_NETPLAY_BUILD AND PIKMIN_NATIVE_OPTIMIZE)
     message(FATAL_ERROR "PIKMIN_NETPLAY_BUILD cannot be combined with PIKMIN_NATIVE_OPTIMIZE")
 endif()
 if(PIKMIN_NETPLAY_BUILD)
+    set(PIKMIN_NETPLAY_SOURCE_ID "" CACHE STRING
+        "Cross-platform source identity used by the netplay compatibility handshake")
+    if(NOT PIKMIN_NETPLAY_SOURCE_ID)
+        execute_process(
+            COMMAND git rev-parse "HEAD^{tree}"
+            WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+            RESULT_VARIABLE PIKMIN_NETPLAY_GIT_RESULT
+            OUTPUT_VARIABLE PIKMIN_NETPLAY_GIT_TREE
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+            ERROR_QUIET)
+        if(NOT PIKMIN_NETPLAY_GIT_RESULT EQUAL 0 OR NOT PIKMIN_NETPLAY_GIT_TREE MATCHES "^[0-9a-f]+$")
+            message(FATAL_ERROR
+                "A deterministic netplay build needs PIKMIN_NETPLAY_SOURCE_ID when built outside a Git checkout")
+        endif()
+        execute_process(
+            COMMAND git status --porcelain --untracked-files=all -- games/pikmin1 libs/nectar_net
+            WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../.."
+            RESULT_VARIABLE PIKMIN_NETPLAY_STATUS_RESULT
+            OUTPUT_VARIABLE PIKMIN_NETPLAY_DIRTY_FILES
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+            ERROR_QUIET)
+        if(NOT PIKMIN_NETPLAY_STATUS_RESULT EQUAL 0)
+            message(FATAL_ERROR "Could not verify that the netplay source tree is clean")
+        endif()
+        string(REGEX MATCH
+            "(^|\n)[^\n]*(CMakeLists\\.txt|\\.(c|cc|cpp|h|hpp|inl|cmake))($|\n)"
+            PIKMIN_NETPLAY_DIRTY_SOURCE "${PIKMIN_NETPLAY_DIRTY_FILES}")
+        if(PIKMIN_NETPLAY_DIRTY_SOURCE)
+            message(FATAL_ERROR
+                "Refusing an ambiguous netplay source identity for a dirty tree. Commit the source changes, "
+                "or set PIKMIN_NETPLAY_SOURCE_ID explicitly for a private development build.")
+        endif()
+        set(PIKMIN_NETPLAY_SOURCE_ID "${PIKMIN_NETPLAY_GIT_TREE}")
+    endif()
+    message(STATUS "Netplay cross-platform source identity: ${PIKMIN_NETPLAY_SOURCE_ID}")
+    target_compile_definitions(${NECTAR_GAME} PRIVATE
+        PIKMIN_NETPLAY_SOURCE_ID="${PIKMIN_NETPLAY_SOURCE_ID}"
+        PIKMIN_NETPLAY_GAME_VERSION="${PIKMIN_GAME_VERSION}")
     foreach(target IN LISTS PIKMIN_OPTIMIZED_TARGETS)
         if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
             target_compile_options(${target} PRIVATE -ffp-contract=off -ftrivial-auto-var-init=zero)
@@ -630,11 +678,100 @@ set(PC_NETPLAY_LIBM_NO_BUILTIN_FLAGS
     -fno-builtin-asin -fno-builtin-acos -fno-builtin-atan -fno-builtin-atan2
     -fno-builtin-exp -fno-builtin-log -fno-builtin-log10 -fno-builtin-log2
     -fno-builtin-exp2 -fno-builtin-pow -fno-builtin-fmod -fno-builtin-hypot)
-if(PIKMIN_NETPLAY_BUILD AND NOT ANDROID)
-    add_library(pc_netplay_libm_obj OBJECT pc_port/netplay/pc_netplay_libm.c)
-    target_compile_options(pc_netplay_libm_obj PRIVATE
-        ${PC_NETPLAY_LIBM_NO_BUILTIN_FLAGS} -fno-lto -ffp-contract=off -ftrivial-auto-var-init=zero)
+# Android too: the online mode (NECTAR_ONLINE) replays the host's ticks, so
+# its simulation must match bit for bit on every platform.
+if(PIKMIN_NETPLAY_BUILD)
+    # Created once: the Android project adds this directory for USA and PAL.
+    if(NOT TARGET pc_netplay_libm_obj)
+        add_library(pc_netplay_libm_obj OBJECT pc_port/netplay/pc_netplay_libm.c)
+        target_compile_options(pc_netplay_libm_obj PRIVATE
+            ${PC_NETPLAY_LIBM_NO_BUILTIN_FLAGS} -fno-lto -ffp-contract=off -ftrivial-auto-var-init=zero)
+    endif()
     target_sources(${NECTAR_GAME} PRIVATE $<TARGET_OBJECTS:pc_netplay_libm_obj>)
+endif()
+
+# Netplay lockstep session (third_party/NETPLAY_VENDOR.md). GekkoNet is its own
+# static library: GekkoLib/src/*.cpp with -std=gnu++20, GEKKONET_NO_ASIO and
+# GEKKONET_STATIC. Quoted includes search its own directories first
+# (-iquote): on case-insensitive file systems the game's include/Event.h would
+# otherwise shadow GekkoNet's private event.h. The game's session and UDP
+# transport compile as C++17 and include only gekkonet.h.
+if(PIKMIN_NETPLAY_BUILD)
+    if(NOT TARGET gekkonet)
+        set(GEKKONET_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_party/gekkonet/GekkoLib")
+        file(GLOB GEKKONET_SOURCES "${GEKKONET_DIR}/src/*.cpp")
+        add_library(gekkonet STATIC ${GEKKONET_SOURCES})
+        target_include_directories(gekkonet PUBLIC ${GEKKONET_DIR}/include
+            PRIVATE ${GEKKONET_DIR}/include/private ${GEKKONET_DIR}/thirdparty)
+        target_compile_definitions(gekkonet PUBLIC GEKKONET_STATIC PRIVATE GEKKONET_NO_ASIO)
+        if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+            target_compile_options(gekkonet PRIVATE -std=gnu++20
+                "-iquote${GEKKONET_DIR}/include/private"
+                "-iquote${GEKKONET_DIR}/include"
+                "-iquote${GEKKONET_DIR}/thirdparty")
+        endif()
+    endif()
+    target_sources(${NECTAR_GAME} PRIVATE
+        pc_port/netplay/pc_netplay_session.cpp
+        pc_port/netplay/pc_netplay_udp.cpp
+        # Title Local/Online choice: the host-authoritative room with
+        # NECTAR_ONLINE, otherwise the lockstep ICE (NPIX) room.
+        pc_port/netplay/pc_online_menu.cpp
+        pc_port/netplay/pc_online_relaunch.cpp)
+    target_link_libraries(${NECTAR_GAME} PRIVATE gekkonet)
+    if(WIN32)
+        target_link_libraries(${NECTAR_GAME} PRIVATE ws2_32 winmm)
+    endif()
+endif()
+
+# Netplay ICE transport (connection codes, NAT traversal). libjuice is its own
+# static C11 library with JUICE_STATIC and USE_NETTLE=0; the game's C++
+# options (NATIVE_COMPILE_OPTIONS) are C++-only and not applied to it.
+if(PIKMIN_NETPLAY_BUILD)
+    if(NOT TARGET juice)
+        file(GLOB LIBJUICE_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/third_party/libjuice/src/*.c")
+        add_library(juice STATIC ${LIBJUICE_SOURCES})
+        set_target_properties(juice PROPERTIES C_STANDARD 11 C_STANDARD_REQUIRED ON)
+        target_include_directories(juice PUBLIC third_party/libjuice/include
+            PRIVATE third_party/libjuice/include/juice third_party/libjuice/src)
+        target_compile_definitions(juice PUBLIC JUICE_STATIC PRIVATE USE_NETTLE=0)
+        if(WIN32)
+            target_compile_definitions(juice PRIVATE WIN32_LEAN_AND_MEAN)
+            target_link_libraries(juice PUBLIC ws2_32 bcrypt)
+        endif()
+        find_package(Threads REQUIRED)
+        target_link_libraries(juice PRIVATE Threads::Threads)
+    endif()
+    target_sources(${NECTAR_GAME} PRIVATE
+        pc_port/netplay/pc_netplay_ice.cpp
+        pc_port/netplay/pc_netplay_launch.cpp
+        # Session HUD, desync forensics and the failure-path diagnostics.
+        pc_port/netplay/pc_netplay_hud.cpp
+        pc_port/netplay/pc_netplay_forensics.cpp
+        pc_port/netplay/pc_netplay_inlog.cpp
+        pc_port/netplay/pc_state_dump.cpp
+        pc_port/netplay/pc_netplay_diag.cpp
+        pc_port/netplay/pc_netplay_diag_bt.cpp)
+    target_link_libraries(${NECTAR_GAME} PRIVATE juice)
+    # Router port mapping for ICE rooms (nectar_net's PortPublisher: PCP and
+    # NAT-PMP always, UPnP when miniupnpc is found, e.g. with CMAKE_PREFIX_PATH
+    # at the scripts/netplay-deps.sh prefix). Created once: Android adds this
+    # directory twice, and NECTAR_ONLINE may have added it already.
+    if(NOT TARGET nectar_net)
+        find_package(miniupnpc CONFIG QUIET)
+        if(miniupnpc_FOUND)
+            set(NECTAR_NET_ENABLE_UPNP ON)
+        endif()
+        add_subdirectory("${NECTAR_LIBS_DIR}/nectar_net" "${CMAKE_BINARY_DIR}/nectar_net")
+    endif()
+    target_link_libraries(${NECTAR_GAME} PRIVATE nectar_net)
+    target_compile_definitions(${NECTAR_GAME} PRIVATE PIKI_NETPLAY_PORTMAP=1)
+endif()
+
+# Default build: the netplay hooks are no-op stubs, so the weak call sites link
+# on Mach-O too (see pc_port/netplay/pc_netplay_stubs.cpp).
+if(NOT PIKMIN_NETPLAY_BUILD)
+    target_sources(${NECTAR_GAME} PRIVATE pc_port/netplay/pc_netplay_stubs.cpp)
 endif()
 
 option(PIKMIN_ENABLE_IPO "Enable portable interprocedural/link-time optimization" ON)
@@ -849,6 +986,13 @@ if(PIKMIN_BUILD_LAUNCHER)
     if (WIN32)
         target_sources(pikmin_launcher PRIVATE packaging/windows/nectar.rc)
     endif()
+    # Host Co-op / Join Co-op en el launcher: apagado por defecto, el online se
+    # abre desde el propio juego (Co-op / VS -> Online).
+    option(PIKMIN_LAUNCHER_NETPLAY_BUTTONS "Show the Host/Join Co-op buttons in the launcher" OFF)
+    if(PIKMIN_NETPLAY_BUILD AND PIKMIN_LAUNCHER_NETPLAY_BUTTONS)
+        target_sources(pikmin_launcher PRIVATE pc_port/launcher/launcher_coop.cpp)
+        target_compile_definitions(pikmin_launcher PRIVATE PIKMIN_LAUNCHER_NETPLAY=1)
+    endif()
     target_include_directories(pikmin_launcher PRIVATE ${SDL2_INCLUDE_DIRS})
     target_link_libraries(pikmin_launcher PRIVATE pikmin_disc_image ${SDL2_LIBRARIES} Threads::Threads)
     if (WIN32)
@@ -903,6 +1047,13 @@ if(PIKMIN_BUILD_TESTS AND PIKMIN_BUILD_LAUNCHER)
         target_link_libraries(prepared_image_test PRIVATE comdlg32 ole32 shell32 uuid)
     endif()
     add_test(NAME prepared_image_test COMMAND prepared_image_test)
+
+    if(PIKMIN_NETPLAY_BUILD)
+        # Host Co-op / Join Co-op flow with a fake game.
+        add_executable(launcher_coop_test pc_port/launcher/launcher_coop_test.cpp pc_port/launcher/launcher_coop.cpp)
+        target_compile_options(launcher_coop_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+        add_test(NAME launcher_coop_test COMMAND launcher_coop_test)
+    endif()
 endif()
 
 if(PIKMIN_BUILD_TESTS)
@@ -1077,6 +1228,58 @@ if(PIKMIN_BUILD_TESTS)
     target_compile_options(pc_netplay_policy_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
     add_test(NAME pc_netplay_policy_test COMMAND pc_netplay_policy_test)
 
+    # Two-pass present module: skip flag, null-GX counters, local player.
+    add_executable(pc_netplay_present_test
+        pc_port/netplay/pc_netplay_present_test.cpp
+        pc_port/netplay/pc_netplay_present.cpp
+        pc_port/netplay/pc_netplay_det.cpp
+        pc_port/netplay/pc_sim_rng.cpp)
+    target_compile_definitions(pc_netplay_present_test PRIVATE PC_NETPLAY_PRESENT_HOST=1)
+    target_compile_options(pc_netplay_present_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME pc_netplay_present_test COMMAND pc_netplay_present_test)
+
+    # Lead camera core (header-only): key mapping, input history, prediction
+    # window, correction filter.
+    add_executable(pc_netplay_camlead_test pc_port/netplay/pc_netplay_camlead_test.cpp)
+    target_include_directories(pc_netplay_camlead_test PRIVATE pc_port)
+    target_compile_options(pc_netplay_camlead_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME pc_netplay_camlead_test COMMAND pc_netplay_camlead_test)
+
+    # Netplay audio ownership gate (header-only).
+    add_executable(pc_audio_source_test pc_port/audio/pc_audio_source_test.cpp)
+    target_include_directories(pc_audio_source_test PRIVATE pc_port)
+    target_compile_options(pc_audio_source_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME pc_audio_source_test COMMAND pc_audio_source_test)
+
+    # Netplay session HUD model and the desync forensics data model / input log.
+    add_executable(pc_netplay_hud_model_test pc_port/netplay/pc_netplay_hud_model_test.cpp)
+    target_include_directories(pc_netplay_hud_model_test PRIVATE pc_port)
+    target_compile_options(pc_netplay_hud_model_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME pc_netplay_hud_model_test COMMAND pc_netplay_hud_model_test)
+    add_executable(pc_netplay_forensics_test
+        pc_port/netplay/pc_netplay_forensics_test.cpp
+        pc_port/netplay/pc_netplay_forensics.cpp
+        pc_port/netplay/pc_netplay_inlog.cpp)
+    target_include_directories(pc_netplay_forensics_test PRIVATE pc_port)
+    target_compile_options(pc_netplay_forensics_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME pc_netplay_forensics_test COMMAND pc_netplay_forensics_test)
+
+    # Netplay handshake Hello codec, --netplay-input parse and the co-op switch.
+    add_executable(pc_netplay_transfer_test pc_port/netplay/pc_netplay_transfer_test.cpp)
+    target_include_directories(pc_netplay_transfer_test PRIVATE pc_port)
+    target_compile_options(pc_netplay_transfer_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME pc_netplay_transfer_test COMMAND pc_netplay_transfer_test)
+    add_executable(pc_netplay_input_sel_test pc_port/netplay/pc_netplay_input_sel_test.cpp)
+    target_include_directories(pc_netplay_input_sel_test PRIVATE pc_port)
+    target_compile_options(pc_netplay_input_sel_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME pc_netplay_input_sel_test COMMAND pc_netplay_input_sel_test)
+    add_executable(pc_coop_switch_test
+        pc_port/netplay/pc_coop_switch_test.cpp
+        pc_port/netplay/pc_coop_switch.cpp)
+    target_include_directories(pc_coop_switch_test PRIVATE pc_port)
+    target_compile_options(pc_coop_switch_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME pc_coop_switch_test COMMAND pc_coop_switch_test)
+
     # PKNI input-file format, yaw quantisation and the per-tick yaw slots.
     add_executable(pc_input_log_test
         pc_port/netplay/pc_input_log_test.cpp
@@ -1106,6 +1309,39 @@ if(PIKMIN_NETPLAY_BUILD AND PIKMIN_BUILD_TESTS AND NOT ANDROID)
             COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/tools/netplay/fp_gate.py"
                     --objdump "${CMAKE_OBJDUMP}" "$<TARGET_FILE:${NECTAR_GAME}>")
     endif()
+
+    # GekkoNet-backed host tests: the UDP transport and lossy wrapper over two
+    # in-process sessions, the load guard's GekkoNet assumptions, and the
+    # adaptive delay's transitions.
+    foreach(test pc_netplay_transport_test pc_netplay_loadguard_test pc_netplay_adaptive_test)
+        add_executable(${test} pc_port/netplay/${test}.cpp)
+        target_include_directories(${test} PRIVATE pc_port)
+        target_compile_options(${test} PRIVATE ${NATIVE_COMPILE_OPTIONS})
+        target_link_libraries(${test} PRIVATE gekkonet)
+        if(WIN32)
+            target_link_libraries(${test} PRIVATE ws2_32)
+        endif()
+        add_test(NAME ${test} COMMAND ${test})
+    endforeach()
+    target_sources(pc_netplay_transport_test PRIVATE pc_port/netplay/pc_netplay_udp.cpp)
+
+    # ICE codes and two libjuice agents over loopback (no network needed).
+    add_executable(pc_netplay_ice_test
+        pc_port/netplay/pc_netplay_ice_test.cpp
+        pc_port/netplay/pc_netplay_ice.cpp)
+    target_include_directories(pc_netplay_ice_test PRIVATE pc_port)
+    target_compile_options(pc_netplay_ice_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    target_link_libraries(pc_netplay_ice_test PRIVATE juice gekkonet)
+    add_test(NAME pc_netplay_ice_test COMMAND pc_netplay_ice_test)
+endif()
+
+# Loopback UDP impairment proxy for netplay tests (pc_netplay_impair.h). It sits
+# between the two peers, so any executable sees the same impaired link.
+if(PIKMIN_NETPLAY_BUILD AND WIN32 AND NOT ANDROID)
+    add_executable(netplay_impair_proxy tools/netplay/udp_impair_proxy.cpp)
+    target_include_directories(netplay_impair_proxy PRIVATE pc_port)
+    target_compile_options(netplay_impair_proxy PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    target_link_libraries(netplay_impair_proxy PRIVATE ws2_32 winmm)
 endif()
 
 message(STATUS "")

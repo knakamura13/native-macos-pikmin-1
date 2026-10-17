@@ -40,15 +40,92 @@ Estado: contrato previo a implementación. Los números son provisionales hasta 
 
 ## Handshake
 
-1. El invitado decodifica el código y conecta a un endpoint.
-2. El host responde a un `ClientProbe` pequeño con una cookie sin estado, sin amplificar bytes.
-3. `ClientHello` demuestra posesión de `join_secret` y vincula el transcript a la clave/fingerprint del host.
-4. Ambos negocian protocolo, juego, build, región, manifest de gameplay y capabilities.
-5. El host envía `SessionRules`; el invitado acepta o rechaza explícitamente.
-6. Tras autenticar se acuerdan `session_id` y un `resume_secret` distinto.
-7. El host consume la plaza y deja de aceptar nuevos handshakes.
+Implementado en `nectar_net` (`GatedTransport`, ADR-0002):
 
-El código nunca es un token de sesión permanente. Checksum sólo detecta errores de copia; el MAC/fingerprint autentica.
+1. El invitado decodifica el código `NECTAR1` y conecta a un endpoint. GNS
+   resuelve el desafío sin estado (cookie antiamplificación) y cifra el canal.
+2. Cuarentena: el invitado envía `ClientHello` (nonce de sala 16 + `join_secret`
+   16) por el canal fiable. El host compara ambos en tiempo constante y
+   responde `HostHello` (nonce 16 + veredicto 1); un rechazo lleva el nonce a
+   ceros para no revelar la sala a quien no tiene el secreto. Un solo intento por conexión,
+   5 s de plazo; cualquier otro mensaje antes del veredicto cierra la conexión.
+   Tres fallos desde un mismo origen lo vetan 30 s, doblando hasta 10 min.
+3. Compatibilidad: el invitado envía `CompatibilityOffer` con su
+   `CompatibilityInfo`; el host responde `CompatibilityResult` con el primer
+   campo distinto (juego, región, build, contenido, capabilities) y su propia
+   info, 10 s de plazo. El invitado vuelve a comparar y trata como violación un
+   veredicto que contradiga la info del host. Un invitado incompatible no se
+   penaliza: conocía el secreto.
+4. Sólo entonces ambos lados informan `Connected` y aceptan gameplay.
+5. Pendiente: `SessionRules`, `session_id` y `resume_secret` distinto.
+
+Riesgo aceptado (ADR-0002): un atacante activo en la ruta durante el handshake
+puede suplantar a cualquiera de los dos. El código nunca es un token de sesión
+permanente; el checksum sólo detecta errores de copia.
+
+### `CompatibilityInfo` (76 bytes, big endian)
+
+| Offset | Campo | Bytes |
+|---:|---|---:|
+| 0 | protocol_minor | 2 |
+| 2 | game (1 Pikmin 1, 2 Pikmin 2) | 1 |
+| 3 | region (código del juego) | 1 |
+| 4 | build digest | 32 |
+| 36 | content digest (datos y mods de lógica) | 32 |
+| 68 | capabilities | 4 |
+| 72 | required capabilities | 4 |
+
+`CompatibilityResult` = campo (1) + `CompatibilityInfo` del host.
+
+### Código `NECTAR1` (congelado el 14-10-2026)
+
+`NECTAR1-` + Crockford Base32 canónico en grupos de 5 de:
+magic `NCJC` | versión 1 | protocol_major u16 | flags u16 | nº endpoints u8 |
+caducidad u32 (Unix) | nonce 16 | join_secret 16 | por endpoint: familia u8,
+puerto u16, prioridad u8, 4 o 16 bytes | CRC32. Máximo 4 endpoints y 384
+caracteres. Con un IPv4 ocupa 119 caracteres. Se rechazan relleno no canónico,
+caracteres sobrantes y datos tras el CRC. Vectores de referencia en
+`libs/nectar_net/tests/connection_code_test.cpp`; cambiarlos rompe códigos ya
+compartidos y exige un formato nuevo (`NECTAR2`).
+
+## Mensajes de juego v1 (implementados en `nectar_net`)
+
+Todos big endian, con tamaños exactos o acotados y validados antes de reservar
+memoria. Tick canónico: 30 Hz.
+
+| Mensaje | Payload | Canal |
+|---|---|---|
+| `InputBundle` | tick más nuevo u64, nº frames u8 (1–6), frames del más nuevo al más viejo: held, pressed, released u16; stick x/y, cstick x/y i8; triggers u8×2; cursor dx/dy i16; flags u8 (17 bytes) | no fiable |
+| `Ping` | id u32, hora del emisor u64 (12 bytes) | no fiable |
+| `Pong` | id u32, eco u64, tick del host u64, fase del tick u32 < 34 ms (24 bytes) | no fiable |
+| `WorldDelta`/`WorldSnapshot` | flags u8 (bit0 keyframe), nº registros u16, registros: id u64, esquema u8 (≠0), longitud u16, datos | no fiable / bulk |
+| `StateHash` | tick u64, hash u64, nº entidades u32 (20 bytes) | control |
+| `AppliedInputs` | tick más nuevo u64, nº ticks u8 (1–8), tamaño u8 (1–64), bloques del más nuevo al más viejo (Pikmin 1: P1+P2, 32 bytes) | no fiable con 8 de redundancia + copia fiable |
+| `SessionRules` | `seed=<u32>\n` + texto `clave=valor;` de los ajustes de simulación del host (≤ 8 KiB, imprimible) | control |
+| `ScenePrepare` | época u32 (≠0), escena u32, semilla u64 | control |
+| `SceneReady` | época u32, escena u32 | control |
+| `SceneStart` | época u32, tick de inicio u64 | control |
+
+Reglas:
+- `InputBundle`: ticks consecutivos; botones y flags fuera de la máscara del
+  juego y sticks a -128 se rechazan. El host descarta ticks ya consumidos o
+  más de 30 por delante, reconstruye pulsar/soltar desde `held`, repite el
+  último estado 6 ticks (sin repetir eventos de un solo uso) y después pasa a
+  input neutro.
+- Reloj: el invitado estima el tick del host con la muestra de menor RTT de
+  las 16 últimas; búfer de interpolación `clamp(60 + 2·jitter, 60, 150)` ms.
+- `NetEntityId` = época de escena (16 bits bajos) | tipo | generación |
+  contador ≠ 0. Un delta con registros de otra época o ids repetidos se
+  rechaza entero; los datagramas no fiables se empaquetan autocontenidos en
+  ≤ 1.100 bytes.
+- Escena: las épocas sólo crecen; mensajes de una escena anterior se ignoran.
+- Réplica exacta (Pikmin 1, Fase 5 opción A): el host envía antes de
+  simular cada tick los inputs que aplicará; el invitado reproduce
+  exactamente esos ticks a 30 Hz (acelera si se retrasa, colchón de 1–4
+  ticks según el jitter) y compara el `StateHash` del host dos veces por
+  segundo. Su propio input viaja en `InputBundle` adelantado `lead` ticks.
+- Grabaciones (`NNRC` v1): sólo tráfico posterior al handshake, tope de
+  tamaño, parser estricto y reproducción determinista con `ReplayTransport`.
 
 ## Tipos v0 reservados
 
@@ -62,6 +139,7 @@ El código nunca es un token de sesión permanente. Checksum sólo detecta error
 | 6 | CompatibilityResult | control | ambas |
 | 7 | Ping | control | ambas |
 | 8 | Pong | control | ambas |
+| 9 | CompatibilityOffer | control | C→H |
 | 16 | InputBundle | input | C→H |
 | 32 | WorldDelta | state | H→C |
 | 33 | WorldSnapshot | bulk | H→C |
@@ -105,5 +183,4 @@ Todos los límites se centralizarán en `nectar_net/limits.h` y reducirlos será
 
 - Asignación definitiva de IDs y representación cuantizada.
 - Esquemas por familia de entidad.
-- Algoritmo exacto de MAC/cookie según la API final del transporte.
 - Ventanas de secuencia, tick y reanudación medidas en pruebas de red.

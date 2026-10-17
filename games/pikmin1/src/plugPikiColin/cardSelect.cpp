@@ -27,6 +27,7 @@
 #include "mods/pc_vs_arena.h"
 #include "pc_window.h"
 #include "settings/pc_settings.h"
+#include "netplay/pc_coop_switch.h"
 #endif
 
 // Macros for packing and unpacking the section compression flag.
@@ -105,9 +106,13 @@ struct CardSelectSetupSection : public Node {
 			// guardadas; J1 teclado + mando 1, J2 mando 2). Si el mapa no se
 			// puede montar, se dice en la consola y se vuelve al título.
 			pc_coop_take_chosen_at_title();
-			pc_window_input_reset_assignment();
-			pc_coop_set_captain(0, PC_CAPTAIN_OLIMAR);
-			pc_coop_set_captain(1, PC_CAPTAIN_LOUIE);
+			// Netplay: each PC drives only its own player with the device the
+			// session assigned, and the captains are the session's.
+			if (!pc_vs_direct_online()) {
+				pc_window_input_reset_assignment();
+				pc_coop_set_captain(0, PC_CAPTAIN_OLIMAR);
+				pc_coop_set_captain(1, PC_CAPTAIN_LOUIE);
+			}
 			if (const char* why = pc_vs_arena_prepare()) {
 				fprintf(stderr, "[VS] --vs-map: el mapa no se puede jugar: %s\n", why);
 				pc_vs_set_pending(false);
@@ -115,6 +120,38 @@ struct CardSelectSetupSection : public Node {
 				mNextSectionsFlag = PACK_NEXT_ONEPLAYER(ONEPLAYER_GameExit);
 			}
 			mState = Exit;
+			gsys->setFade(0.0f);
+		} else if (!gameflow.mIsChallengeMode && pc_coop_pending() && pc_coop_direct_take_setup()) {
+			// Co-op direct boot: a new file with no prompts. The captains and
+			// the controller assignment were armed by the co-op switch; the
+			// run takes no Permadeath, Hard mode, Randomizer or tutorial skip.
+			pc_coop_take_chosen_at_title();
+			pc_permadeath_set_pending(false);
+			pc_hardmode_set_pending(false);
+			pc_randomizer_set_menu_pending(false);
+			pc_tutorial_skip_set_pending(false);
+			gameflow.mGamePrefs.mHasSaveGame = false;
+			// An online session can continue a file instead (the host's card,
+			// copied to the guest): commit that slot like picking it here.
+			if (const int slot = pc_coop_direct_slot()) {
+				MemoryCard& memcard = gameflow.mMemoryCard;
+				memcard.getMemoryCardState(false);
+				if (memcard.mSaveFileIndex < 0) {
+					memcard.makeDefaultFile();
+					CardUtilIdleWhileBusy();
+					memcard.hasCardFinished();
+				}
+				if (memcard.getMemoryCardState(true) == 0 && memcard.mSaveFileIndex >= 0) {
+					CardQuickInfo infos[4];
+					memcard.getQuickInfos(infos);
+					commitSelectedFile(infos[slot - 1], slot - 1);
+					printf("[coop] direct boot: continuing file %d (day %d)\n", slot, (int)infos[slot - 1].mCurrentDay);
+				} else {
+					printf("[coop] direct boot: the card is not usable; starting a new run\n");
+				}
+			}
+			mNextSectionsFlag                = 0; // no destination: the exit starts the new run
+			mState                           = Exit;
 			gsys->setFade(0.0f);
 		} else if (gameflow.mIsChallengeMode && pc_vs_pending() && pc_coop_take_chosen_at_title()) {
 			// VS: primero la explicación y las reglas; luego mandos y
@@ -535,7 +572,7 @@ struct CardSelectSetupSection : public Node {
 					#if defined(PIKI_PC_PORT)
 						// Skip tutorial enters the stage directly. IntroGame is only the
 						// two-part crash movie and has no progression state to preserve.
-						gameflow.mNextOnePlayerSectionID = pc_tutorial_skip_pending()
+						gameflow.mNextOnePlayerSectionID = pc_tutorial_skip_pending() || pc_coop_direct_active()
 						                                       ? ONEPLAYER_NewPikiGame
 						                                       : ONEPLAYER_IntroGame;
 					#else

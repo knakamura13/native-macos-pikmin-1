@@ -4,6 +4,9 @@
 #include "installer_ui.h"
 #include "launcher_gui.h"
 #include "launcher_platform.h"
+#if PIKMIN_LAUNCHER_NETPLAY
+#include "launcher_coop.h"
+#endif
 
 #include <cerrno>
 #include <chrono>
@@ -17,6 +20,7 @@
 #include <fstream>
 #include <functional>
 #include <iostream>
+#include <iterator>
 #include <memory>
 #include <string>
 #include <thread>
@@ -682,11 +686,25 @@ UpdateOutcome runUpdate(pikmin::launcher::HubWindow& hub, const fs::path& source
 
 #ifdef _WIN32
 constexpr const char* kPikmin2Executable = "pikmin2_pc.exe";
+constexpr const char* kPikmin2UsaExecutable = "pikmin2_pc-usa.exe";
 #else
 constexpr const char* kPikmin2Executable = "pikmin2_pc";
+constexpr const char* kPikmin2UsaExecutable = "pikmin2_pc-usa";
 #endif
-// El port de Pikmin 2 se compila para el disco europeo (VERSION_GPVP01).
+// El paquete trae dos builds de Pikmin 2: Europa (GPVP01, pikmin2_pc) y USA
+// (GPVE01, pikmin2_pc-usa). Al instalar se copia la del disco como pikmin2_pc.
 constexpr const char* kPikmin2DiscId = "GPVP01";
+constexpr const char* kPikmin2UsaDiscId = "GPVE01";
+
+// Región de los datos instalados: primera línea de assets/.pikmin2-assets.
+std::string installedPikmin2DiscId(const fs::path& gameDirectory)
+{
+    std::ifstream in(gameDirectory / "assets" / ".pikmin2-assets");
+    std::string line;
+    if (!in || !std::getline(in, line)) return kPikmin2DiscId;
+    while (!line.empty() && (line.back() == '\r' || line.back() == ' ')) line.pop_back();
+    return line == kPikmin2UsaDiscId ? kPikmin2UsaDiscId : kPikmin2DiscId;
+}
 
 // Pikmin 2 vive en <instalación>/pikmin2: su ejecutable y su carpeta assets,
 // aparte de los de Pikmin 1, que ocupan la raíz.
@@ -746,10 +764,10 @@ bool installPikmin2Assets(const fs::path& image, const fs::path& gameDirectory, 
         failure = error;
         return false;
     }
-    if (identity.gameId != kPikmin2DiscId) {
+    if (identity.gameId != kPikmin2DiscId && identity.gameId != kPikmin2UsaDiscId) {
         failure = identity.gameId.rfind("GPV", 0) == 0
-                    ? "This build of Pikmin 2 needs the European disc (GPVP01); this one is " + identity.gameId + "."
-                    : "This is not a Pikmin 2 disc (" + identity.gameId + "). Choose Pikmin 2 Europe (GPVP01).";
+                    ? "Pikmin 2 needs the USA (GPVE01) or European (GPVP01) disc; this one is " + identity.gameId + "."
+                    : "This is not a Pikmin 2 disc (" + identity.gameId + "). Choose Pikmin 2 USA (GPVE01) or Europe (GPVP01).";
         return false;
     }
 
@@ -794,7 +812,7 @@ bool installPikmin2Assets(const fs::path& image, const fs::path& gameDirectory, 
     }
     {
         std::ofstream marker(partialAssets / ".pikmin2-assets", std::ios::trunc);
-        marker << kPikmin2DiscId << "\nextracted_from=" << image.filename().string() << '\n';
+        marker << identity.gameId << "\nextracted_from=" << image.filename().string() << '\n';
     }
     if (progressCallback) progressCallback(100, "Finishing installation...");
     ec = pikmin::launcher::finalizeAssets(partialAssets, finalAssets);
@@ -813,10 +831,12 @@ bool installPikmin2Executables(const fs::path& sourceDirectory, const fs::path& 
                                std::string& failure)
 {
     const fs::path gameDirectory = pikmin2GameDirectory(installDirectory);
-    fs::path game = sourceDirectory / kPikmin2Executable;
-    if (!fs::is_regular_file(game)) game = pikmin2GameDirectory(sourceDirectory) / kPikmin2Executable;
+    const bool usa = installedPikmin2DiscId(gameDirectory) == kPikmin2UsaDiscId;
+    const char* sourceName = usa ? kPikmin2UsaExecutable : kPikmin2Executable;
+    fs::path game = sourceDirectory / sourceName;
+    if (!fs::is_regular_file(game)) game = pikmin2GameDirectory(sourceDirectory) / sourceName;
     if (!fs::is_regular_file(game)) {
-        failure = "The package is incomplete: missing " + std::string(kPikmin2Executable) + ".";
+        failure = "The package is incomplete: missing " + std::string(sourceName) + ".";
         return false;
     }
     const std::pair<fs::path, fs::path> copies[] = {
@@ -923,10 +943,94 @@ void usage(const char* argv0)
               << "In game, F1 opens graphics, controls and gameplay settings.\n";
 }
 
+#if PIKMIN_LAUNCHER_NETPLAY
+// Scripted Host Co-op / Join Co-op without the window, for tests: the same
+// CoopFlow and game start as the panel, with the paste replaced by files.
+//   --coop-smoke host --exchange DIR --answer-file FILE --game EXE --data-root DIR [--coop-arg A]...
+//   --coop-smoke join --exchange DIR --offer-file FILE  --game EXE --data-root DIR [--coop-arg A]...
+// --vs runs Host VS / Join VS instead.
+// Prints each stage; returns the game's exit code.
+int coopSmoke(int argc, char** argv)
+{
+    std::string role, exchange, answerFile, offerFile, game, dataRoot;
+    std::vector<std::string> extra;
+    bool vs = false;
+    for (int i = 2; i < argc; ++i) {
+        const std::string arg = argv[i];
+        const bool more = i + 1 < argc;
+        if (arg == "host" || arg == "join") role = arg;
+        else if (arg == "--vs") vs = true;
+        else if (arg == "--exchange" && more) exchange = argv[++i];
+        else if (arg == "--answer-file" && more) answerFile = argv[++i];
+        else if (arg == "--offer-file" && more) offerFile = argv[++i];
+        else if (arg == "--game" && more) game = argv[++i];
+        else if (arg == "--data-root" && more) dataRoot = argv[++i];
+        else if (arg == "--coop-arg" && more) extra.push_back(argv[++i]);
+        else {
+            std::cerr << "coop-smoke: unknown argument " << arg << '\n';
+            return 2;
+        }
+    }
+    if (role.empty() || exchange.empty() || game.empty() || dataRoot.empty()) {
+        std::cerr << "coop-smoke: needs host|join, --exchange, --game and --data-root\n";
+        return 2;
+    }
+    platform::GameProcess process;
+    pikmin::launcher::CoopFlow flow(
+        [&](const std::vector<std::string>& args, std::string& error) {
+            std::cout << "coop-smoke: starting " << game;
+            for (const std::string& a : args) std::cout << ' ' << a;
+            std::cout << std::endl;
+            return platform::spawnGame(dataRoot, game, args, process, error);
+        },
+        [&](int& code) { return platform::gameRunning(process, code); });
+    const auto readText = [](const std::string& path, std::string& out) {
+        std::ifstream in(path, std::ios::binary);
+        if (!in) return false;
+        out.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+        return !pikmin::launcher::CoopFlow::clean(out).empty();
+    };
+    std::string error;
+    if (role == "host") {
+        if (!flow.startHost(exchange, error, extra, vs)) {
+            std::cerr << "coop-smoke: " << error << '\n';
+            return 1;
+        }
+    } else {
+        flow.startJoin(exchange, extra, vs);
+    }
+    auto last = pikmin::launcher::CoopFlow::Stage::Idle;
+    for (;;) {
+        flow.poll();
+        std::string text;
+        if (flow.stage() == pikmin::launcher::CoopFlow::Stage::PasteOffer && readText(offerFile, text)
+            && !flow.submitOffer(text, error)) {
+            std::cerr << "coop-smoke: offer refused: " << error << '\n';
+            return 1;
+        }
+        if (flow.stage() == pikmin::launcher::CoopFlow::Stage::ShowOffer && readText(answerFile, text)
+            && !flow.submitAnswer(text, error)) {
+            std::cerr << "coop-smoke: answer refused: " << error << '\n';
+            return 1;
+        }
+        if (flow.stage() != last) {
+            last = flow.stage();
+            std::cout << "coop-smoke: " << role << ": " << flow.status() << std::endl;
+        }
+        if (last == pikmin::launcher::CoopFlow::Stage::Exited) return flow.exitCode();
+        if (last == pikmin::launcher::CoopFlow::Stage::Failed) return 1;
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+}
+#endif
+
 } // namespace
 
 int main(int argc, char** argv)
 {
+#if PIKMIN_LAUNCHER_NETPLAY
+    if (argc >= 2 && std::strcmp(argv[1], "--coop-smoke") == 0) return coopSmoke(argc, argv);
+#endif
     fs::path image;
     fs::path dataRoot;
     bool extractOnly = false;
@@ -1015,6 +1119,9 @@ int main(int argc, char** argv)
         hubState.games[0].installed = pikmin1Available;
         hubState.games[1].installed = pikmin2Available;
         hubState.installerOnly = !pikmin1Available && !pikmin2Available;
+#if PIKMIN_LAUNCHER_NETPLAY
+        hubState.netplay = pikmin1Available;
+#endif
         if (pikmin1Available) {
             hubState.games[0].directory = pikmin1Directory.string();
             hubState.games[0].executable = pikmin1Executable.string();
