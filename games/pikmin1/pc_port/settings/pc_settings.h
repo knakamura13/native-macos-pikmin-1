@@ -291,6 +291,9 @@ unsigned char pcOsLanguageFromGame(int gameLanguage);
 int pc_settings_get_coop_split(void);
 // Cámara coop dinámica (una cámara con los Olimar cerca); 0 = partida fija.
 int pc_settings_get_coop_merge_camera(void);
+/// Quick Save (experimental), 0 = off (the default). The game reads it once at
+/// launch (pc_quicksave_init); a change takes effect at the next launch.
+int pc_settings_get_quick_save(void);
 
 /**
  * @brief The language the PAL disc should be played in, as an OS_LANG_* value.

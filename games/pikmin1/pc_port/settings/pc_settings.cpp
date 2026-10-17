@@ -220,6 +220,10 @@ struct PcConfig {
     // Cámara cooperativa dinámica: una sola cámara con los Olimar cerca y
     // división fluida al alejarse. 0 = pantalla partida fija.
     int coopMergeCamera = 0;
+    // Quick Save (experimental): deterministic mode from launch and a
+    // recording of each day, so a day can be saved mid-way and loaded again
+    // (pc_quicksave.h). Read once at launch; no F1 row yet.
+    int quickSave = 0;
     // Colour grading. Neutral by default: the port should look like the game
     // until someone asks otherwise.
     int antialiasing = 0;   // 0 off, 1 FXAA
@@ -318,6 +322,7 @@ struct PcConfig {
         coopSplit = 0;
 #endif
         coopMergeCamera = 0;
+        quickSave = 0;
         antialiasing  = 0;
         fog           = 1;
         perPixelLighting = 0;
@@ -1278,6 +1283,7 @@ void saveConfig() {
     out << "coopPlayers = " << sConfig.coopPlayers << "\n";
     out << "coopSplit = " << sConfig.coopSplit << "\n";
     out << "coopMergeCamera = " << sConfig.coopMergeCamera << "\n";
+    out << "quickSave = " << sConfig.quickSave << "\n";
     out << "antialiasing = " << sConfig.antialiasing << "\n";
     out << "fog = " << sConfig.fog << "\n";
     out << "perPixelLighting = " << sConfig.perPixelLighting << "\n";
@@ -1585,6 +1591,9 @@ void loadConfig() {
         }
         else if (key == "coopMergeCamera") {
             sConfig.coopMergeCamera = atoi(val.c_str()) ? 1 : 0;
+        }
+        else if (key == "quickSave") {
+            sConfig.quickSave = atoi(val.c_str()) ? 1 : 0;
         }
         else if (key == "debugKeys") {
             sConfig.debugKeys = atoi(val.c_str()) ? 1 : 0;
@@ -7152,6 +7161,8 @@ int pc_settings_get_coop_merge_camera(void) {
     if (pc_vs_active()) return 0;
     return sConfig.coopMergeCamera;
 }
+
+int pc_settings_get_quick_save(void) { return sConfig.quickSave; }
 
 int pcGameLanguageFromOs(unsigned char osLanguage) {
     static const int kGame[] = { 0, 2, 1, 3, 4 }; // en de fr es it -> en fr de es it
