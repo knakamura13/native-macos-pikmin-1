@@ -8,8 +8,10 @@
 //
 // Save (the Quick Save action, F6 by default, while a day is being played):
 // <save root>/quicksave/<slot>.qsv (pc_quicksave_file.h) gets the day's
-// start, every input since, the state hash at this tick and the view and
-// window state. The game itself is untouched.
+// start (the card block, the clock and the sim state that carries over from
+// day to day outside the card, such as the throw preferences), every input
+// since, the state hash at this tick and the view and window state. The
+// game itself is untouched.
 //
 // Load (the Quick Load action, F7 by default, inside a day; or --quick-load
 // <file> at launch): the file is checked against the running game (CRC,
