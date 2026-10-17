@@ -880,13 +880,17 @@ static bool pcUpdatePreferredThrowColor(Navi* navi, bool allowKind = false)
 #if PIKI_PC_TOUCH
 	if (keyboardOwner) touchSteps = pc_touch_take_color_taps();
 #endif
-	// Netplay: the wheel and the touch icon live outside PADStatus, so
-	// deterministic mode drains and ignores them (the D-pad still steps). The
-	// wheel's job is a local control setting, so the sim takes its default
-	// (the colour), as every peer's does.
+	// Netplay: the wheel and the touch icon live outside PADStatus. In
+	// deterministic mode the wheel's notches come from this captain's
+	// per-tick input (pc_input_log.h), filed only while the wheel picks
+	// colours, and the touch icon is drained and ignored (the D-pad still
+	// steps). Captain 0 always takes the wheel path, so the sim takes the
+	// setting's default (the colour), as every peer's does.
 	const bool detMode = pc_netplay_deterministic();
+	int inputWheelSteps = 0;
 	if (detMode) {
-		touchSteps = 0;
+		touchSteps      = 0;
+		inputWheelSteps = pc_netplay_take_wheel_steps(navi->mNaviID);
 	}
 	// Cruceta izquierda/derecha como en Pikmin 2 (issue #43): vale para
 	// mando y teclado, con o sin A pulsado. Abajo sigue siendo el original.
@@ -910,7 +914,7 @@ static bool pcUpdatePreferredThrowColor(Navi* navi, bool allowKind = false)
 	}
 
 	const bool wheelOn = keyboardOwner && (detMode || pc_settings_get_mouse_wheel_action() == 0);
-	if (!wheelOn && touchSteps == 0 && padSteps == 0 && preferred < 0) {
+	if (!wheelOn && touchSteps == 0 && padSteps == 0 && inputWheelSteps == 0 && preferred < 0) {
 		return kindChanged;
 	}
 
@@ -935,10 +939,9 @@ static bool pcUpdatePreferredThrowColor(Navi* navi, bool allowKind = false)
 		}
 	}
 
-	int steps = touchSteps + padSteps;
-	if (wheelOn && pc_settings_get_mouse_wheel_action() == 0) {
-		const int wheelSteps = pc_window_take_wheel_steps();
-		if (!detMode) steps += wheelSteps;
+	int steps = touchSteps + padSteps + inputWheelSteps;
+	if (!detMode && wheelOn && pc_settings_get_mouse_wheel_action() == 0) {
+		steps += pc_window_take_wheel_steps();
 	}
 	if (steps != 0) {
 		index = ((index + steps) % presentCount + presentCount) % presentCount;
@@ -3373,10 +3376,13 @@ void Navi::makeVelocity(bool isSunset)
 	// El ratón y el cursor virtual van con el jugador que tiene el teclado;
 	// el otro usa siempre el modo clásico.
 	// Netplay: mouse deltas, the virtual cursor and the gyro recenter are
-	// local state outside PADStatus, so in deterministic mode every captain
-	// takes the classic stick path; the edges are drained.
+	// local state outside PADStatus. In deterministic mode the Mouse Cursor
+	// path reads this captain's per-tick input instead (pc_input_log.h):
+	// whether the mouse drives its cursor this tick and the delta. The
+	// virtual cursor and the gyro recenter stay off; the recenter is drained.
 	const bool detMode     = pc_netplay_deterministic();
-	const bool mouseIsMine = !detMode && mNaviID == pc_window_get_keyboard_owner();
+	const bool mouseIsMine = detMode ? (pc_netplay_local_flags(mNaviID) & pc_input_log::kLocalMouseCursor) != 0
+	                                 : mNaviID == pc_window_get_keyboard_owner();
 	// "Gyro Recenter": el cursor vuelve delante del capitán, en la dirección
 	// de la cámara, para corregir la deriva acumulada del giroscopio.
 	if (detMode) {
@@ -3393,30 +3399,49 @@ void Navi::makeVelocity(bool isSunset)
 		}
 		pc_window_clear_mouse_cursor_delta();
 	}
+	// In deterministic mode the flag already holds the mode test below.
 	if (mouseIsMine
-	    && (pc_window_get_control_mode() == PC_CONTROL_MOUSE_CURSOR
+	    && (detMode || pc_window_get_control_mode() == PC_CONTROL_MOUSE_CURSOR
 	        || pc_window_get_mouse_cursor_delta_x() != 0.0f
 	        || pc_window_get_mouse_cursor_delta_y() != 0.0f)) {
 		// Direct mouse delta mode: use raw deltas, no normalization or frame time scaling
 		// SDL already provides distance since last poll
 		static const float kMouseCursorWorldScale = 0.5f; // Convert SDL counts to world units
 
-		const float mouseX = pc_window_get_mouse_cursor_delta_x();
-		const float mouseY = pc_window_get_mouse_cursor_delta_y();
-		pc_window_clear_mouse_cursor_delta();
+		float mouseX = 0.0f;
+		float mouseY = 0.0f;
+		if (detMode) {
+			pc_netplay_take_cursor_delta(mNaviID, &mouseX, &mouseY);
+		} else {
+			mouseX = pc_window_get_mouse_cursor_delta_x();
+			mouseY = pc_window_get_mouse_cursor_delta_y();
+			pc_window_clear_mouse_cursor_delta();
+		}
 
 		// mCursorPosition is a world-space offset from Olimar.  SDL deltas are
 		// screen-space, so fixed world X/Z axes make the cursor rotate or invert
 		// as the camera turns.  Project the camera basis onto the ground instead.
-		Vector3f screenRight(ctrlCam->mViewXAxis.x, 0.0f, ctrlCam->mViewXAxis.z);
-		// SDL Y grows downwards, whereas the gameplay cursor's positive screen
-		// vertical direction is camera-forward on the ground plane.
-		Vector3f screenDown(-ctrlCam->mViewZAxis.x, 0.0f, -ctrlCam->mViewZAxis.z);
-		if (screenRight.length() > 0.0001f) {
-			screenRight.normalise();
-		}
-		if (screenDown.length() > 0.0001f) {
-			screenDown.normalise();
+		Vector3f screenRight;
+		Vector3f screenDown;
+		f32 basisSin, basisCos;
+		if (pcNaviControlSincos(mNaviID, &basisSin, &basisCos)) {
+			// Netplay: the same ground basis from the quantised control yaw
+			// the stick uses, never the camera, so record and replay match.
+			// yaw = atan2(viewX.z, viewX.x): right is (cos, 0, sin) and the
+			// view's ground forward is (sin, 0, -cos); screenDown points back.
+			screenRight.set(basisCos, 0.0f, basisSin);
+			screenDown.set(-basisSin, 0.0f, basisCos);
+		} else {
+			screenRight.set(ctrlCam->mViewXAxis.x, 0.0f, ctrlCam->mViewXAxis.z);
+			// SDL Y grows downwards, whereas the gameplay cursor's positive screen
+			// vertical direction is camera-forward on the ground plane.
+			screenDown.set(-ctrlCam->mViewZAxis.x, 0.0f, -ctrlCam->mViewZAxis.z);
+			if (screenRight.length() > 0.0001f) {
+				screenRight.normalise();
+			}
+			if (screenDown.length() > 0.0001f) {
+				screenDown.normalise();
+			}
 		}
 		Vector3f mouseDelta = (screenRight * mouseX + screenDown * mouseY) * kMouseCursorWorldScale;
 
