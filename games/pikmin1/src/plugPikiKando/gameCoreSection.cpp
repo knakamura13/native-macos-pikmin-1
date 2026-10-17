@@ -1366,7 +1366,11 @@ static u64 pcVsHashMode()
 		mix(bits);
 	};
 	for (u32 id : sVsPieceIds) mix(id);
-	mix(u32(sVsSerial));
+	// Whether this match's reinforcement state was reset yet, not the match
+	// counter itself: it counts matches since launch, so the same match
+	// played as a process's first or as a rematch (a quick load) would hash
+	// apart although the sim only compares it for a change.
+	mix(sVsSerial == pc_vs_match_serial() ? 1u : 0u);
 	for (int p = 0; p < 2; p++) {
 		mixF(sEmptyFor[p]);
 		mixF(sReinforceCd[p]);
