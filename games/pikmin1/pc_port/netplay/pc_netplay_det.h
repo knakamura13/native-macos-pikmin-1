@@ -19,6 +19,20 @@ void pc_netplay_on_tick_begin(void);            // called by System::run right b
 // Turns deterministic mode on at runtime (for a netplay session).
 void pc_netplay_det_force_on(void);
 
+// Quick save (pc_quicksave.h): turns deterministic mode on at launch, before
+// the first tick, for a run whose days are recorded.
+void pc_netplay_det_enable_for_recording(void);
+// Quick save load: while on, deterministic mode runs unthrottled (one tick
+// per loop, no frame pacing) as PIKMIN_NETPLAY_UNTHROTTLED=1 does, so a
+// recorded day catches up as fast as it can. Off again at the handoff.
+void pc_netplay_det_set_catchup(bool on);
+bool pc_netplay_det_catchup(void);
+// Quick save load: re-enters a recorded day at the logical tick it began on,
+// so every value the sim derives from the tick count (the VS clock, the swarm
+// timer) is the recorded one. The next pc_netplay_on_tick_begin counts on
+// from here.
+void pc_netplay_det_set_tick(unsigned tick);
+
 // Logical tick period in seconds for a setFrameClamp value: 1/30 at clamp 2,
 // 1/60 at clamp 1, 1/120 at clamp 0 (mirrors PcFrameScheduler::deltaForClamp).
 float pc_netplay_fixed_dt(int frameClamp);
