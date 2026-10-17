@@ -3395,16 +3395,32 @@ void Navi::makeVelocity(bool isSunset)
 	// Netplay: mouse deltas, the virtual cursor and the gyro recenter are
 	// local state outside PADStatus. In deterministic mode the Mouse Cursor
 	// path reads this captain's per-tick input instead (pc_input_log.h):
-	// whether the mouse drives its cursor this tick and the delta. The
-	// virtual cursor and the gyro recenter stay off; the recenter is drained.
+	// whether the mouse drives its cursor this tick, the delta and the gyro
+	// recenter press. The virtual cursor stays off.
 	const bool detMode     = pc_netplay_deterministic();
 	const bool mouseIsMine = detMode ? (pc_netplay_local_flags(mNaviID) & pc_input_log::kLocalMouseCursor) != 0
 	                                 : mNaviID == pc_window_get_keyboard_owner();
 	// "Gyro Recenter": el cursor vuelve delante del capitán, en la dirección
 	// de la cámara, para corregir la deriva acumulada del giroscopio.
 	if (detMode) {
+		// The press is in the input (offline, filed by the window's capture;
+		// a session never carries it). The view's ground forward comes from
+		// the quantised control yaw, (sin, 0, -cos), as the First Person pin
+		// takes it, and this tick's mouse motion is dropped as below.
 		pc_gyro_take_recenter_cursor();
 		pc_window_clear_mouse_cursor_delta();
+		if ((pc_netplay_local_flags(mNaviID) & pc_input_log::kLocalGyroRecenter) != 0) {
+			f32 yawSin = 0.0f, yawCos = 1.0f;
+			if (!pc_netplay_control_yaw(mNaviID, &yawSin, &yawCos)) {
+				yawSin = 0.0f;
+				yawCos = 1.0f;
+			}
+			const f32 reach = NAVI_PARM(mCursorMaxRadius) * 0.5f;
+			mCursorPosition.set(yawSin * reach, 0.0f, -yawCos * reach);
+			mCursorTargetPosition = mCursorPosition;
+			mCursorNaviDist       = reach;
+			pc_netplay_take_cursor_delta(mNaviID, nullptr, nullptr);
+		}
 	} else if (mouseIsMine && pc_gyro_take_recenter_cursor()) {
 		Vector3f fwd(-ctrlCam->mLookAtMtx.mMtx[2][0], 0.0f, -ctrlCam->mLookAtMtx.mMtx[2][2]);
 		const f32 len = speedy_sqrtf(fwd.x * fwd.x + fwd.z * fwd.z);

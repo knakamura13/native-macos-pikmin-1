@@ -1624,12 +1624,16 @@ static void pcWindowCaptureLocalInput(PcLocalInput out[4]) {
     const float dy = sMouseCursorDeltaY;
     sMouseCursorDeltaX = 0.0f;
     sMouseCursorDeltaY = 0.0f;
+    const bool recenter = pc_gyro_take_recenter_cursor() != 0;
     const int owner = sKeyboardOwner;
     if (owner < 0 || owner > 3) return;
     PcLocalInput& in = out[owner];
     if (effectiveControlMode() == PC_CONTROL_MOUSE_CURSOR || dx != 0.0f || dy != 0.0f) {
         in.flags |= pc_input_log::kLocalMouseCursor;
     }
+    // The gyro recenter brings the keyboard owner's cursor back in front of
+    // the captain, as Navi::makeVelocity does outside deterministic mode.
+    if (recenter) in.flags |= pc_input_log::kLocalGyroRecenter;
     in.cursorDx = dx;
     in.cursorDy = dy;
     // The wheel picks the throw colour only when set to; otherwise the
