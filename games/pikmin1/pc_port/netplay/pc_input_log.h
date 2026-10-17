@@ -71,9 +71,12 @@
 //   Record and replay may be combined, even on the same path: the replay is
 //     loaded into memory first, and recording a replayed v2, v3 or v4 run
 //     reproduces the replay file byte for byte.
-//   Covered: PADStatus, yaw, (v3+) the ext slots and (v4) the local slots.
-//     Inputs outside them (touch colour taps, the gyro recentre, ...) are
-//     neutralised in deterministic mode rather than recorded.
+//   Covered: PADStatus, yaw, (v3+) the ext slots and (v4) the local slots,
+//     which offline also carry the touch colour taps (as wheel notches), the
+//     gamepad's D-pad Down, the gyro recenter and the photo mode toggle.
+//     Inputs outside them (the absolute-mode virtual cursor) are neutralised
+//     in deterministic mode rather than recorded. A netplay session carries
+//     only the pads, the yaw and the ext slots.
 //   With neither switch set no file is touched and nothing is printed. The
 //     yaw and local slots are still cleared and the capture hooks still run
 //     each tick, so deterministic mode without a file gets fresh input every
