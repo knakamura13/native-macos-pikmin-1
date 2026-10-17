@@ -47,8 +47,8 @@
 // path from these per-pad slots only: whether the pad's cursor follows the
 // mouse this tick, the cursor delta, the wheel's colour-pick notches and
 // whether First Person pins the cursor. It also reads from them whether the
-// D-pad Down in the pad came from a gamepad and the Gyro Recenter press
-// (both kLocal* bits). A live tick fills them through the
+// D-pad Down in the pad came from a gamepad, the Gyro Recenter press and
+// (pad 0) the photo mode toggle (kLocal* bits). A live tick fills them through the
 // local capture hook (the engine takes what the window gathered since the
 // last tick); a v4 replay fills them from the file. Either way the sim
 // runs the same code on the same values. The sim takes the delta and the
@@ -150,7 +150,8 @@ constexpr uint8_t kLocalMouseCursor = 0x01; // the pad's cursor follows the mous
 constexpr uint8_t kLocalFirstPerson = 0x02; // First Person is on: the cursor is pinned ahead of the view
 constexpr uint8_t kLocalPadDpadDown = 0x04; // D-pad Down held on this player's gamepad (its swarm button, not a lie-down)
 constexpr uint8_t kLocalGyroRecenter = 0x08; // Gyro Recenter pressed: the cursor goes back in front of the captain
-constexpr uint8_t kLocalKnown       = 0x0F;
+constexpr uint8_t kLocalPhotoToggle = 0x10; // photo mode toggled (pad 0 only): it freezes the sim
+constexpr uint8_t kLocalKnown       = 0x1F;
 } // namespace pc_input_log
 
 // Pure encode/decode API (no globals, no files).

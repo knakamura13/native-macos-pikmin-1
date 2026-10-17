@@ -64,6 +64,7 @@ PcLocalInput scriptedLocal(int t, int pad)
 		static const uint32_t dx[] = { 0x00000000u, 0x80000000u, 0x00000001u, 0x3DCCCCCDu, 0xC1A80000u, 0x40490FDBu };
 		in.flags      = pc_input_log::kLocalMouseCursor;
 		if (t % 13 == 6) in.flags |= pc_input_log::kLocalGyroRecenter;
+		if (t == 20 || t == 41) in.flags |= pc_input_log::kLocalPhotoToggle;
 		in.cursorDx   = floatOf(dx[t % 6]);
 		in.cursorDy   = (float)t * -0.1f + 0.3f;
 		in.wheelSteps = (int8_t)((t % 5 == 0) ? (t % 10 == 0 ? 1 : -2) : 0);

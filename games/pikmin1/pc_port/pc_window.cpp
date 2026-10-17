@@ -2,6 +2,7 @@
 #include "port/jaudio_host.h"
 #endif
 #include "pc_window.h"
+#include "pc_photo_mode.h"
 #include "pc_speedrun.h"
 #include "pc_gyro.h"
 #include "pc_icon.h"
@@ -1625,6 +1626,9 @@ static void pcWindowCaptureLocalInput(PcLocalInput out[4]) {
     sMouseCursorDeltaX = 0.0f;
     sMouseCursorDeltaY = 0.0f;
     const bool recenter = pc_gyro_take_recenter_cursor() != 0;
+    // Photo mode freezes the sim, so its toggle (F3 or the touch button) is
+    // input too: one flag for the whole game, on pad 0.
+    if (pc_photo_mode_poll_toggle()) out[0].flags |= pc_input_log::kLocalPhotoToggle;
     const int owner = sKeyboardOwner;
     if (owner < 0 || owner > 3) return;
     PcLocalInput& in = out[owner];
