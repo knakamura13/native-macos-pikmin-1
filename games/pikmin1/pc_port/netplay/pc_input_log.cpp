@@ -390,6 +390,7 @@ void capture_local(bool live)
 		sWheel[p]      = in[p].wheelSteps;
 		sCursorDx[p]   = in[p].cursorDx;
 		sCursorDy[p]   = in[p].cursorDy;
+		sExt[p]        = in[p].ext & pc_input_log::kExtKnown;
 	}
 }
 

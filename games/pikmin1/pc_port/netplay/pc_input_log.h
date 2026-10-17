@@ -30,8 +30,10 @@
 // Ext bits and cursor rotate (v3, and the netplay input bytes 10-12): the
 // Bomb, Lock-On and Charge presses, the held Swarm button and the cursor
 // rotation of a free-camera drag live outside PADStatus. In deterministic
-// mode the sim reads them from these per-pad slots only (zero unless a
-// session or a v3 replay fills them); outside it they are never read.
+// mode the sim reads them from these per-pad slots only: a session fills
+// them, a v3 or v4 replay fills them from the file, and an offline live tick
+// fills the ext bits through the local capture hook. Outside deterministic
+// mode they are never read.
 //
 // Control yaw: in deterministic mode the camera yaw each player saw when
 // they pushed the stick is part of that player's per-tick input, so the sim
@@ -69,8 +71,7 @@
 //     reproduces the replay file byte for byte.
 //   Covered: PADStatus, yaw, (v3+) the ext slots and (v4) the local slots.
 //     Inputs outside them (touch colour taps, the gyro recentre, ...) are
-//     neutralised in deterministic mode rather than recorded. Offline
-//     nothing fills the ext slots yet.
+//     neutralised in deterministic mode rather than recorded.
 //   With neither switch set no file is touched and nothing is printed. The
 //     yaw and local slots are still cleared and the capture hooks still run
 //     each tick, so deterministic mode without a file gets fresh input every
@@ -109,12 +110,13 @@ struct PcInputPad {
 };
 
 // One pad's local inputs for one tick, as the local capture hook reports
-// them (the v4 fields of PcInputPad).
+// them (the v4 fields of PcInputPad, plus the ext bits of the v3 flags).
 struct PcLocalInput {
 	uint8_t flags;      // pc_input_log::kLocal* bits
 	int8_t wheelSteps;  // colour-pick wheel notches since the last tick
 	float cursorDx;     // Mouse Cursor delta since the last tick
 	float cursorDy;
+	uint8_t ext;        // pc_input_log::kExt* bits: presses since the last tick, Swarm held now
 };
 
 namespace pc_input_log {
@@ -230,8 +232,9 @@ bool pc_netplay_ext_trace(void);
 // Local capture hook, registered once by the engine (the window layer)
 // before the first tick. pc_input_log_tick runs it every tick with out[]
 // zeroed; it takes what the window gathered since the last tick (nothing
-// outside deterministic mode). Its values fill the local slots only on a
-// live tick, not while a replay feeds the tick or after it ends.
+// outside deterministic mode). Its values fill the local slots and the ext
+// bits only on a live tick, not while a replay feeds the tick or after it
+// ends.
 typedef void (*PcLocalCaptureFn)(PcLocalInput out[4]);
 void pc_input_log_set_local_capture_fn(PcLocalCaptureFn fn);
 

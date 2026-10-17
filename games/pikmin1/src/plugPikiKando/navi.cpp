@@ -1173,7 +1173,8 @@ void Navi::pcUpdateBombCommand()
 {
 	// Se consume siempre, como Lock-On, para que no salte sola al activarlo.
 	// Netplay: deterministic mode takes the press from this captain's synced
-	// input instead (the session drains the local queue into it).
+	// input instead (the session, or offline the per-tick input capture,
+	// drains the local queue into it).
 	const bool detMode = pc_netplay_deterministic();
 	const bool pressed = detMode ? (pc_netplay_ext_bits(mNaviID) & pc_input_log::kExtBomb) != 0
 	                             : pc_window_take_bomb_press(mNaviID == 1 ? 1 : 0);

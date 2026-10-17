@@ -1,5 +1,6 @@
 // Host-run test of the PKNI record/replay runtime (pc_input_log_tick) with the
-// v4 local slots. The input log reads its switches once per process, so each
+// v4 local slots and the ext bits the local capture hook files offline. The
+// input log reads its switches once per process, so each
 // mode runs in its own process (ctest chains them with a fixture):
 //   record <file>             deterministic mode, live local input -> v4 file
 //   replay <file> <record>    deterministic mode, replays <file> while live
@@ -53,7 +54,8 @@ float floatOf(uint32_t u)
 
 // The scripted live input of tick t: pad 0 drives the cursor with awkward
 // floats (signed zero, a subnormal, values with no short decimal form), the
-// wheel turns now and then, and pad 1 sometimes has First Person on.
+// wheel turns now and then, and pad 1 sometimes has First Person on. Both
+// press Bomb, Lock-On and Charge now and then and hold Swarm for stretches.
 PcLocalInput scriptedLocal(int t, int pad)
 {
 	PcLocalInput in;
@@ -64,8 +66,13 @@ PcLocalInput scriptedLocal(int t, int pad)
 		in.cursorDx   = floatOf(dx[t % 6]);
 		in.cursorDy   = (float)t * -0.1f + 0.3f;
 		in.wheelSteps = (int8_t)((t % 5 == 0) ? (t % 10 == 0 ? 1 : -2) : 0);
-	} else if (pad == 1 && t % 7 == 0) {
-		in.flags = pc_input_log::kLocalFirstPerson;
+		if (t % 4 == 1) in.ext |= pc_input_log::kExtBomb;
+		if (t % 6 == 2) in.ext |= pc_input_log::kExtLockOn;
+		if (t % 9 == 3) in.ext |= pc_input_log::kExtCharge;
+		if ((t / 8) % 2 == 1) in.ext |= pc_input_log::kExtSwarm;
+	} else if (pad == 1) {
+		if (t % 7 == 0) in.flags = pc_input_log::kLocalFirstPerson;
+		if (t % 5 == 4) in.ext = pc_input_log::kExtBomb | pc_input_log::kExtSwarm;
 	}
 	return in;
 }
@@ -98,6 +105,7 @@ void junkHook(PcLocalInput out[4])
 		out[p].wheelSteps = 7;
 		out[p].cursorDx   = 999.0f;
 		out[p].cursorDy   = -999.0f;
+		out[p].ext        = pc_input_log::kExtKnown;
 	}
 }
 
@@ -128,12 +136,13 @@ void readSlots(int pad, PcLocalInput& got)
 	got.flags = pc_netplay_local_flags(pad);
 	pc_netplay_take_cursor_delta(pad, &got.cursorDx, &got.cursorDy);
 	got.wheelSteps = (int8_t)pc_netplay_take_wheel_steps(pad);
+	got.ext        = pc_netplay_ext_bits(pad);
 }
 
 bool sameLocal(const PcLocalInput& a, const PcLocalInput& b)
 {
 	return a.flags == b.flags && a.wheelSteps == b.wheelSteps && bitsOf(a.cursorDx) == bitsOf(b.cursorDx)
-	    && bitsOf(a.cursorDy) == bitsOf(b.cursorDy);
+	    && bitsOf(a.cursorDy) == bitsOf(b.cursorDy) && a.ext == b.ext;
 }
 
 int runRecord(const char* file)
@@ -175,7 +184,8 @@ int runRecord(const char* file)
 			got.wheelSteps = decoded[p].wheelSteps;
 			got.cursorDx   = decoded[p].cursorDx;
 			got.cursorDy   = decoded[p].cursorDy;
-			check(sameLocal(got, want), "record: local input filed bit for bit");
+			got.ext        = decoded[p].flags;
+			check(sameLocal(got, want), "record: local input and ext bits filed bit for bit");
 		}
 	}
 	return 0;
@@ -275,9 +285,12 @@ int runReplayV3(const char* file, const char* record)
 			readSlots(p, got);
 			PcLocalInput zero;
 			std::memset(&zero, 0, sizeof(zero));
+			zero.ext = p == 0 ? (uint8_t)(sTick & pc_input_log::kExtKnown) : 0; // from the file
 			check(sameLocal(got, zero), "v3 replay: no live local input reaches the sim");
 		}
 		check(pc_netplay_ext_cursor_rotate(0) == (int16_t)(-sTick), "v3 replay: ext rotate still replays");
+		check(pc_netplay_ext_bits(0) == (uint8_t)(sTick & pc_input_log::kExtKnown),
+		      "v3 replay: the file's ext bits reach the sim, not the live presses");
 		pc_input_log_tick_end();
 	}
 	pc_input_log_close();

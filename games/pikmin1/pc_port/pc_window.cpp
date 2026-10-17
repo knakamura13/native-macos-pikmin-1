@@ -1609,6 +1609,15 @@ static void pcWindowCaptureLocalInput(PcLocalInput out[4]) {
     if (!pc_netplay_deterministic()) return;
     for (int p = 0; p < 2; p++) {
         if (pc_first_person_active_for(p)) out[p].flags |= pc_input_log::kLocalFirstPerson;
+        // Each player's Bomb, Lock-On and Charge presses and held Swarm
+        // button, from the queues the sim drains outside deterministic mode
+        // (player 1's are captain 1's, as there).
+        uint8_t ext = 0;
+        if (pc_window_take_bomb_press(p)) ext |= pc_input_log::kExtBomb;
+        if (pc_window_take_lockon_press(p)) ext |= pc_input_log::kExtLockOn;
+        if (pc_window_take_swarm_press(p)) ext |= pc_input_log::kExtCharge;
+        if (p == 0 ? sSwarmHeld : sSwarmHeldP2) ext |= pc_input_log::kExtSwarm;
+        out[p].ext = ext;
     }
     const float dx = sMouseCursorDeltaX;
     const float dy = sMouseCursorDeltaY;
