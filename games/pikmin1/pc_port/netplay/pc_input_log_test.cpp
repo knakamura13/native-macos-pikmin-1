@@ -474,6 +474,36 @@ int main()
 		check(pc_netplay_local_flags(1) == 0, "local slots clear every tick without a hook");
 		pc_input_log_tick_end();
 	}
+	// Per-pad camera rotation queued during a tick: the next tick's capture
+	// quantises it into that pad's cursor rotate and keeps the remainder;
+	// out-of-range pads are ignored and a huge drag clamps to the s16 range.
+	{
+		const float lsb = pc_input_log::kYawTurnsToRad;
+		check(!pc_netplay_local_slots_filled(), "slots not filled outside a tick");
+		pc_input_log_pad_rotate_add(3, lsb * 0.75f);
+		pc_input_log_pad_rotate_add(-1, 1.0f);
+		pc_input_log_pad_rotate_add(4, 1.0f);
+		pc_input_log_tick();
+		check(pc_netplay_local_slots_filled(), "slots filled during a tick");
+		check(pc_netplay_ext_cursor_rotate(3) == 1, "0.75 LSB rounds to 1");
+		check(pc_netplay_ext_cursor_rotate(0) == 0 && pc_netplay_ext_cursor_rotate(1) == 0
+		          && pc_netplay_ext_cursor_rotate(2) == 0,
+		      "other pads take no rotation");
+		pc_input_log_tick_end();
+		check(!pc_netplay_local_slots_filled(), "tick_end spends the slots");
+		pc_input_log_pad_rotate_add(3, lsb * 0.25f);
+		pc_input_log_tick();
+		check(pc_netplay_ext_cursor_rotate(3) == 0, "the -0.25 remainder cancels the next 0.25");
+		pc_input_log_tick_end();
+		pc_input_log_tick();
+		check(pc_netplay_ext_cursor_rotate(3) == 0, "a tick without a drag reads no rotation");
+		pc_input_log_tick_end();
+		pc_input_log_pad_rotate_add(3, 100.0f);
+		pc_input_log_pad_rotate_add(3, std::numeric_limits<float>::quiet_NaN());
+		pc_input_log_tick();
+		check(pc_netplay_ext_cursor_rotate(3) == 32767, "a huge drag clamps; NaN is ignored");
+		pc_input_log_tick_end();
+	}
 	{
 		const float pi = 3.14159265358979323846f;
 		check(pc_input_log_yaw_quantise(pi) == 0x8000, "yaw pi -> 0x8000");

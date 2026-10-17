@@ -145,6 +145,12 @@ bool sameLocal(const PcLocalInput& a, const PcLocalInput& b)
 	    && bitsOf(a.cursorDy) == bitsOf(b.cursorDy) && a.ext == b.ext;
 }
 
+// The free-camera rotation the camera queues for pad 2 during tick t's sim,
+// in whole 1/65536 turns, and what the sim therefore reads on tick t (the
+// rotation queued on the previous tick).
+int16_t scriptedTurn(int t) { return (int16_t)((t % 3 == 0) ? t * 17 - 300 : 0); }
+int16_t turnSeenOn(int t) { return t > 0 ? scriptedTurn(t - 1) : 0; }
+
 int runRecord(const char* file)
 {
 	std::vector<std::string> args = { "test", "--netplay-deterministic", "--input-record", file };
@@ -154,12 +160,18 @@ int runRecord(const char* file)
 	for (sTick = 0; sTick < kTicks; ++sTick) {
 		scriptedPads(sTick);
 		pc_input_log_tick();
+		check(pc_netplay_local_slots_filled(), "record: slots filled during the tick");
 		for (int p = 0; p < 4; ++p) {
 			PcLocalInput got;
 			readSlots(p, got);
 			check(sameLocal(got, scriptedLocal(sTick, p)), "record: live tick feeds the sim the hook's input");
 		}
+		check(pc_netplay_ext_cursor_rotate(2) == turnSeenOn(sTick) && pc_netplay_ext_cursor_rotate(0) == 0,
+		      "record: last tick's queued camera rotation reaches its pad");
+		// The camera queues this tick's drag during the sim.
+		pc_input_log_pad_rotate_add(2, (float)scriptedTurn(sTick) * pc_input_log::kYawTurnsToRad);
 		pc_input_log_tick_end();
+		check(!pc_netplay_local_slots_filled(), "record: slots spent after the tick");
 	}
 	check(pc_input_log_is_record_active(), "record: record active");
 	pc_input_log_close();
@@ -186,6 +198,7 @@ int runRecord(const char* file)
 			got.cursorDy   = decoded[p].cursorDy;
 			got.ext        = decoded[p].flags;
 			check(sameLocal(got, want), "record: local input and ext bits filed bit for bit");
+			check(decoded[p].cursorRotate == (p == 2 ? turnSeenOn(t) : 0), "record: camera rotation filed");
 		}
 	}
 	return 0;
@@ -216,6 +229,10 @@ int runReplay(const char* file, const char* record)
 		if (sTick < kTicks) {
 			check(pc_netplay_pad_status()[0].button == (uint16_t)(sTick * 37), "replay: pads come from the file");
 		}
+		check(pc_netplay_ext_cursor_rotate(2) == (sTick < kTicks ? turnSeenOn(sTick) : 0),
+		      "replay: the file's camera rotation reaches the sim, never the live drag");
+		// A live drag during the replay is drained, never applied.
+		pc_input_log_pad_rotate_add(2, 900.0f * pc_input_log::kYawTurnsToRad);
 		pc_input_log_tick_end();
 	}
 	pc_input_log_close();

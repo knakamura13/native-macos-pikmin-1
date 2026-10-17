@@ -246,11 +246,23 @@ uint8_t pc_netplay_local_flags(int pad);
 void pc_netplay_take_cursor_delta(int pad, float* dx, float* dy);
 int pc_netplay_take_wheel_steps(int pad);
 
+// True from pc_input_log_tick to pc_input_log_tick_end: this tick's local
+// slots and ext bits come from the input log (an offline tick, live or
+// replayed). A netplay session's tick never runs pc_input_log_tick, so the
+// sim keeps the session's own path for inputs the session does not carry.
+bool pc_netplay_local_slots_filled(void);
+
 // Local cursor rotation (this peer's own captain's free-camera drag, in
 // radians) waiting for the session's next input. take() quantises to
 // 1/65536 turns and keeps the remainder for the next take.
 void pc_input_log_local_rotate_add(float angleRad);
 int16_t pc_input_log_local_rotate_take(void);
+
+// Offline deterministic mode: a captain's free-camera drag rotation (in
+// radians), queued by the camera during a tick. The next live tick's
+// capture quantises it like take() above into that pad's cursor rotate (so
+// a v4 record carries it); a replayed tick drains it unused.
+void pc_input_log_pad_rotate_add(int pad, float angleRad);
 
 bool pc_input_log_is_record_active(void);
 bool pc_input_log_is_replay_active(void);

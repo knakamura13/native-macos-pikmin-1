@@ -347,6 +347,11 @@ uint8_t sExt[4]    = { 0, 0, 0, 0 };
 int16_t sRotate[4] = { 0, 0, 0, 0 };
 uint16_t sRecordVersion = 0;
 float sLocalRotate = 0.0f;
+// Per-pad free-camera rotation queued offline (pc_input_log_pad_rotate_add),
+// in 1/65536 turns, taken by the next capture.
+float sPadRotate[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+// Set by pc_input_log_tick, cleared by pc_input_log_tick_end.
+bool sSlotsFilled = false;
 // Current-tick local inputs (v4), cleared with the yaw and again after the
 // sim: filled by the local capture hook on a live tick or by a v4 replay.
 uint8_t sLocalFlags[4] = { 0, 0, 0, 0 };
@@ -375,11 +380,32 @@ void clear_tick_slots()
 	clear_local_slots();
 }
 
-// Runs the local capture hook. It always takes what the window gathered, so
-// nothing piles up while a replay feeds the ticks; the values reach the
-// slots only on a live tick.
+// The rotate accumulators hold 1/65536 turns: add() clamps to the s16 range,
+// take() rounds to the nearest unit and keeps the remainder.
+void rotate_accum_add(float& acc, float angleRad)
+{
+	if (!std::isfinite(angleRad)) return;
+	acc += angleRad / pc_input_log::kYawTurnsToRad;
+	if (acc > 32767.0f) acc = 32767.0f;
+	if (acc < -32767.0f) acc = -32767.0f;
+}
+
+int16_t rotate_accum_take(float& acc)
+{
+	const long q = std::lround(acc);
+	acc -= (float)q;
+	return (int16_t)q;
+}
+
+// Takes the camera's queued rotation and runs the local capture hook. Both
+// are always taken, so nothing piles up while a replay feeds the ticks; the
+// values reach the slots only on a live tick.
 void capture_local(bool live)
 {
+	for (int p = 0; p < 4; ++p) {
+		const int16_t turn = rotate_accum_take(sPadRotate[p]);
+		if (live) sRotate[p] = turn;
+	}
 	if (sLocalCaptureFn == nullptr) return;
 	PcLocalInput in[4];
 	std::memset(in, 0, sizeof(in));
@@ -511,20 +537,17 @@ bool pc_netplay_ext_trace(void)
 	return on;
 }
 
-void pc_input_log_local_rotate_add(float angleRad)
+void pc_input_log_local_rotate_add(float angleRad) { rotate_accum_add(sLocalRotate, angleRad); }
+
+int16_t pc_input_log_local_rotate_take(void) { return rotate_accum_take(sLocalRotate); }
+
+void pc_input_log_pad_rotate_add(int pad, float angleRad)
 {
-	if (!std::isfinite(angleRad)) return;
-	sLocalRotate += angleRad / pc_input_log::kYawTurnsToRad;
-	if (sLocalRotate > 32767.0f) sLocalRotate = 32767.0f;
-	if (sLocalRotate < -32767.0f) sLocalRotate = -32767.0f;
+	if (pad < 0 || pad >= 4) return;
+	rotate_accum_add(sPadRotate[pad], angleRad);
 }
 
-int16_t pc_input_log_local_rotate_take(void)
-{
-	const long q = std::lround(sLocalRotate);
-	sLocalRotate -= (float)q;
-	return (int16_t)q;
-}
+bool pc_netplay_local_slots_filled(void) { return sSlotsFilled; }
 
 bool pc_netplay_control_yaw(int pad, float* sinYaw, float* cosYaw)
 {
@@ -549,6 +572,7 @@ void pc_input_log_close(void)
 
 void pc_input_log_tick(void)
 {
+	sSlotsFilled = true;
 	if (!sInitialised) {
 		sInitialised = true;
 		const char* recordPath = sArgvRecord;
@@ -786,6 +810,7 @@ void pc_input_log_tick_end(void)
 	// The local slots hold one tick's input: spent once the sim has run, so
 	// a tick that never ran pc_input_log_tick (a netplay session's) sees none.
 	clear_local_slots();
+	sSlotsFilled = false;
 	if (!sInitialised) return;
 	if (!sRecordActive && !sReplayActive) return;
 
