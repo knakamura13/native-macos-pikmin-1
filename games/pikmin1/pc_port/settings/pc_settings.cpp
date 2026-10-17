@@ -47,6 +47,7 @@
 #include "pc_vs.h"
 #include "mods/pc_vs_map.h"
 #include "netplay/pc_netplay_det.h"
+#include "settings/pc_sim_settings_text.h"
 #include "pc_achievements.h"
 #include "pc_speedrun.h"
 #include "pc_livesplit.h"
@@ -1075,10 +1076,11 @@ void pc_settings_set_language(unsigned char language) {
 
 namespace {
 
-#if PIKI_NETPLAY_BUILD
-// Netplay: every setting that changes the simulation. Both peers hash these
-// in the handshake and they are locked for the session. Window, graphics,
-// audio, bindings, camera feel and other local-only rows are not here.
+// Every setting that changes the simulation. A netplay session hashes them in
+// the handshake and locks them for the session (netplay builds); a
+// deterministic recording names them in its header text (below). Window,
+// graphics, audio, bindings, camera feel and other local-only rows are not
+// here: what they change reaches the sim, if at all, as recorded input.
 #define PC_NETPLAY_SESSION_FIELDS(X)                                                          \
     X(fpsMode) X(chainActions) X(holdToPluck) X(betterPathfinding) X(bluesOnlyWater)         \
     X(idleCounter) X(naviHealthPct) X(tekiHealthPct) X(infiniteDay) X(freeCamera)            \
@@ -1090,6 +1092,13 @@ namespace {
     X(vsPellets) X(lockOn) X(charge) X(throwWhileMoving) X(firstPerson) X(pikiLimit)         \
     X(dayMinutes) X(coopSplit) X(coopMergeCamera) X(debugKeys) X(gyroEnabled)
 
+// Deterministic recording (quick save): the settings a recorded day depends
+// on, written into the recording's header text (pc_settings_sim_config_text).
+// The session list, plus the wheel's job (colour or zoom), which in
+// deterministic mode only decides whether the wheel's notches are recorded.
+#define PC_SIM_RECORD_FIELDS(X) PC_NETPLAY_SESSION_FIELDS(X) X(mouseWheelAction)
+
+#if PIKI_NETPLAY_BUILD
 bool sNetplaySessionLocked = false;
 PcConfig sNetplaySessionConfig;
 // The joiner of a launcher session adopted the host's values: the file keeps
@@ -7169,6 +7178,23 @@ void pc_settings_record_original_look(int original) {
     applyGraphics(sConfig);
     fprintf(stderr, "[RECORD] graphics: %s\n", sInOriginal ? "original" : "Open Nectar");
     fflush(stderr);
+}
+
+const char* pc_settings_sim_config_text(void) {
+    static std::string text;
+    pc_sim_settings_text::begin(text);
+#define PC_SIM_TEXT_FIELD(f) pc_sim_settings_text::add_int(text, #f, (long)sConfig.f);
+    PC_SIM_RECORD_FIELDS(PC_SIM_TEXT_FIELD)
+#undef PC_SIM_TEXT_FIELD
+    // Chosen before a day starts, outside the F1 rows; the day depends on them.
+    pc_sim_settings_text::add_int(text, "coopPlayers", sConfig.coopPlayers);
+    pc_sim_settings_text::add_int(text, "language", pc_settings_get_language());
+    pc_sim_settings_text::add_str(text, "vsMap", sConfig.vsMap);
+    return text.c_str();
+}
+
+unsigned long long pc_settings_sim_config_hash(void) {
+    return pc_sim_settings_text::hash(pc_settings_sim_config_text());
 }
 
 #if PIKI_NETPLAY_BUILD

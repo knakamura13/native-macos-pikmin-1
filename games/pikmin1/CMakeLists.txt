@@ -334,6 +334,7 @@ set(PC_PORT_SOURCES
     pc_port/audio/pc_dsp_host.cpp
     pc_port/settings/pc_settings.cpp
     pc_port/settings/pc_settings_p2d.cpp
+    pc_port/settings/pc_sim_settings_text.cpp
     src/jaudio/pikiseq.c
     pc_port/dolphin_stubs/os_stubs.cpp
     pc_port/dolphin_stubs/gx_stubs.cpp
@@ -1313,6 +1314,13 @@ if(PIKMIN_BUILD_TESTS)
     set_tests_properties(pc_input_log_v4_replay PROPERTIES FIXTURES_REQUIRED pkni_v4_file)
     set_tests_properties(pc_input_log_v4_record pc_input_log_v4_replay pc_input_log_v2_nondet pc_input_log_v3_replay
         PROPERTIES ENVIRONMENT "PIKMIN_INPUT_RECORD=;PIKMIN_INPUT_REPLAY=;PIKMIN_NETPLAY_DETERMINISTIC=")
+
+    # Canonical text and hash of the sim-affecting settings (recording header).
+    add_executable(pc_sim_settings_text_test
+        pc_port/settings/pc_sim_settings_text_test.cpp
+        pc_port/settings/pc_sim_settings_text.cpp)
+    target_compile_options(pc_sim_settings_text_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME pc_sim_settings_text_test COMMAND pc_sim_settings_text_test)
 endif()
 
 # Netplay-only checks. The libm test compares against the platform libm

@@ -330,6 +330,13 @@ void pc_texpack_install_progress(int files);
 void pc_save_transfer_finished(bool ok, const char* message);
 
 #if defined(PIKI_PC_PORT)
+// Deterministic recording (quick save): the settings a recorded day depends
+// on, as canonical one-line text ("simcfg=1;key=value;...", see
+// pc_sim_settings_text.h) for a recording's header, and the text's FNV-1a 64
+// hash. The text is valid until the next call.
+const char* pc_settings_sim_config_text(void);
+unsigned long long pc_settings_sim_config_hash(void);
+
 // Netplay builds: the sim-relevant settings both peers must share, as
 // "key=value;" pairs (the session hashes it in the handshake). Valid until
 // the next call.
