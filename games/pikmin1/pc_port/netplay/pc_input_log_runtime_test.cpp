@@ -360,13 +360,20 @@ int runMemory()
 		}
 	}
 
-	// Replay the first K ticks from memory while the live input is junk.
+	// Replay the first K ticks from memory while the live input is junk. The
+	// replay begins in the middle of a tick, as the day start that begins it
+	// runs inside the sim: that tick keeps its live input and the next tick
+	// takes the first record.
 	const int K                     = 40;
 	const std::vector<uint8_t> live = sSunk;
+	scriptedPads(kTicks);
+	pc_input_log_tick();
+	check(pc_input_log_replay_memory_begin(live.data(), K), "memory: replay begins");
+	pc_input_log_tick_end();
 	sSunk.clear();
 	sSinkCalls = 0;
-	check(pc_input_log_replay_memory_begin(live.data(), K), "memory: replay begins");
-	check(pc_input_log_replay_memory_active() && pc_input_log_replay_memory_fed() == 0, "memory: nothing fed yet");
+	check(pc_input_log_replay_memory_active() && pc_input_log_replay_memory_fed() == 0,
+	      "memory: a replay begun mid-tick has fed nothing at that tick's end");
 	pc_input_log_set_local_capture_fn(&junkHook);
 	for (sTick = 0; sTick < K; ++sTick) {
 		for (int p = 0; p < 4; ++p) std::memset(&sStubPads[p], 0x11, sizeof(PADStatus));

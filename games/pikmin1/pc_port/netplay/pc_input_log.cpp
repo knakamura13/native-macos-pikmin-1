@@ -366,6 +366,9 @@ bool sMemActive = false;
 std::vector<uint8_t> sMemRecords;
 size_t sMemTicks = 0;
 size_t sMemIndex = 0;
+// This tick took a record from the memory replay. A replay begun in the
+// middle of a tick (the sim starts it) begins with the next tick's input.
+bool sMemFed = false;
 
 void clear_local_slots()
 {
@@ -694,6 +697,7 @@ bool pc_input_log_replay_memory_begin(const uint8_t* records, size_t count)
 	else sMemRecords.clear();
 	sMemTicks  = count;
 	sMemIndex  = 0;
+	sMemFed    = false;
 	sMemActive = true;
 	return true;
 }
@@ -707,6 +711,7 @@ void pc_input_log_replay_memory_end(void)
 	sMemActive = false;
 	sMemTicks  = 0;
 	sMemIndex  = 0;
+	sMemFed    = false;
 	std::vector<uint8_t>().swap(sMemRecords);
 }
 
@@ -827,6 +832,7 @@ void pc_input_log_tick(void)
 		if (sMemIndex < sMemTicks) {
 			apply_record(pc_input_log::kVersionV4, sMemRecords.data() + sMemIndex * pc_input_log::kRecordBytesV4,
 			             pc_input_log::kRecordBytesV4);
+			sMemFed = true;
 		} else {
 			apply_neutral();
 		}
@@ -869,10 +875,12 @@ void pc_input_log_tick_end(void)
 	// The local slots hold one tick's input: spent once the sim has run, so
 	// a tick that never ran pc_input_log_tick (a netplay session's) sees none.
 	clear_local_slots();
-	const bool ranTick = sSlotsFilled;
-	sSlotsFilled       = false;
+	sSlotsFilled = false;
+	if (sMemFed) {
+		++sMemIndex;
+		sMemFed = false;
+	}
 	if (!sInitialised) return;
-	if (sMemActive && ranTick && sMemIndex < sMemTicks) ++sMemIndex;
 	if (!sRecordActive && !sReplayActive) return;
 
 	++sTickIndex;
