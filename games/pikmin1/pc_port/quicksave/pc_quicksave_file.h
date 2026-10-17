@@ -26,6 +26,8 @@
 //   4+n    view block: u32 length + bytes (cameras; opaque here)
 //   4+n    local input block: u32 length + bytes (window state; opaque here)
 //   4+n    day-start card block: u32 length + bytes (the game file format)
+//   4+n    day-start state block: u32 length + bytes (sim state the card does
+//          not hold and that carries over from day to day; opaque here)
 //   2      record version u16 (PKNI version, 4)
 //   2      record size u16 (bytes per tick, 104)
 //   4      record count u32 (must equal N)
@@ -70,6 +72,7 @@ struct File {
 	std::vector<uint8_t> view;
 	std::vector<uint8_t> local;
 	std::vector<uint8_t> card;
+	std::vector<uint8_t> start;
 	uint16_t recordVersion = 0;
 	uint16_t recordSize    = 0;
 	std::vector<uint8_t> records; // ticks * recordSize bytes

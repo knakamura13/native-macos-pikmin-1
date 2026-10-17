@@ -49,6 +49,7 @@ q::File sample(uint32_t ticks)
 	// A short card block keeps the every-truncation loops quick; the format
 	// does not depend on its size.
 	for (int i = 0; i < 0x800; ++i) f.card.push_back((uint8_t)((i * 31) ^ (i >> 8)));
+	for (int i = 0; i < 36; ++i) f.start.push_back((uint8_t)(i * 5 + 1));
 	f.recordVersion = 4;
 	f.recordSize    = 104;
 	for (uint32_t t = 0; t < ticks; ++t) {
@@ -63,7 +64,7 @@ bool same(const q::File& a, const q::File& b)
 	    && a.simHash == b.simHash && a.knobsText == b.knobsText && a.modeText == b.modeText && a.seed == b.seed
 	    && a.day == b.day && a.stage == b.stage && a.slot == b.slot && a.dayStartTick == b.dayStartTick
 	    && a.tutorial == b.tutorial && std::memcmp(a.clock, b.clock, sizeof(a.clock)) == 0 && a.ticks == b.ticks
-	    && a.stateHash == b.stateHash && a.view == b.view && a.local == b.local && a.card == b.card
+	    && a.stateHash == b.stateHash && a.view == b.view && a.local == b.local && a.card == b.card && a.start == b.start
 	    && a.recordVersion == b.recordVersion && a.recordSize == b.recordSize && a.records == b.records;
 }
 
