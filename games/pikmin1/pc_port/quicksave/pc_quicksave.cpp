@@ -35,6 +35,8 @@
 #include <string>
 
 std::string pc_card_save_dir(); // card_stubs.cpp: the save root, absolute
+int pc_navi_throw_prefs_save(int out[8]);        // navi.cpp
+void pc_navi_throw_prefs_restore(const int in[8]); // navi.cpp
 
 // Netplay session state: strong-defined by pc_netplay_session.cpp in netplay
 // builds only, null otherwise.
@@ -90,6 +92,7 @@ struct Day {
 	uint8_t tutorial      = 0;
 	uint32_t clock[qs::kClockWords] = {};
 	std::vector<uint8_t> card;
+	std::vector<uint8_t> start;
 	std::string modeText;
 	uint32_t seed         = 0;
 	int32_t day           = 0;
@@ -331,6 +334,36 @@ bool localStateRestore(const std::vector<uint8_t>& in)
 	return true;
 }
 
+// Sim state that carries over from one day to the next outside the card
+// (the throw preferences), as a block of u32 words: a version, then the values.
+std::vector<uint8_t> startStateSave()
+{
+	std::vector<uint8_t> out;
+	auto u32le = [&out](uint32_t v) {
+		for (int i = 0; i < 4; ++i) out.push_back((uint8_t)(v >> (8 * i)));
+	};
+	int prefs[8];
+	const int n = pc_navi_throw_prefs_save(prefs);
+	u32le(1); // version
+	u32le((uint32_t)n);
+	for (int i = 0; i < n; ++i) u32le((uint32_t)prefs[i]);
+	return out;
+}
+
+bool startStateRestore(const std::vector<uint8_t>& in)
+{
+	if (in.size() != 4 * 10) return false;
+	auto at = [&in](size_t i) {
+		const uint8_t* p = in.data() + 4 * i;
+		return (uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
+	};
+	if (at(0) != 1 || at(1) != 8) return false;
+	int prefs[8];
+	for (int i = 0; i < 8; ++i) prefs[i] = (int)at(2 + (size_t)i);
+	pc_navi_throw_prefs_restore(prefs);
+	return true;
+}
+
 void sinkRecord(const uint8_t record[104])
 {
 	if (sDay.valid && sDay.eligible) sRecords.insert(sRecords.end(), record, record + kRecordBytes);
@@ -429,6 +462,7 @@ void doSave()
 	f.ticks         = (uint32_t)(sRecords.size() / kRecordBytes);
 	f.stateHash     = pc_state_hash_compute_total();
 	f.card          = sDay.card;
+	f.start         = sDay.start;
 	f.recordVersion = pc_input_log::kVersionV4;
 	f.recordSize    = (uint16_t)kRecordBytes;
 	f.records       = sRecords;
@@ -598,11 +632,13 @@ void pc_quicksave_day_prepare(void)
 		// and the logs count the same ticks. The whole day start runs within
 		// one tick, so this is the tick the recorded day began on.
 		restoreClock(sLoad.clock);
+		if (!startStateRestore(sLoad.start)) failLoad("the save's day-start state cannot be read");
 		pc_netplay_det_set_tick(sLoad.dayStartTick);
 		pc_state_hash_set_tick(sLoad.dayStartTick > 0 ? sLoad.dayStartTick - 1 : 0);
 	}
 	d.tutorial = (playerState != nullptr && playerState->mIsTutorialMode) ? 1 : 0;
 	captureClock(d.clock);
+	d.start = startStateSave();
 	if (d.eligible && !mode.vs) {
 		// The game file this day starts from, written from memory as the
 		// save writes it (the game itself is untouched). A load restores it
@@ -620,6 +656,7 @@ void pc_quicksave_day_prepare(void)
 		if (sDay.modeText != sLoad.modeText) failLoad("the day started in another mode than the recorded one");
 		if (sDay.tutorial != sLoad.tutorial) failLoad("the day started with another tutorial state");
 		if (sDay.card != sLoad.card) failLoad("the day's start (its card block) differs from the recorded one");
+		if (sDay.start != sLoad.start) failLoad("the day's start (its carried-over state) differs from the recorded one");
 	}
 }
 
