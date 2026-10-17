@@ -2171,9 +2171,25 @@ void Navi::pcPinCursorToLock()
 void Navi::pcPinCursorFirstPerson()
 {
 #if defined(PIKI_PC_PORT)
-	// Netplay: the pin reads the local view matrix, so deterministic mode
-	// keeps the classic stick cursor.
+	// Netplay: the pin reads local state (the First Person toggle and the
+	// view matrix). In deterministic mode both come from this captain's
+	// per-tick input instead: the First Person flag (pc_input_log.h) and the
+	// view's direction from the quantised control yaw the stick basis uses.
+	// The view's ground forward is the stick's forward, (sin, 0, -cos).
 	if (pc_netplay_deterministic()) {
+		if ((pc_netplay_local_flags(mNaviID) & pc_input_log::kLocalFirstPerson) == 0) {
+			return;
+		}
+		f32 yawSin = 0.0f, yawCos = 1.0f;
+		if (!pc_netplay_control_yaw(mNaviID, &yawSin, &yawCos)) {
+			yawSin = 0.0f;
+			yawCos = 1.0f;
+		}
+		const f32 detReach = NAVI_PARM(mCursorMaxRadius) * 0.8f;
+		Vector3f detOffset(yawSin * detReach, 0.0f, -yawCos * detReach);
+		mCursorPosition       = detOffset;
+		mCursorTargetPosition = detOffset;
+		mCursorNaviDist       = detReach;
 		return;
 	}
 #endif
