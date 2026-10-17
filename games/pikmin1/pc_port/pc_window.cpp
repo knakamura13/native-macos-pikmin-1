@@ -1638,9 +1638,15 @@ static void pcWindowCaptureLocalInput(PcLocalInput out[4]) {
     in.cursorDy = dy;
     // The wheel picks the throw colour only when set to; otherwise the
     // camera zooms with it (local view state) and takes the notches itself.
-    if (pc_settings_get_mouse_wheel_action() == 0) {
-        in.wheelSteps = static_cast<int8_t>(std::clamp(pc_window_take_wheel_steps(), -127, 127));
-    }
+    int steps = 0;
+    if (pc_settings_get_mouse_wheel_action() == 0) steps += pc_window_take_wheel_steps();
+#if PIKI_PC_TOUCH
+    // A tap on the HUD colour icon is one notch for the keyboard owner's
+    // captain whatever the wheel does, as the sim counts it outside
+    // deterministic mode.
+    steps += pc_touch_take_color_taps();
+#endif
+    in.wheelSteps = static_cast<int8_t>(std::clamp(steps, -127, 127));
 }
 static const bool sPcLocalCaptureRegistered = (pc_input_log_set_local_capture_fn(&pcWindowCaptureLocalInput), true);
 

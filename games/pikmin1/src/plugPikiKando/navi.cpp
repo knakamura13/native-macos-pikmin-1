@@ -881,11 +881,11 @@ static bool pcUpdatePreferredThrowColor(Navi* navi, bool allowKind = false)
 	if (keyboardOwner) touchSteps = pc_touch_take_color_taps();
 #endif
 	// Netplay: the wheel and the touch icon live outside PADStatus. In
-	// deterministic mode the wheel's notches come from this captain's
-	// per-tick input (pc_input_log.h), filed only while the wheel picks
-	// colours, and the touch icon is drained and ignored (the D-pad still
-	// steps). Captain 0 always takes the wheel path, so the sim takes the
-	// setting's default (the colour), as every peer's does.
+	// deterministic mode their notches come from this captain's per-tick
+	// input (pc_input_log.h): the wheel's filed only while it picks colours,
+	// the icon's taps always (offline; a session carries neither, and the
+	// icon is drained here). Captain 0 always takes the wheel path, so the
+	// sim takes the setting's default (the colour), as every peer's does.
 	const bool detMode = pc_netplay_deterministic();
 	int inputWheelSteps = 0;
 	if (detMode) {
