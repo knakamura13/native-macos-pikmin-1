@@ -8,6 +8,7 @@
 #include "pc_record.h"
 #include "pc_coop.h"
 #include "pc_window.h"
+#include "pc_throw_color.h"
 #include "pc_gyro.h"
 #include "settings/pc_settings.h"
 #include "mods/pc_hd_models.h"
@@ -867,7 +868,8 @@ static bool pcSquadHasColor(int color)
  * Only colours actually in the squad take part, so one colour means the wheel
  * does nothing, two colours alternate and three cycle -- without special-casing
  * any of them. A preference whose colour ran out snaps to one that exists,
- * otherwise the wheel would appear stuck on an empty colour.
+ * otherwise the wheel would appear stuck on an empty colour. Until the first
+ * notch, tap, or D-pad press there is no preference (-1).
  */
 static bool pcUpdatePreferredThrowColor(Navi* navi, bool allowKind = false)
 {
@@ -882,8 +884,9 @@ static bool pcUpdatePreferredThrowColor(Navi* navi, bool allowKind = false)
 #endif
 	// Netplay: the wheel and the touch icon live outside PADStatus, so
 	// deterministic mode drains and ignores them (the D-pad still steps). The
-	// wheel's job is a local control setting, so the sim takes its default
-	// (the colour), as every peer's does.
+	// wheel's job is a local control setting, so every peer treats it as on
+	// its default, Pikmin Colour. That arms the selector. It does not pick a
+	// colour until a D-pad press.
 	const bool detMode = pc_netplay_deterministic();
 	if (detMode) {
 		touchSteps = 0;
@@ -909,8 +912,8 @@ static bool pcUpdatePreferredThrowColor(Navi* navi, bool allowKind = false)
 		sPreferredFromPad[pcThrowSlot(navi)]   = true;
 	}
 
-	const bool wheelOn = keyboardOwner && (detMode || pc_settings_get_mouse_wheel_action() == 0);
-	if (!wheelOn && touchSteps == 0 && padSteps == 0 && preferred < 0) {
+	const bool wheelOn = pc_throw_color_wheel_armed(keyboardOwner, detMode, pc_settings_get_mouse_wheel_action());
+	if (pc_throw_color_keep_unset(wheelOn, touchSteps, padSteps, preferred)) {
 		return kindChanged;
 	}
 
@@ -926,25 +929,19 @@ static bool pcUpdatePreferredThrowColor(Navi* navi, bool allowKind = false)
 		return kindChanged;
 	}
 
-	// Where the current preference sits among the colours on hand.
-	int index = 0;
-	for (int i = 0; i < presentCount; i++) {
-		if (present[i] == preferred) {
-			index = i;
-			break;
-		}
-	}
-
 	int steps = touchSteps + padSteps;
 	if (wheelOn && pc_settings_get_mouse_wheel_action() == 0) {
 		const int wheelSteps = pc_window_take_wheel_steps();
 		if (!detMode) steps += wheelSteps;
 	}
-	if (steps != 0) {
-		index = ((index + steps) % presentCount + presentCount) % presentCount;
+	// No colour chosen and no notch this tick: stay at -1. Index 0 would be
+	// the first squad colour (blue, then red, then yellow) before any choice.
+	const int next = pc_next_preferred_throw_color(preferred, steps, present, presentCount);
+	if (next < 0) {
+		return kindChanged;
 	}
 	const int previous = preferred;
-	preferred          = present[index];
+	preferred          = next;
 	if (previous != preferred && getenv("PIKMIN_WHEEL_TRACE") != nullptr) {
 		fprintf(stderr, "[WHEEL] preferred colour -> %d (in squad=%d)\n",
 		        preferred, presentCount);
