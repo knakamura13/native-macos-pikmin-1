@@ -50,6 +50,7 @@ q::File sample(uint32_t ticks)
 	// does not depend on its size.
 	for (int i = 0; i < 0x800; ++i) f.card.push_back((uint8_t)((i * 31) ^ (i >> 8)));
 	for (int i = 0; i < 36; ++i) f.start.push_back((uint8_t)(i * 5 + 1));
+	for (int i = 0; i < 61; ++i) f.carry.push_back((uint8_t)(i * 9 + 3));
 	f.recordVersion = 4;
 	f.recordSize    = 104;
 	for (uint32_t t = 0; t < ticks; ++t) {
@@ -65,6 +66,7 @@ bool same(const q::File& a, const q::File& b)
 	    && a.day == b.day && a.stage == b.stage && a.slot == b.slot && a.dayStartTick == b.dayStartTick
 	    && a.tutorial == b.tutorial && std::memcmp(a.clock, b.clock, sizeof(a.clock)) == 0 && a.ticks == b.ticks
 	    && a.stateHash == b.stateHash && a.view == b.view && a.local == b.local && a.card == b.card && a.start == b.start
+	    && a.carry == b.carry
 	    && a.recordVersion == b.recordVersion && a.recordSize == b.recordSize && a.records == b.records;
 }
 
@@ -101,7 +103,8 @@ void test_round_trip()
 		std::vector<uint8_t> again;
 		check(q::encode(g, again) && again == bytes, "re-encoding the decoded file gives the same bytes");
 		check(bytes.size() > 4 && std::memcmp(bytes.data(), "PKQS", 4) == 0, "magic first");
-		check(bytes[4] == 1 && bytes[5] == 0, "version 1 little-endian");
+		check(bytes[4] == 2 && bytes[5] == 0, "version 2 little-endian");
+		check(q::file_version(bytes.data(), bytes.size()) == 2, "file_version reads it");
 		check(bytes[6] == 0xA0 && bytes[6 + 31] == 0xA0 + 31, "build id follows the version");
 		check(bytes[38] == 9 && bytes[39] == 0 && std::memcmp(bytes.data() + 40, "GPIE01_01", 9) == 0,
 		      "region as u16 length and ASCII");
@@ -191,7 +194,7 @@ void test_version_and_fields()
 	std::vector<uint8_t> bytes;
 	q::encode(f, bytes);
 	q::File g;
-	for (uint16_t v : { (uint16_t)0, (uint16_t)2, (uint16_t)0x0100 }) {
+	for (uint16_t v : { (uint16_t)0, (uint16_t)1, (uint16_t)3, (uint16_t)0x0200 }) {
 		std::vector<uint8_t> other = bytes;
 		other[4] = (uint8_t)(v & 0xFF);
 		other[5] = (uint8_t)(v >> 8);
@@ -225,6 +228,30 @@ void test_version_and_fields()
 		reseal(other);
 		check(q::decode(other.data(), other.size(), g) == q::kBadField, "region length over its limit");
 	}
+}
+
+// A version 1 file (no precision block), laid out as 2a wrote it: refused as
+// another version, and its version can still be read for the message.
+void test_version_1_refused()
+{
+	q::File f = sample(2);
+	f.carry.clear();
+	std::vector<uint8_t> bytes;
+	check(q::encode(f, bytes), "encode without a precision block");
+	// Drop the empty block's length word (right before the record version and
+	// size) and say version 1.
+	const size_t at = record_count_offset(f, bytes.size()) - 4 - 4;
+	check(bytes[at] == 0 && bytes[at + 1] == 0 && bytes[at + 2] == 0 && bytes[at + 3] == 0, "empty block length found");
+	bytes.erase(bytes.begin() + (long)at, bytes.begin() + (long)at + 4);
+	bytes[4] = 1;
+	reseal(bytes);
+	q::File g;
+	check(q::decode(bytes.data(), bytes.size(), g) == q::kBadVersion, "a version 1 file is refused");
+	check(q::file_version(bytes.data(), bytes.size()) == 1, "and says it is version 1");
+	check(q::file_version(bytes.data(), 5) == 0 && q::file_version(nullptr, 0) == 0, "no version from a short file");
+	std::vector<uint8_t> notQs = bytes;
+	notQs[0]                   = 'X';
+	check(q::file_version(notQs.data(), notQs.size()) == 0, "no version from another kind of file");
 }
 
 void test_check()
@@ -296,6 +323,7 @@ int main()
 	test_corruption();
 	test_truncation();
 	test_version_and_fields();
+	test_version_1_refused();
 	test_check();
 	test_io();
 	if (sFailures == 0) std::printf("pc_quicksave_file_test: all passed\n");

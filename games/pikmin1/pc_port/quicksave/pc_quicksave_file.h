@@ -28,6 +28,10 @@
 //   4+n    day-start card block: u32 length + bytes (the game file format)
 //   4+n    day-start state block: u32 length + bytes (sim state the card does
 //          not hold and that carries over from day to day; opaque here)
+//   4+n    day-start precision block: u32 length + bytes (what the card block
+//          keeps less exactly than the game held it in memory, such as the
+//          buried Pikmin's positions; pc_quicksave_carry.h; opaque here).
+//          Version 2 on.
 //   2      record version u16 (PKNI version, 4)
 //   2      record size u16 (bytes per tick, 104)
 //   4      record count u32 (must equal N)
@@ -36,6 +40,10 @@
 //
 // Pure: no game state, no files. The host test covers the round trip, the
 // CRC, every truncated length, the version and the header checks.
+//
+// Versions: 1 had no precision block. A file of any other version than
+// kVersion is refused (kBadVersion) before anything else is read: its
+// recorded day may need state it does not hold.
 
 #include <cstddef>
 #include <cstdint>
@@ -45,7 +53,7 @@
 namespace pc_quicksave {
 
 constexpr uint8_t kMagic[4]        = { 'P', 'K', 'Q', 'S' };
-constexpr uint16_t kVersion        = 1;
+constexpr uint16_t kVersion        = 2;
 constexpr size_t kBuildIdBytes     = 32;
 constexpr size_t kClockWords       = 12;
 constexpr size_t kMaxRegionBytes   = 64;
@@ -73,6 +81,7 @@ struct File {
 	std::vector<uint8_t> local;
 	std::vector<uint8_t> card;
 	std::vector<uint8_t> start;
+	std::vector<uint8_t> carry;
 	uint16_t recordVersion = 0;
 	uint16_t recordSize    = 0;
 	std::vector<uint8_t> records; // ticks * recordSize bytes
@@ -99,6 +108,10 @@ bool encode(const File& f, std::vector<uint8_t>& out);
 
 // Decodes a whole file. On anything but kOk, f is unspecified.
 Result decode(const uint8_t* data, size_t len, File& f);
+
+// The format version a file says it has (its bytes 4-5), or 0 when it is
+// too short or not a quick save. For messages about a refused file.
+uint16_t file_version(const uint8_t* data, size_t len);
 
 // What a load compares with the running game before it touches anything.
 struct Expect {

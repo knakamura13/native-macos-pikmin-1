@@ -133,7 +133,7 @@ const char* result_name(Result r)
 	case kOk: return "ok";
 	case kTruncated: return "truncated";
 	case kBadMagic: return "not a quick save";
-	case kBadVersion: return "unsupported version";
+	case kBadVersion: return "from another version of Quick Save";
 	case kBadCrc: return "CRC mismatch (damaged file)";
 	case kBadField: return "inconsistent field";
 	}
@@ -164,7 +164,8 @@ bool encode(const File& f, std::vector<uint8_t>& out)
 {
 	if (f.region.size() > kMaxRegionBytes || f.simText.size() > kMaxTextBytes || f.knobsText.size() > kMaxTextBytes
 	    || f.modeText.size() > kMaxTextBytes || f.view.size() > kMaxBlockBytes || f.local.size() > kMaxBlockBytes
-	    || f.card.size() > kMaxBlockBytes || f.start.size() > kMaxBlockBytes || f.ticks > kMaxTicks || f.recordSize == 0
+	    || f.card.size() > kMaxBlockBytes || f.start.size() > kMaxBlockBytes || f.carry.size() > kMaxBlockBytes
+	    || f.ticks > kMaxTicks || f.recordSize == 0
 	    || f.records.size() != (size_t)f.ticks * f.recordSize) {
 		return false;
 	}
@@ -199,6 +200,8 @@ bool encode(const File& f, std::vector<uint8_t>& out)
 	put_bytes(b, f.card.data(), f.card.size());
 	put_u32(b, (uint32_t)f.start.size());
 	put_bytes(b, f.start.data(), f.start.size());
+	put_u32(b, (uint32_t)f.carry.size());
+	put_bytes(b, f.carry.data(), f.carry.size());
 	put_u16(b, f.recordVersion);
 	put_u16(b, f.recordSize);
 	put_u32(b, f.ticks);
@@ -241,6 +244,7 @@ Result decode(const uint8_t* data, size_t len, File& f)
 	r.blob(f.local, kMaxBlockBytes, tooLong);
 	r.blob(f.card, kMaxBlockBytes, tooLong);
 	r.blob(f.start, kMaxBlockBytes, tooLong);
+	r.blob(f.carry, kMaxBlockBytes, tooLong);
 	f.recordVersion        = r.u16();
 	f.recordSize           = r.u16();
 	const uint32_t records = r.u32();
@@ -252,6 +256,12 @@ Result decode(const uint8_t* data, size_t len, File& f)
 	if (recordBytes < r.left) return kBadField; // trailing bytes before the CRC
 	f.records.assign(r.p, r.p + recordBytes);
 	return kOk;
+}
+
+uint16_t file_version(const uint8_t* data, size_t len)
+{
+	if (data == nullptr || len < 6 || std::memcmp(data, kMagic, 4) != 0) return 0;
+	return (uint16_t)(data[4] | ((uint16_t)data[5] << 8));
 }
 
 Check check(const File& f, const Expect& e)
