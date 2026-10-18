@@ -1,0 +1,159 @@
+{
+  "source_ref": "6118f1dc79506c3d685359158d8b4c5809494f97",
+  "base_game_ref": "3ae1dc0be4a00384496bc7385d246b3799dbac49",
+  "exe_sha256": "79a703fd22a54d0fdd52f85d13514d2ee9da39afb9cd97be3ce6eb1d70a939e1",
+  "qa_patch_sha256": "0c43830069d7cd2bf0d4de0db76d1515dbdf209a2b00677e223c55ac980ac8be",
+  "gpu_patch_sha256": "7e37c648b0558a44959fa1477e8f5dbcc60bc6b85c01f63bd9981cb6a8b0c6d5",
+  "cases": {
+    "precision-base": {
+      "name": "precision-base",
+      "exit": 0,
+      "seconds": 15.81,
+      "events": [
+        "[PC Port] Internal render resolution: 1280x720 (aspect 1.778)",
+        "[quicksave] saved /private/tmp/pikmin-qs-gpu-cases/precision-base/save/quicksave/1.qsv: day 5 stage 0, tick 999 of the day (tick 5799), hash 88624d0fa6d69280, 139728 bytes, 20.8 ms"
+      ]
+    },
+    "precision-control": {
+      "name": "precision-control",
+      "exit": 0,
+      "seconds": 6.04,
+      "events": [
+        "[PC Port] Internal render resolution: 1280x720 (aspect 1.778)",
+        "[quicksave] loaded /private/tmp/pikmin-qs-gpu-cases/precision-base/save/quicksave/1.qsv: tick 999 of day 5 (tick 5799) hash 88624d0fa6d69280 matched; replay 3.21 s (311 ticks/s), 3.50 s since the load began; live input from the next tick"
+      ]
+    },
+    "precision-null-gpu": {
+      "name": "precision-null-gpu",
+      "exit": 0,
+      "seconds": 3.98,
+      "events": [
+        "[PC Port] Internal render resolution: 1280x720 (aspect 1.778)",
+        "[quicksave] loaded /private/tmp/pikmin-qs-gpu-cases/precision-base/save/quicksave/1.qsv: tick 999 of day 5 (tick 5799) hash 88624d0fa6d69280 matched; replay 0.79 s (1263 ticks/s), 1.07 s since the load began; live input from the next tick",
+        "[QS-GPU] catch-up ended frames=999 null_gl=0 restored=1"
+      ]
+    },
+    "long-base": {
+      "name": "long-base",
+      "exit": 0,
+      "seconds": 77.86,
+      "events": [
+        "[PC Port] Internal render resolution: 1280x720 (aspect 1.778)",
+        "[quicksave] saved /private/tmp/pikmin-qs-gpu-cases/long-base/save/quicksave/0.qsv: day 1 stage 0, tick 26990 of the day (tick 27000), hash 2638fdb9766296b1, 2842480 bytes, 29.6 ms"
+      ]
+    },
+    "long-control": {
+      "name": "long-control",
+      "exit": 0,
+      "seconds": 105.7,
+      "events": [
+        "[PC Port] Internal render resolution: 2560x1018 (aspect 2.515)",
+        "[PC Port] Internal render resolution: 1280x509 (aspect 2.515)",
+        "[quicksave] loaded /private/tmp/pikmin-qs-gpu-cases/long-base/save/quicksave/0.qsv: tick 26990 of day 1 (tick 27000) hash 2638fdb9766296b1 matched; replay 103.57 s (261 ticks/s), 103.93 s since the load began; live input from the next tick",
+        "[PC Port] Internal render resolution: 2560x1018 (aspect 2.515)"
+      ]
+    },
+    "long-null-gpu": {
+      "name": "long-null-gpu",
+      "exit": 0,
+      "seconds": 29.2,
+      "events": [
+        "[PC Port] Internal render resolution: 2560x1018 (aspect 2.515)",
+        "[PC Port] Internal render resolution: 1280x509 (aspect 2.515)",
+        "[quicksave] loaded /private/tmp/pikmin-qs-gpu-cases/long-base/save/quicksave/0.qsv: tick 26990 of day 1 (tick 27000) hash 2638fdb9766296b1 matched; replay 27.10 s (996 ticks/s), 27.49 s since the load began; live input from the next tick",
+        "[PC Port] Internal render resolution: 2560x1018 (aspect 2.515)",
+        "[QS-GPU] catch-up ended frames=26990 null_gl=0 restored=1"
+      ]
+    },
+    "precision-in-game-null-gpu": {
+      "name": "precision-in-game-null-gpu",
+      "exit": 0,
+      "seconds": 17.78,
+      "events": [
+        "[PC Port] Internal render resolution: 1280x720 (aspect 1.778)",
+        "[quicksave] loaded /private/tmp/pikmin-qs-gpu-cases/precision-base/save/quicksave/1.qsv: tick 999 of day 5 (tick 5799) hash 88624d0fa6d69280 matched; replay 0.90 s (1104 ticks/s), 0.92 s since the load began; live input from the next tick",
+        "[QS-GPU] catch-up ended frames=999 null_gl=0 restored=1"
+      ]
+    },
+    "title-complete-null-gpu": {
+      "name": "title-complete-null-gpu",
+      "exit": 0,
+      "seconds": 5.85,
+      "events": [
+        "[PC Port] Internal render resolution: 1280x720 (aspect 1.778)",
+        "[quicksave] loaded /private/tmp/pikmin-qs-gpu-cases/title-complete-null-gpu/save/quicksave/1.qsv: tick 999 of day 5 (tick 5799) hash 88624d0fa6d69280 matched; replay 0.93 s (1072 ticks/s), 0.96 s since the load began; live input from the next tick",
+        "[QS-GPU] catch-up ended frames=999 null_gl=0 restored=1"
+      ]
+    },
+    "null-gpu-visible-v2": {
+      "name": "null-gpu-visible-v2",
+      "exit": 0,
+      "seconds": 42.34,
+      "events": [
+        "[PC Port] Internal render resolution: 2560x1018 (aspect 2.515)",
+        "[PC Port] Internal render resolution: 1280x509 (aspect 2.515)",
+        "[quicksave] loaded /private/tmp/pikmin-qs-gpu-cases/long-base/save/quicksave/0.qsv: tick 26990 of day 1 (tick 27000) hash 2638fdb9766296b1 matched; replay 24.59 s (1097 ticks/s), 24.98 s since the load began; live input from the next tick",
+        "[PC Port] Internal render resolution: 2560x1018 (aspect 2.515)",
+        "[QS-GPU] catch-up ended frames=26990 null_gl=0 restored=1"
+      ]
+    },
+    "long-null-gpu-fullres": {
+      "name": "long-null-gpu-fullres",
+      "exit": 0,
+      "seconds": 25.1,
+      "events": [
+        "[PC Port] Internal render resolution: 2560x1018 (aspect 2.515)",
+        "[quicksave] loaded /private/tmp/pikmin-qs-gpu-cases/long-base/save/quicksave/0.qsv: tick 26990 of day 1 (tick 27000) hash 2638fdb9766296b1 matched; replay 23.00 s (1174 ticks/s), 23.36 s since the load began; live input from the next tick",
+        "[QS-GPU] catch-up ended frames=26990 null_gl=0 restored=1"
+      ]
+    }
+  },
+  "checks": [
+    {
+      "reference": "precision-base",
+      "cases": [
+        "precision-control",
+        "precision-null-gpu",
+        "precision-in-game-null-gpu",
+        "title-complete-null-gpu"
+      ],
+      "from_tick": 4801,
+      "through_tick": 6400,
+      "result": "all columns identical"
+    },
+    {
+      "reference": "long-base",
+      "cases": [
+        "long-control",
+        "long-null-gpu",
+        "long-null-gpu-fullres"
+      ],
+      "from_tick": 11,
+      "through_tick": 27060,
+      "result": "all columns identical"
+    },
+    {
+      "reference": "long-base",
+      "cases": [
+        "null-gpu-visible-v2"
+      ],
+      "from_tick": 11,
+      "through_tick": 27100,
+      "result": "all columns identical"
+    }
+  ],
+  "host_tests": {
+    "passed": 37,
+    "total": 38,
+    "failed": [
+      "pc_tev_shader_test"
+    ],
+    "failure": "Known generated-uniform mismatch: uChan0AlphaEn and uChan0AlphaDiff."
+  },
+  "manual": {
+    "loading_ui": "Observed visible and updating at reduced and native resolution.",
+    "post_load": "Observed rendered gameplay after experimental load.",
+    "cancellation": "Escape cancelled at replay tick 6481/26990; observed cancellation toast and rendered captain prompt on the card-select return path. Original resolution restored.",
+    "excluded_run": "Initial null-gpu-visible launch exited 137 after the closed test app relaunched and overlapped it. Its native.log was only a launch error. Cleared leftover own test process; null-gpu-visible-v2 passed."
+  }
+}

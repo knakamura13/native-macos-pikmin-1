@@ -95,3 +95,31 @@ restoring it before the loading UI and swap. `[QS-GPU]` reports suppressed frame
 and real GL calls observed inside the gated presentation interval. This is not a
 claim that the entire frame performs zero GPU work. Hash correctness and a measured
 speedup are prerequisites for considering a product implementation.
+
+
+The experiment scenarios use the same `--out` root in this order:
+
+1. `catchup-gpu-precision.json`: record the precision fixture, then control and
+   experimental loads. Compare ticks 4801..6400 against `precision-base`.
+2. `catchup-gpu-record-long.json`: record the long fixture with this executable.
+3. `catchup-gpu-comparison.json`: sequential control and experimental long loads.
+   Compare ticks 11..27060 against `long-base` for both.
+4. `catchup-gpu-load-paths.json`: in-game and title load checks. First copy
+   `precision-base/save/` to `{out}/title-fixture/`; optionally add a newer invalid
+   `quicksave/2.qsv` there to test fallback. Compare ticks 4801..6400, using the
+   last occurrence of a tick, against `precision-base`.
+5. `catchup-gpu-visible.json`: a foreground long load with time to inspect the
+   loading overlay and resumed game. `catchup-gpu-cancel.json` is the equivalent
+   cancellation check: press Escape during replay, inspect the destination, then
+   close the test window. These checks require Computer Use.
+
+Invoke `run.py` as above with the selected JSON file. All cases refuse existing
+case directories. Reference save files are specific to the exact instrumented
+executable; do not rebuild between recording and loading.
+
+`catchup-gpu-fullres.json` repeats the experimental long load without the
+resolution reduction, using the existing test-only `PIKMIN_QS_NO_LOWRES` hook.
+See `docs/quick-save-catchup-gpu-experiment.md` and
+`catchup-gpu-results-macos.json` for the measured macOS results and limits.
+For cleanup after closing a test app, wait for the runner to finish before
+launching another case; do not query a closed app binding, which may relaunch it.
