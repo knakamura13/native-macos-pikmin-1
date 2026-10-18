@@ -357,6 +357,18 @@ struct CardSelectSetupSection : public Node {
 		if (pc_erased_notice_active()) {
 			return;
 		}
+		// Quick Load from the file select (pc_quicksave.h): back to the title,
+		// which takes the load as --quick-load's route. Only from the file
+		// screen itself, not under one of the prompts before it.
+		if (memcardWindow && mState == Active && !mAwaitingCaptain && !mAwaitingDevAssign && !mAwaitingVsRules
+		    && !mAwaitingPlayerCount && !mAwaitingNewGameChoice && !mAwaitingRandomizerSettings
+		    && pc_quicksave_take_card_exit()) {
+			memcardWindow     = nullptr;
+			mNextSectionsFlag = PACK_NEXT_ONEPLAYER(ONEPLAYER_GameExit);
+			mState            = Exit;
+			gsys->setFade(0.0f);
+			return;
+		}
 		if (mAwaitingSpeedrunIntro) {
 			const int choice = pc_speedrun_intro_result();
 			if (choice == PC_SPEEDRUN_INTRO_PENDING) {

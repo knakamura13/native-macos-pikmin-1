@@ -13,8 +13,9 @@
 // since, the state hash at this tick and the view and window state. The
 // game itself is untouched.
 //
-// Load (the Quick Load action, F7 by default, inside a day; or --quick-load
-// <file> at launch): the file is checked against the running
+// Load (the Quick Load action, F7 by default: inside a day the running file's
+// save; on the title screen or in the file select the newest story save; or
+// --quick-load <file> at launch): the file is checked against the running
 // game (CRC, build, region, sim settings, test switches, mode) before
 // anything changes. The running day is left, the recorded day is entered
 // through the normal day start (so the RNG reseeds), its input is replayed
@@ -60,7 +61,9 @@ bool pc_quicksave_enabled(void);
 // at the end of the tick. The result (or why nothing happened) goes to the
 // console, the menus' notice line and pc_quicksave_toast.
 void pc_quicksave_request_save(void);
-void pc_quicksave_request_load(void); // the running day's slot file
+// In a day: the running file's save. On the title screen or in the file
+// select: the newest story save, by the --quick-load route.
+void pc_quicksave_request_load(void);
 void pc_quicksave_request_load_file(const char* path);
 // Escape during a load (pc_window).
 void pc_quicksave_request_cancel(void);
@@ -88,8 +91,11 @@ void pc_quicksave_note_running(void); // RunningModeState::update, every tick
 // select (a story day, or a cancelled story load); 2 straight into the day
 // again (VS, as a rematch); 3 to the title (a cancelled VS load).
 int pc_quicksave_take_leave(void);
+// CardSelect: a load from the file select wants the title (1), whose route
+// then takes it as --quick-load's.
+int pc_quicksave_take_card_exit(void);
 bool pc_quicksave_boot_pending(void); // logo: a --quick-load is waiting (no logo pause)
-bool pc_quicksave_take_title(void);   // title: a story --quick-load starts its run
+bool pc_quicksave_take_title(void);   // title: a story load starts its run
 bool pc_quicksave_take_setup(void);   // CardSelect: skip the menus for a story load
 int pc_quicksave_setup_slot(void);    // ...and the card file to commit (1-3, 0 none)
 // CardSelect exit: puts the recorded day's start back (the card block, the

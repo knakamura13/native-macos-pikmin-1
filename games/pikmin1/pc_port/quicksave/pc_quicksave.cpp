@@ -113,7 +113,8 @@ struct Day {
 enum Phase {
 	kIdle,     // no load
 	kLeave,    // F7: waiting for the running day to be left
-	kTitle,    // --quick-load, story: waiting for the title
+	kCardExit, // F7 in the card select: waiting for it to go back to the title
+	kTitle,    // --quick-load or F7 on the title, story: waiting for the title
 	kSetup,    // waiting for the card select
 	kEnter,    // waiting for the card select to enter the day
 	kDay,      // waiting for the day to start
@@ -595,6 +596,24 @@ void dropLoad()
 	sLoad   = qs::File();
 }
 
+// Where a load can start outside a day: 1 the title screen, 2 the card select
+// (the file select), 0 elsewhere.
+int menuPlace()
+{
+	if (gameflow.mCurrGameSectionID == SECTION_Titles) return 1;
+	if (gameflow.mCurrGameSectionID == SECTION_OnePlayer && gameflow.mNextOnePlayerSectionID == ONEPLAYER_CardSelect) return 2;
+	return 0;
+}
+
+// The slot files a load from the title or the card select considers, newest
+// first.
+std::vector<std::string> savesNewestFirst()
+{
+	std::vector<std::string> paths;
+	for (int slot = 0; slot <= 3; ++slot) paths.push_back(slotPath(slot));
+	return qs::existing_newest_first(paths);
+}
+
 void doSave()
 {
 	if (!sDay.valid) {
@@ -702,6 +721,48 @@ int cancelLeave()
 	return vs ? 3 : 1;
 }
 
+// Starts a load (sLoad set) from outside a day, by the --quick-load route.
+void startMenuLoad(int place)
+{
+	sLoadRequested = Clock::now();
+	sCancel        = false;
+	sLeaveWait     = 0;
+	sPhase         = place == 2 ? kCardExit : kTitle;
+	std::printf("[quicksave] loading %s from the %s: day %d stage %d slot %d, %u ticks\n", sLoadPath.c_str(),
+	            place == 2 ? "card select" : "title", (int)sLoad.day, (int)sLoad.stage, (int)sLoad.slot, sLoad.ticks);
+	std::fflush(stdout);
+}
+
+// F7 (or the menu) on the title or in the card select: the newest story save
+// that this game can load.
+void requestMenuLoad(int place)
+{
+	const std::vector<std::string> saves = savesNewestFirst();
+	if (saves.empty()) {
+		notify(true, "Quick Load: there is no quick save yet.");
+		return;
+	}
+	std::string firstWhy;
+	for (const std::string& path : saves) {
+		std::string why;
+		qs::File f;
+		Mode m;
+		if (!readAndCheck(path, f, m, &why)) {
+			if (firstWhy.empty()) firstWhy = why;
+			continue;
+		}
+		if (m.vs) {
+			if (firstWhy.empty()) firstWhy = "the newest quick save is a VS match, which loads only at launch with --vs-map";
+			continue;
+		}
+		sLoad     = std::move(f);
+		sLoadMode = m;
+		sLoadPath = path;
+		startMenuLoad(place);
+		return;
+	}
+	notify(true, "Quick Load refused: %s.", firstWhy.c_str());
+}
 
 } // namespace
 
@@ -760,7 +821,11 @@ void pc_quicksave_request_load(void)
 		return;
 	}
 	if (!sDay.valid) {
-		notify(true, "Quick Load works in a day, or start the game with --quick-load <file>.");
+		if (const int place = menuPlace()) {
+			requestMenuLoad(place);
+		} else {
+			notify(true, "Quick Load works in a day, on the title screen or in the file select.");
+		}
 		return;
 	}
 	pc_quicksave_request_load_file(slotPath(sDay.slot).c_str());
@@ -913,10 +978,17 @@ int pc_quicksave_take_leave(void)
 	return sLoadMode.vs ? 2 : 1;
 }
 
+int pc_quicksave_take_card_exit(void)
+{
+	if (!sEnabled || sPhase != kCardExit) return 0;
+	sPhase = kTitle;
+	return 1;
+}
+
 void pc_quicksave_request_cancel(void)
 {
 	if (!sEnabled || sPhase == kIdle || sCancel) return;
-	if (sPhase == kLeave || sPhase == kTitle) {
+	if (sPhase == kLeave || sPhase == kCardExit || sPhase == kTitle) {
 		// Nothing has changed yet.
 		std::printf("[quicksave] load of %s cancelled before it began\n", sLoadPath.c_str());
 		notify(false, "Quick Load cancelled.");
@@ -1038,6 +1110,12 @@ void pc_quicksave_tick_end(void)
 		// No running day took the request (a cutscene began, the day ended).
 		std::printf("[quicksave] load of %s cancelled: the day is not in play\n", sLoadPath.c_str());
 		notify(true, "Quick Load: the day is not in play (a cutscene, the day's start or its end).");
+		dropLoad();
+	}
+	if (sPhase == kCardExit && ++sLeaveWait > 300) {
+		// The card select did not let go (a prompt is open over it).
+		std::printf("[quicksave] load of %s cancelled: the card select did not go back to the title\n", sLoadPath.c_str());
+		notify(true, "Quick Load: close the open prompt first, then press Quick Load again.");
 		dropLoad();
 	}
 	if (sSaveRequested) {
