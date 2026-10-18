@@ -329,6 +329,7 @@ set(PC_PORT_SOURCES
     pc_port/quicksave/pc_quicksave_carry.cpp
     pc_port/quicksave/pc_quicksave_file.cpp
     pc_port/quicksave/pc_quicksave_io.cpp
+    pc_port/quicksave/pc_quicksave_progress.cpp
     pc_port/audio/pc_audio.cpp
     pc_port/audio/pc_envelope.cpp
     pc_port/audio/pc_jam.cpp
@@ -1337,10 +1338,11 @@ if(PIKMIN_BUILD_TESTS)
     target_compile_options(pc_quicksave_file_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
     add_test(NAME pc_quicksave_file_test COMMAND pc_quicksave_file_test)
 
-    # Quick save helpers: the day-start precision block.
+    # Quick save helpers: the day-start precision block and the load progress.
     add_executable(pc_quicksave_helpers_test
         pc_port/quicksave/pc_quicksave_helpers_test.cpp
-        pc_port/quicksave/pc_quicksave_carry.cpp)
+        pc_port/quicksave/pc_quicksave_carry.cpp
+        pc_port/quicksave/pc_quicksave_progress.cpp)
     target_compile_options(pc_quicksave_helpers_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
     add_test(NAME pc_quicksave_helpers_test COMMAND pc_quicksave_helpers_test)
 endif()
