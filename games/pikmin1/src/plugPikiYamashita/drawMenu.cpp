@@ -398,6 +398,7 @@ zen::DrawMenu::DrawMenu(immut char* bloFileName, bool useAlphaMgr, bool useTexAn
 	setCancelSelectMenuNo(-1);
 #if defined(PIKI_PC_PORT)
 	mPointerClicks = false;
+	mPointerScreen = PC_MENU_CLICK_NONE;
 #endif
 	mParentPane = mScreen.search('pall', true);
 	mParentPane->setOffset(mParentPane->getWidth() >> 1, mParentPane->getHeight() >> 1);
@@ -667,7 +668,7 @@ bool zen::DrawMenu::update(Controller* controller)
 	if (mState != STATUS_Inactive) pc_touch_claim_game_menu();
 #endif
 #if defined(PIKI_PC_PORT)
-	// Only a menu that opted in (the title's main menu) holds the pointer.
+	// A menu that opted in holds the pointer, so this click is not also A or B.
 	if (mPointerClicks && mState != STATUS_Inactive) pc_menu_click_claim_pointer_menu();
 #endif
 	if (mState != STATUS_Inactive) {
@@ -727,14 +728,14 @@ bool zen::DrawMenu::update(Controller* controller)
 					float menuY = 0.0f;
 					if (pcMenuGraphPoint(false, &menuX, &menuY)) {
 						const PcMenuClickResult hover
-						    = pc_menu_click_hover(PC_MENU_CLICK_MAIN, menuX, menuY, rects, active, n, kPcMenuClickMargin);
+						    = pc_menu_click_hover(mPointerScreen, menuX, menuY, rects, active, n, kPcMenuClickMargin);
 						if (hover.action == PC_MENU_CLICK_HIGHLIGHT) {
 							mCurrentSelect = hover.index;
 						}
 					}
 					if (!touchDecide && pcMenuGraphPoint(true, &menuX, &menuY)) {
 						const PcMenuClickResult hit
-						    = pc_menu_click_resolve(PC_MENU_CLICK_MAIN, menuX, menuY, rects, active, n, kPcMenuClickMargin);
+						    = pc_menu_click_resolve(mPointerScreen, menuX, menuY, rects, active, n, kPcMenuClickMargin);
 						if (hit.action == PC_MENU_CLICK_ACTIVATE) {
 							mCurrentSelect = hit.index;
 							touchDecide    = true;
@@ -806,6 +807,10 @@ void zen::DrawMenu::draw(Graphics&)
 {
 	if (mState) {
 		DrawScreen::draw();
+#if defined(PIKI_PC_PORT)
+		// The click maps into the graph this draw just used.
+		if (mPointerClicks) pc_gfx_note_menu_tap_space(pc_gfx_menu_virt_width(), 480);
+#endif
 	}
 }
 

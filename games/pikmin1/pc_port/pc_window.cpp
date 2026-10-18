@@ -270,8 +270,8 @@ static int sCStickInvert = 0;
 
 // Mouse input state for cursor (C-stick) control
 static bool sMouseRelativeMode = false;
-// Title and main menu release capture so the pointer can hit a button, then
-// put it back when the level (or any other screen) is showing again.
+// A menu that takes the pointer releases capture so the pointer can hit a
+// button, then puts it back when that menu is gone.
 static bool sRestoreMouseAfterMenu = false;
 static int sMouseCenterX = 0;
 // Centre of the window as it is now (fullscreen included), not the stored
@@ -1189,8 +1189,8 @@ void pc_window_poll_events(PADStatus* pad) {
                 }
                 // Issue #52: Escape (or the OS) can drop the mouse out of
                 // relative mode, which froze the cursor until the option was
-                // toggled. A click in the window takes it back. The title and
-                // main menu keep the pointer free so the click can hit a button.
+                // toggled. A click in the window takes it back. A menu that takes
+                // the pointer keeps it free so the click can hit a button.
                 if (!sSettingsMenuOpen && !pc_menu_click_pointer_menu_active()
                     && effectiveControlMode() == PC_CONTROL_MOUSE_CURSOR && !sMouseRelativeMode
                     && event.button.which != SDL_TOUCH_MOUSEID) {
@@ -1328,8 +1328,8 @@ void pc_window_poll_events(PADStatus* pad) {
     const Uint8* state = SDL_GetKeyboardState(NULL);
     // Bindings may name a mouse button (issue #42); sample the mouse once here.
     Uint32 boundMouse = SDL_GetMouseState(NULL, NULL);
-    // While the title or main menu holds the pointer, a mouse button is that
-    // menu's click, not A or B. Keyboard and controller bindings stay.
+    // While a pointer menu holds the click, a mouse button is that menu's
+    // click, not A or B. Keyboard and controller bindings stay.
     if (pc_menu_click_pointer_menu_active()) boundMouse = 0;
     // La segunda tecla con un clic solo cuenta fuera de Classic, como los clics
     // fijos que sustituye (en Classic el ratón no juega).

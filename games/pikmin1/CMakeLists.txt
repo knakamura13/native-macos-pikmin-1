@@ -1111,7 +1111,7 @@ if(PIKMIN_BUILD_TESTS)
     target_compile_options(pc_menu_repeat_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
     add_test(NAME pc_menu_repeat_test COMMAND pc_menu_repeat_test)
 
-    # Title and main-menu pointer hits (no window, no disc)
+    # Pointer hits for Press Start and DrawMenu rows (no window, no disc)
     add_executable(pc_menu_click_test pc_port/pc_menu_click_test.cpp pc_port/pc_menu_click.cpp)
     target_include_directories(pc_menu_click_test PRIVATE pc_port)
     target_compile_options(pc_menu_click_test PRIVATE ${NATIVE_COMPILE_OPTIONS})

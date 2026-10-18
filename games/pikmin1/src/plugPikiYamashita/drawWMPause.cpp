@@ -5,6 +5,9 @@
 #include "sysNew.h"
 #include "zen/DrawMenu.h"
 #include "zen/Math.h"
+#if defined(PIKI_PC_PORT)
+#include "pc_menu_click.h"
+#endif
 
 /**
  * @todo: Documentation
@@ -24,6 +27,9 @@ DEFINE_PRINT("drawWMPause")
 zen::DrawWMPause::DrawWMPause()
 {
 	mPauseMenu = new DrawMenu("screen/blo/pause_w.blo", false, false);
+#if defined(PIKI_PC_PORT)
+	mPauseMenu->setPointerClicks(PC_MENU_CLICK_MAP_PAUSE);
+#endif
 	mPauseMenu->setCancelSelectMenuNo(0);
 	P2DScreen* pause = mPauseMenu->getScreenPtr();
 	mBackPane        = static_cast<P2DPicture*>(pause->search('back', true));

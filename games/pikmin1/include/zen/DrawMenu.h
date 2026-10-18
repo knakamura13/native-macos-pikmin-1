@@ -8,6 +8,9 @@
 #include "zen/Math.h"
 #include "zen/MenuPanelMgr.h"
 #include "zen/SpectrumCursorMgr.h"
+#if defined(PIKI_PC_PORT)
+#include "pc_menu_click.h"
+#endif
 
 class Colour;
 class Graphics;
@@ -282,8 +285,13 @@ public:
 	void setCancelKeyAssign(u32 key) { mKeyCancel = key; }
 	void setDecideKeyAssign(u32 key) { mKeyDecide = key; }
 #if defined(PIKI_PC_PORT)
-	// Left clicks highlight and confirm a row. Off except on the title's main menu.
-	void setPointerClicks(bool enabled) { mPointerClicks = enabled; }
+	// Left clicks highlight and confirm a row. Pass a PcMenuClickScreen, or
+	// PC_MENU_CLICK_NONE to leave the menu on the keyboard and the controller.
+	void setPointerClicks(int screen)
+	{
+		mPointerScreen = screen;
+		mPointerClicks = screen != PC_MENU_CLICK_NONE;
+	}
 #endif
 
 protected:
@@ -321,7 +329,8 @@ protected:
 	int mCancelSelectMenuNo;           // _1D0
 	bool mIsSelectMenuCancel;          // _1D4
 #if defined(PIKI_PC_PORT)
-	bool mPointerClicks;               // title main menu only
+	bool mPointerClicks;
+	int mPointerScreen;                // PcMenuClickScreen while mPointerClicks
 #endif
 };
 

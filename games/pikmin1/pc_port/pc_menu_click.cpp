@@ -114,9 +114,28 @@ int pc_menu_click_hit(float x, float y, const PcMenuClickRect* rects, const int*
 	return -1;
 }
 
+static bool pc_menu_click_is_row_screen(int screen)
+{
+	switch (screen) {
+	case PC_MENU_CLICK_MAIN:
+	case PC_MENU_CLICK_OPTIONS:
+	case PC_MENU_CLICK_SOUND:
+	case PC_MENU_CLICK_RUMBLE:
+	case PC_MENU_CLICK_LANGUAGE:
+	case PC_MENU_CLICK_ADVANCED:
+	case PC_MENU_CLICK_PAUSE:
+	case PC_MENU_CLICK_PAUSE_YESNO:
+	case PC_MENU_CLICK_PROGRESSIVE:
+	case PC_MENU_CLICK_MAP_PAUSE:
+		return true;
+	default:
+		return false;
+	}
+}
+
 static bool pc_menu_click_is_menu_screen(int screen)
 {
-	return screen == PC_MENU_CLICK_TITLE || screen == PC_MENU_CLICK_MAIN;
+	return screen == PC_MENU_CLICK_TITLE || pc_menu_click_is_row_screen(screen);
 }
 
 PcMenuClickResult pc_menu_click_hover(int screen, float x, float y, const PcMenuClickRect* rects, const int* active, int count,

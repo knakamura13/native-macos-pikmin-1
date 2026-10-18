@@ -2,6 +2,9 @@
 #include "DebugLog.h"
 #include "SoundMgr.h"
 #include "sysNew.h"
+#if defined(PIKI_PC_PORT)
+#include "pc_menu_click.h"
+#endif
 
 /**
  * @todo: Documentation
@@ -21,6 +24,9 @@ DEFINE_PRINT("drawProgre")
 zen::DrawProgre::DrawProgre()
 {
 	mMenu = new DrawMenu("screen/blo/progre.blo", false, false);
+#if defined(PIKI_PC_PORT)
+	mMenu->setPointerClicks(PC_MENU_CLICK_PROGRESSIVE);
+#endif
 	mMenu->setCancelSelectMenuNo(1);
 	mMenu->setCancelKeyAssign(KBBTN_NONE); // can't cancel the progressive mode screen!
 	mMenu->setDecideKeyAssign(KBBTN_START | KBBTN_A);

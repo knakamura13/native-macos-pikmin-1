@@ -11,6 +11,7 @@
 #if defined(PIKI_PC_PORT)
 #include "pc_gfx.h"
 #include "pc_coop.h"
+#include "pc_menu_click.h"
 #include "settings/pc_settings.h"
 #endif
 
@@ -57,6 +58,10 @@ zen::ogScrPauseMgr::ogScrPauseMgr()
 	mSubMenu = new DrawMenu("screen/blo/ot_pa_ok.blo", false, false);
 #else
 	mSubMenu = new DrawMenu("screen/blo/pause_ok.blo", false, false);
+#endif
+#if defined(PIKI_PC_PORT)
+	mMainMenu->setPointerClicks(PC_MENU_CLICK_PAUSE);
+	mSubMenu->setPointerClicks(PC_MENU_CLICK_PAUSE_YESNO);
 #endif
 	mSubMenuScreen          = mSubMenu->getScreenPtr();
 	mQuitChalModeSubTextBox = static_cast<P2DTextBox*>(mSubMenuScreen->search('yame', true));
