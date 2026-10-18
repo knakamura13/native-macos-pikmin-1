@@ -1311,6 +1311,18 @@ void pc_window_poll_events(PADStatus* pad) {
         if (loadDown && !sQuickLoadWasDown) pc_quicksave_request_load();
         sQuickSaveWasDown = saveDown;
         sQuickLoadWasDown = loadDown;
+        // Escape (or player 1's B) cancels a load under way: a fresh press
+        // after the load began, so a key held from before does not.
+        static bool sCancelWasDown = false;
+        static bool sLoadWasActive = false;
+        const bool loadActive = pc_quicksave_load_active();
+        const bool cancelDown = !sSettingsMenuOpen
+            && (state[SDL_SCANCODE_ESCAPE] != 0
+                || (sControllers[0] != nullptr
+                    && SDL_GameControllerGetButton(sControllers[0], SDL_CONTROLLER_BUTTON_B) != 0));
+        if (loadActive && sLoadWasActive && cancelDown && !sCancelWasDown) pc_quicksave_request_cancel();
+        sCancelWasDown = cancelDown;
+        sLoadWasActive = loadActive;
     }
 
     u16 button = 0;

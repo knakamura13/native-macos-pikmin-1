@@ -5,6 +5,7 @@
 #include "quicksave/pc_quicksave_carry.h"
 #include "quicksave/pc_quicksave_file.h"
 #include "quicksave/pc_quicksave_io.h"
+#include "quicksave/pc_quicksave_progress.h"
 
 #include "BaseInf.h"
 #include "FlowController.h"
@@ -16,6 +17,7 @@
 #include "gameflow.h"
 
 #include "audio/pc_audio.h"
+#include "gl/pc_gfx.h"
 #include "mods/pc_vs_map.h"
 #include "netplay/pc_coop_switch.h"
 #include "netplay/pc_input_log.h"
@@ -32,6 +34,7 @@
 #include "settings/pc_sim_settings_text.h"
 
 #include <chrono>
+#include <cstdarg>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -108,14 +111,18 @@ struct Day {
 };
 
 enum Phase {
-	kIdle,   // no load
-	kLeave,  // F7: waiting for the running day to be left
-	kTitle,  // --quick-load, story: waiting for the title
-	kSetup,  // waiting for the card select
-	kEnter,  // waiting for the card select to enter the day
-	kDay,    // waiting for the day to start
-	kReplay, // replaying the recorded ticks
+	kIdle,     // no load
+	kLeave,    // F7: waiting for the running day to be left
+	kTitle,    // --quick-load, story: waiting for the title
+	kSetup,    // waiting for the card select
+	kEnter,    // waiting for the card select to enter the day
+	kDay,      // waiting for the day to start
+	kReplay,   // replaying the recorded ticks
 };
+
+// The load screen renders the replay no larger than this (same aspect).
+constexpr int kCatchupMaxW = 1280;
+constexpr int kCatchupMaxH = 720;
 
 bool sEnabled = false;
 Day sDay;
@@ -132,6 +139,17 @@ std::string sLoadPath;
 Clock::time_point sLoadRequested;
 Clock::time_point sReplayStart;
 size_t sNextProgress = 0;
+bool sCancel         = false; // Escape: leave the load at the first chance
+
+// The catch-up's lower render resolution (pc_gfx), and what it replaced.
+bool sLowRes   = false;
+int sSavedResW = 0;
+int sSavedResH = 0;
+
+// The last save or load result, shown for a few seconds (pc_quicksave_toast).
+char sToast[192]    = {};
+bool sToastError    = false;
+Clock::time_point sToastAt;
 
 bool envIsOne(const char* name)
 {
@@ -523,28 +541,82 @@ bool readAndCheck(const std::string& path, qs::File& f, Mode& mode, std::string*
 	std::exit(pc_quicksave_exit::kLoadFailed);
 }
 
+// A result the player should see: the console, the in-game toast and the
+// menus' notice line (pc_settings).
+void notify(bool error, const char* fmt, ...)
+{
+	va_list args;
+	va_start(args, fmt);
+	std::vsnprintf(sToast, sizeof(sToast), fmt, args);
+	va_end(args);
+	sToastError = error;
+	sToastAt    = Clock::now();
+	std::printf("[quicksave] %s\n", sToast);
+	std::fflush(stdout);
+	pc_settings_post_notice(error ? 1 : 0, sToast);
+}
+
+// The catch-up renders at most kCatchupMaxW x kCatchupMaxH (the output's
+// aspect): the replay's frames are hidden behind the load screen, and the sim
+// does not depend on the resolution. Nothing changes when the game already
+// renders that small.
+void lowResBegin()
+{
+	if (sLowRes) return;
+	int w = 0, h = 0;
+	pc_gfx_get_render_size(&w, &h);
+	if (w <= kCatchupMaxW && h <= kCatchupMaxH) return;
+	pc_gfx_get_render_resolution(&sSavedResW, &sSavedResH);
+	const float scale = pc_gfx_get_render_scale();
+	pc_gfx_set_render_resolution((int)(kCatchupMaxW / scale), (int)(kCatchupMaxH / scale));
+	sLowRes = true;
+}
+
+void lowResEnd()
+{
+	if (!sLowRes) return;
+	pc_gfx_set_render_resolution(sSavedResW, sSavedResH);
+	sLowRes = false;
+}
+
+// A load is over (handed back or cancelled): the replay's switches go back.
+void endCatchup()
+{
+	if (pc_input_log_is_replay_active()) pc_input_log_replay_memory_end();
+	pc_netplay_det_set_catchup(false);
+	pc_audio_set_output_muted(false);
+	lowResEnd();
+}
+
+void dropLoad()
+{
+	sPhase  = kIdle;
+	sCancel = false;
+	sLoad   = qs::File();
+}
+
 void doSave()
 {
 	if (!sDay.valid) {
-		std::printf("[quicksave] save ignored: no day is being played\n");
+		notify(true, "Quick Save: no day is being played.");
 		return;
 	}
 	if (!sDay.eligible) {
-		std::printf("[quicksave] save ignored: quick save does not work in %s\n", sDay.why);
+		notify(true, "Quick Save does not work in %s.", sDay.why);
 		return;
 	}
 	if (sPhase != kIdle) {
-		std::printf("[quicksave] save ignored: a load is under way\n");
+		notify(true, "Quick Save: a quick load is under way.");
 		return;
 	}
 	if (sRunningTick != pc_netplay_tick()) {
-		std::printf("[quicksave] save ignored: the day is not in play (a cutscene, the day's start or its end)\n");
+		notify(true, "Quick Save: the day is not in play (a cutscene, the day's start or its end).");
 		return;
 	}
 	const Clock::time_point start = Clock::now();
 	qs::File f;
 	if (!qs::executable_sha256(f.buildId)) {
-		std::printf("[quicksave] save failed: cannot read this game's executable to identify the build\n");
+		notify(true, "Quick Save failed: cannot read this game's executable to identify the build.");
 		return;
 	}
 	f.region        = kRegion;
@@ -571,19 +643,19 @@ void doSave()
 	f.local = localStateSave();
 	std::vector<uint8_t> bytes;
 	if (!qs::encode(f, bytes)) {
-		std::printf("[quicksave] save failed: the day is too long to save (%u ticks)\n", f.ticks);
+		notify(true, "Quick Save failed: the day is too long to save (%u ticks).", f.ticks);
 		return;
 	}
 	const std::string path = slotPath(f.slot);
 	std::string err;
 	if (!qs::write_file_atomic(path, bytes, &err)) {
-		std::printf("[quicksave] save failed: %s\n", err.c_str());
+		notify(true, "Quick Save failed: %s.", err.c_str());
 		return;
 	}
 	std::printf("[quicksave] saved %s: day %d stage %d, tick %u of the day (tick %u), hash %016llx, %llu bytes, %.1f ms\n",
 	            path.c_str(), (int)f.day, (int)f.stage, f.ticks, pc_netplay_tick(), (unsigned long long)f.stateHash,
 	            (unsigned long long)bytes.size(), secondsSince(start) * 1000.0);
-	std::fflush(stdout);
+	notify(false, "Quick saved (day %d).", (int)f.day);
 }
 
 // The saved tick was replayed: compare, and hand back on a match.
@@ -602,8 +674,7 @@ void handoff()
 	pc_input_log_replay_memory_end();
 	const bool viewOk  = sLoad.view.empty() || pc_gamecore_view_state_restore(sLoad.view.data(), sLoad.view.size());
 	const bool localOk = localStateRestore(sLoad.local);
-	pc_netplay_det_set_catchup(false);
-	pc_audio_set_output_muted(false);
+	endCatchup();
 	const double replaySecs = secondsSince(sReplayStart);
 	const double totalSecs  = secondsSince(sLoadRequested);
 	std::printf("[quicksave] loaded %s: tick %u of day %d (tick %u) hash %016llx matched; replay %.2f s (%.0f ticks/s), "
@@ -611,10 +682,26 @@ void handoff()
 	            sLoadPath.c_str(), sLoad.ticks, (int)sLoad.day, pc_netplay_tick(), (unsigned long long)hash, replaySecs,
 	            replaySecs > 0.0 ? sLoad.ticks / replaySecs : 0.0, totalSecs, viewOk ? "" : " (the view could not be restored)",
 	            localOk ? "" : " (the window state could not be restored)");
-	std::fflush(stdout);
-	sPhase = kIdle;
-	sLoad  = qs::File();
+	notify(false, "Quick loaded (day %d) in %.0f s.", (int)sLoad.day, totalSecs);
+	dropLoad();
 }
+
+// Escape during a load: the replay stops and the day is left for the card
+// select (a story day) or the title (VS). Nothing of the recorded day stays:
+// the next day starts from a file, as after "Continue from last save".
+int cancelLeave()
+{
+	endCatchup();
+	const bool vs = sLoadMode.vs != 0;
+	std::printf("[quicksave] load of %s cancelled at tick %llu of %u of the replay; leaving the day for the %s\n",
+	            sLoadPath.c_str(), (unsigned long long)pc_input_log_replay_memory_fed(), sLoad.ticks,
+	            vs ? "title" : "card select");
+	notify(false, "Quick Load cancelled.");
+	dropLoad();
+	if (vs) pc_vs_note_left_to_title();
+	return vs ? 3 : 1;
+}
+
 
 } // namespace
 
@@ -668,9 +755,12 @@ void pc_quicksave_request_save(void)
 void pc_quicksave_request_load(void)
 {
 	if (!sEnabled) return;
+	if (sPhase != kIdle) {
+		notify(true, "Quick Load: a load is already under way.");
+		return;
+	}
 	if (!sDay.valid) {
-		std::printf("[quicksave] load ignored: load from inside a day, or start the game with --quick-load <file>\n");
-		std::fflush(stdout);
+		notify(true, "Quick Load works in a day, or start the game with --quick-load <file>.");
 		return;
 	}
 	pc_quicksave_request_load_file(slotPath(sDay.slot).c_str());
@@ -680,13 +770,11 @@ void pc_quicksave_request_load_file(const char* path)
 {
 	if (!sEnabled || path == nullptr) return;
 	if (sPhase != kIdle) {
-		std::printf("[quicksave] load ignored: a load is already under way\n");
-		std::fflush(stdout);
+		notify(true, "Quick Load: a load is already under way.");
 		return;
 	}
 	if (!sDay.valid || sRunningTick != pc_netplay_tick()) {
-		std::printf("[quicksave] load ignored: load from inside a day, or start the game with --quick-load <file>\n");
-		std::fflush(stdout);
+		notify(true, "Quick Load: the day is not in play (a cutscene, the day's start or its end).");
 		return;
 	}
 	std::string why;
@@ -694,14 +782,14 @@ void pc_quicksave_request_load_file(const char* path)
 	Mode m;
 	if (!readAndCheck(path, f, m, &why)) {
 		std::printf("[quicksave] load of %s refused: %s\n", path, why.c_str());
-		std::fflush(stdout);
+		notify(true, "Quick Load refused: %s.", why.c_str());
 		return;
 	}
 	Mode now;
 	if (!parseMode(sDay.modeText, now) || now.vs != m.vs || now.coop != m.coop || now.arena != m.arena) {
 		std::printf("[quicksave] load of %s refused: it was saved in another mode (%s; this day: %s)\n", path,
 		            f.modeText.c_str(), sDay.modeText.c_str());
-		std::fflush(stdout);
+		notify(true, "Quick Load refused: the save was made in another mode.");
 		return;
 	}
 	sLoad          = std::move(f);
@@ -710,6 +798,7 @@ void pc_quicksave_request_load_file(const char* path)
 	sLoadRequested = Clock::now();
 	sPhase         = kLeave;
 	sLeaveWait     = 0;
+	sCancel        = false;
 	std::printf("[quicksave] loading %s: day %d stage %d, %u ticks; leaving the running day\n", path, (int)sLoad.day,
 	            (int)sLoad.stage, sLoad.ticks);
 	std::fflush(stdout);
@@ -801,11 +890,12 @@ void pc_quicksave_day_begin(void)
 	if (!pc_input_log_replay_memory_begin(sLoad.records.data(), sLoad.ticks)) failLoad("an input replay is running");
 	pc_netplay_det_set_catchup(true);
 	pc_audio_set_output_muted(true);
+	lowResBegin();
 	sReplayStart  = Clock::now();
 	sNextProgress = 3000;
 	sPhase        = kReplay;
-	std::printf("[quicksave] replaying %u ticks of day %d (from tick %u), unthrottled, audio muted\n", sLoad.ticks,
-	            (int)sLoad.day, sLoad.dayStartTick);
+	std::printf("[quicksave] replaying %u ticks of day %d (from tick %u), unthrottled, audio muted, %s\n", sLoad.ticks,
+	            (int)sLoad.day, sLoad.dayStartTick, sLowRes ? "lower render resolution" : "render resolution unchanged");
 	std::fflush(stdout);
 }
 
@@ -816,10 +906,57 @@ void pc_quicksave_note_running(void)
 
 int pc_quicksave_take_leave(void)
 {
-	if (!sEnabled || sPhase != kLeave) return 0;
+	if (!sEnabled) return 0;
+	if (sPhase == kReplay && sCancel) return cancelLeave();
+	if (sPhase != kLeave) return 0;
 	sPhase = sLoadMode.vs ? kDay : kSetup;
 	return sLoadMode.vs ? 2 : 1;
 }
+
+void pc_quicksave_request_cancel(void)
+{
+	if (!sEnabled || sPhase == kIdle || sCancel) return;
+	if (sPhase == kLeave || sPhase == kTitle) {
+		// Nothing has changed yet.
+		std::printf("[quicksave] load of %s cancelled before it began\n", sLoadPath.c_str());
+		notify(false, "Quick Load cancelled.");
+		dropLoad();
+		return;
+	}
+	// From the card select on the game is on its way into the recorded day:
+	// the day is left as soon as it runs.
+	sCancel = true;
+	std::printf("[quicksave] cancelling the load of %s\n", sLoadPath.c_str());
+	std::fflush(stdout);
+}
+
+bool pc_quicksave_load_active(void) { return sEnabled && sPhase != kIdle; }
+
+bool pc_quicksave_load_status(PcQuickLoadStatus* out)
+{
+	if (!sEnabled || sPhase == kIdle || out == nullptr) return false;
+	out->replaying  = sPhase == kReplay;
+	out->cancelling = sCancel;
+	out->total      = sLoad.ticks;
+	out->fed        = sPhase == kReplay ? (uint32_t)pc_input_log_replay_memory_fed() : 0;
+	if (out->fed > out->total) out->fed = out->total;
+	out->secs       = secondsSince(sLoadRequested);
+	out->replaySecs = sPhase == kReplay ? secondsSince(sReplayStart) : 0.0;
+	out->day        = sLoad.day;
+	return true;
+}
+
+bool pc_quicksave_toast(char* out, size_t n, bool* isError, float* age)
+{
+	if (!sEnabled || sToast[0] == '\0') return false;
+	const double a = secondsSince(sToastAt);
+	if (a > 4.0) return false;
+	if (out != nullptr && n > 0) std::snprintf(out, n, "%s", sToast);
+	if (isError != nullptr) *isError = sToastError;
+	if (age != nullptr) *age = (float)a;
+	return true;
+}
+
 
 bool pc_quicksave_boot_pending(void) { return sEnabled && (sPhase == kTitle || (sPhase == kDay && sLoadMode.vs)); }
 
@@ -884,7 +1021,9 @@ void pc_quicksave_tick_end(void)
 	if (sPhase == kReplay) {
 		sSaveRequested    = false;
 		const size_t fed  = pc_input_log_replay_memory_fed();
-		if (fed >= sLoad.ticks) {
+		if (sCancel) {
+			// Waiting for the day to run, to leave it (pc_quicksave_take_leave).
+		} else if (fed >= sLoad.ticks) {
 			handoff();
 		} else if (fed >= sNextProgress) {
 			const double s = secondsSince(sReplayStart);
@@ -898,9 +1037,8 @@ void pc_quicksave_tick_end(void)
 	if (sPhase == kLeave && ++sLeaveWait > 2) {
 		// No running day took the request (a cutscene began, the day ended).
 		std::printf("[quicksave] load of %s cancelled: the day is not in play\n", sLoadPath.c_str());
-		std::fflush(stdout);
-		sPhase = kIdle;
-		sLoad  = qs::File();
+		notify(true, "Quick Load: the day is not in play (a cutscene, the day's start or its end).");
+		dropLoad();
 	}
 	if (sSaveRequested) {
 		sSaveRequested = false;

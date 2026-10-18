@@ -14,14 +14,17 @@
 // game itself is untouched.
 //
 // Load (the Quick Load action, F7 by default, inside a day; or --quick-load
-// <file> at launch): the file is checked against the running game (CRC,
-// build, region, sim settings, test switches, mode) before anything
-// changes. The running day is left, the recorded day is entered through the
-// normal day start (so the RNG reseeds), its input is replayed unthrottled
-// with the audio muted, and at the saved tick the state hash is compared. On
-// a match the view and window state come back and the next tick is live
-// input; recording carries on, so the day can be saved again. On a mismatch
-// the game stops with a message: the day is not the recorded one.
+// <file> at launch): the file is checked against the running
+// game (CRC, build, region, sim settings, test switches, mode) before
+// anything changes. The running day is left, the recorded day is entered
+// through the normal day start (so the RNG reseeds), its input is replayed
+// unthrottled with the audio muted, behind a load screen and at a lower
+// render resolution, and at the saved tick the state hash is compared. On a
+// match the view, the window state and the resolution come back and the next
+// tick is live input; recording carries on, so the day can be saved again. On
+// a mismatch the game stops with a message: the day is not the recorded one.
+// Escape cancels a load: the day is left for the file select (VS: the
+// title), as after "Continue from last save".
 //
 // A load re-enters a story day from its card block, as the file select loads
 // a save. A day the game reached by continuing the previous one in memory,
@@ -53,17 +56,37 @@ constexpr int kLoadFailed = 7; // a load did not reproduce the recorded day
 void pc_quicksave_init(int argc, char** argv);
 bool pc_quicksave_enabled(void);
 
-// The bound actions (pc_window). A request acts at the end of the tick.
+// The bound actions (pc_window). A save request acts
+// at the end of the tick. The result (or why nothing happened) goes to the
+// console, the menus' notice line and pc_quicksave_toast.
 void pc_quicksave_request_save(void);
 void pc_quicksave_request_load(void); // the running day's slot file
 void pc_quicksave_request_load_file(const char* path);
+// Escape during a load (pc_window).
+void pc_quicksave_request_cancel(void);
+bool pc_quicksave_load_active(void);
+
+// The load screen (pc_settings_draw_quick_load).
+struct PcQuickLoadStatus {
+	bool replaying     = false; // the recorded day is being replayed (else: on the way into it)
+	bool cancelling    = false;
+	uint32_t fed       = 0;     // ticks replayed
+	uint32_t total     = 0;     // ticks to replay
+	double secs        = 0.0;   // since the load began
+	double replaySecs  = 0.0;   // since the replay began
+	int day            = 0;
+};
+bool pc_quicksave_load_status(PcQuickLoadStatus* out); // false when no load is under way
+// The last result for a few seconds after it: false when there is none.
+bool pc_quicksave_toast(char* out, size_t n, bool* isError, float* age);
 
 // Game flow hooks. Each one does nothing with the feature off.
 void pc_quicksave_day_prepare(void);  // NewPikiGameSection: before the day is built
 void pc_quicksave_day_begin(void);    // GameCoreSection: right after the RNG reseed
 void pc_quicksave_note_running(void); // RunningModeState::update, every tick
 // RunningModeState: a load wants the running day left. 0 no; 1 to the card
-// select (a story day); 2 straight into the day again (VS, as a rematch).
+// select (a story day, or a cancelled story load); 2 straight into the day
+// again (VS, as a rematch); 3 to the title (a cancelled VS load).
 int pc_quicksave_take_leave(void);
 bool pc_quicksave_boot_pending(void); // logo: a --quick-load is waiting (no logo pause)
 bool pc_quicksave_take_title(void);   // title: a story --quick-load starts its run

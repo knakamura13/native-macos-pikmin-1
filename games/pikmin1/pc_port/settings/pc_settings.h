@@ -131,6 +131,11 @@ void pc_settings_draw_idle_counter(void);
 void pc_settings_draw_vs_hud(void);
 /// Aviso de logro desbloqueado (pc_achievements).
 void pc_settings_draw_achievement_toast(void);
+/// Quick Save (pc_quicksave.h): the load screen while a quick load runs, else
+/// the last save or load result for a few seconds (not over the menus).
+void pc_settings_draw_quick_load(void);
+/// A short result for the menus' notice line (F1 and the title's menu).
+void pc_settings_post_notice(int isError, const char* message);
 /// VS: pasa las reglas guardadas (menú previo) a la partida.
 void pc_settings_apply_vs_rules(void);
 #if defined(PIKI_PC_PORT)

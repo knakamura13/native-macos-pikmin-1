@@ -47,6 +47,8 @@
 #include "pc_vs.h"
 #include "mods/pc_vs_map.h"
 #include "netplay/pc_netplay_det.h"
+#include "quicksave/pc_quicksave.h"
+#include "quicksave/pc_quicksave_progress.h"
 #include "settings/pc_sim_settings_text.h"
 #include "pc_achievements.h"
 #include "pc_speedrun.h"
@@ -6557,6 +6559,84 @@ void pc_settings_draw_achievement_toast(void) {
     (void)screenH;
 }
 
+// Quick Save (pc_quicksave.h). While a quick load runs: a plain load screen
+// over the replay (which the catch-up renders at a lower resolution), with
+// the progress, the time so far and an estimate of the time left. Otherwise
+// the last save or load result for a few seconds, unless a menu (which shows
+// it as its notice) is open.
+void pc_settings_draw_quick_load(void) {
+    if (!pc_quicksave_enabled() || !gsys || !gsys->mDGXGfx) return;
+    PcQuickLoadStatus st;
+    const bool loading = pc_quicksave_load_status(&st);
+    char toast[192];
+    bool toastError = false;
+    float toastAge  = 0.0f;
+    const bool showToast = !loading && !sMenuOpen && !pc_glass_menu_active()
+                        && pc_quicksave_toast(toast, sizeof(toast), &toastError, &toastAge);
+    if (!loading && !showToast) return;
+    DGXGraphics* gfx = static_cast<DGXGraphics*>(gsys->mDGXGfx);
+    ensureFont();
+    if (!sFont) return;
+    const int screenW = gfx->mScreenWidth, screenH = gfx->mScreenHeight;
+    PcSettingsP2DFrame nativeFrame(screenW, screenH);
+    Matrix4f ortho;
+    gfx->setOrthogonal(ortho.mMtx, RectArea(0, 0, screenW, screenH));
+    // Laid out on a 480-high canvas, scaled to the window.
+    const float s = screenH / 480.0f;
+    auto px = [s](float v) { return int(v * s + 0.5f); };
+    const bool p2d = pc_settings_p2d_active();
+    auto textW = [&](const char* t, float fw) { return p2d ? pc_settings_p2d_text_width(t, px(fw)) : menuTextWidth(t); };
+    auto text = [&](int x, int y, const char* t, Colour c, float fw, float fh) {
+        if (p2d) pc_settings_p2d_text(x, y, t, c, std::max(1, px(fw)), std::max(1, px(fh)));
+        else drawTextOutline(x, y, "%s", c, Colour(0, 0, 0, c.a), t);
+    };
+    auto fill = [&](int x, int y, int w, int h, Colour c) {
+        gfx->setColour(c, true);
+        gfx->setAuxColour(c);
+        gfx->fillRectangle(RectArea(x, y, x + w, y + h));
+    };
+    const int cx = screenW / 2;
+
+    if (showToast) {
+        const float fade = std::min(1.0f, std::min(toastAge / 0.2f, (4.0f - toastAge) / 0.5f));
+        const u8 a       = u8(255.0f * std::max(0.0f, fade));
+        const int tw = textW(toast, 9), w = tw + px(28), h = px(26);
+        fill(cx - w / 2, px(14), w, h, Colour(8, 12, 28, u8(a * 0.8f)));
+        const Colour c = toastError ? Colour(255, 150, 150, a) : Colour(160, 240, 180, a);
+        text(cx - tw / 2, px(14) + (h - px(14)) / 2, toast, c, 9, 14);
+        return;
+    }
+
+    // Opaque: the replay behind runs fast and at a lower resolution.
+    fill(0, 0, screenW, screenH, Colour(6, 9, 20, 255));
+    const Colour kText(225, 240, 255, 255), kDim(150, 170, 200, 255), kGold(255, 200, 60, 255);
+    const char* title = "Loading quick save";
+    text(cx - textW(title, 16) / 2, px(170), title, kText, 16, 24);
+    char line[160];
+    std::snprintf(line, sizeof(line), "Day %d", st.day);
+    text(cx - textW(line, 9) / 2, px(202), line, kDim, 9, 14);
+
+    const pc_quicksave::LoadProgress p = pc_quicksave::load_progress(st.fed, st.total, st.replaySecs);
+    const int barW = px(320), barH = px(14), barX = cx - barW / 2, barY = px(228);
+    fill(barX - px(2), barY - px(2), barW + px(4), barH + px(4), Colour(70, 85, 120, 255));
+    fill(barX, barY, barW, barH, Colour(16, 22, 44, 255));
+    if (st.replaying) fill(barX, barY, int(barW * (p.percent / 100.0f)), barH, kGold);
+
+    char elapsed[16], left[16];
+    pc_quicksave::format_clock(st.secs, elapsed, sizeof(elapsed));
+    if (!st.replaying) {
+        std::snprintf(line, sizeof(line), "Preparing the day...   %s", elapsed);
+    } else if (p.remainingKnown) {
+        pc_quicksave::format_clock(p.remaining, left, sizeof(left));
+        std::snprintf(line, sizeof(line), "%d%%   Elapsed %s   About %s left", p.percent, elapsed, left);
+    } else {
+        std::snprintf(line, sizeof(line), "%d%%   Elapsed %s   Estimating the time left...", p.percent, elapsed);
+    }
+    text(cx - textW(line, 9) / 2, px(254), line, kText, 9, 14);
+    const char* hint = st.cancelling ? "Cancelling..." : "Esc / B: cancel";
+    text(cx - textW(hint, 8) / 2, px(300), hint, kDim, 8, 12);
+}
+
 void pc_settings_draw(void) {
     if (!sMenuOpen) return;
     if (!gsys || !gsys->mDGXGfx) return;
@@ -8119,6 +8199,8 @@ void pc_settings_capture_poll(void) {
     if (sWaitingForKey) { pollKeyCapture(ctl); return; }
     if (sWaitingForButton || sCaptureWaitRelease) pollButtonCapture(ctl);
 }
+
+void pc_settings_post_notice(int isError, const char* message) { texturePackNotice(isError != 0, message); }
 
 bool pc_settings_notice(char* out, unsigned long n, bool* isError) {
     std::lock_guard<std::mutex> lock(sTexturePackNoticeMutex);

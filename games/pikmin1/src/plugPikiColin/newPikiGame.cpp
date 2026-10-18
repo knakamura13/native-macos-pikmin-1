@@ -1043,11 +1043,14 @@ ModeState* RunningModeState::update(u32& result)
 	// Quick save: the day is in play this tick (a save may be taken), and a
 	// load leaves it: a story day for the card select, which re-enters the
 	// recorded day (the speedrun reset's route), a VS match straight into the
-	// arena again (the rematch's route).
+	// arena again (the rematch's route). A cancelled load leaves the day for
+	// the card select, or the title after a VS match.
 	pc_quicksave_note_running();
 	if (const int quickLoad = pc_quicksave_take_leave()) {
 		gameflow.mPauseAll                         = FALSE;
-		mParentSection->mPendingOnePlayerSectionID = quickLoad == 2 ? ONEPLAYER_NewPikiGame : ONEPLAYER_CardSelect;
+		mParentSection->mPendingOnePlayerSectionID = quickLoad == 2   ? ONEPLAYER_NewPikiGame
+		                                           : quickLoad == 3 ? ONEPLAYER_GameExit
+		                                                            : ONEPLAYER_CardSelect;
 		gsys->setFade(0.0f);
 		return new QuittingGameModeState(mParentSection);
 	}
