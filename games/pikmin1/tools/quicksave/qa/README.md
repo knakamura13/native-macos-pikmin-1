@@ -83,3 +83,15 @@ See `docs/quick-save-phase-2b-verification.md` for the original measured results
 and limits. The earlier skip-entire-presentation experiment is ruled out for
 correct loading: its RNG hash diverged. A GPU-only suppression experiment must
 preserve both CPU passes and establish matching hashes before adoption.
+
+## Experimental GPU suppression
+
+`catchup-gpu.patch` is an additional, test-only experiment. After `prepare.py`,
+apply it inside the exported `src/` with `patch --batch -p1 < /absolute/path/to/catchup-gpu.patch`.
+Build once, then record and load with that same executable. Set
+`PIKMIN_QS_TEST_NULL_GPU=1` only on experimental loads; leave it unset for the
+control. It keeps both CPU passes and suppresses presentation GL during catch-up,
+restoring it before the loading UI and swap. `[QS-GPU]` reports suppressed frames
+and real GL calls observed inside the gated presentation interval. This is not a
+claim that the entire frame performs zero GPU work. Hash correctness and a measured
+speedup are prerequisites for considering a product implementation.
