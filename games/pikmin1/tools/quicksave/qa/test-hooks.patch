@@ -445,7 +445,7 @@
  #include "teki.h"
  #include <algorithm>
  #include <vector>
-@@ -2660,6 +2661,201 @@
+@@ -2660,6 +2661,260 @@
  	fflush(stderr);
  }
  
@@ -524,6 +524,65 @@
 +	for (int c = 0; c < PikiColorCount; c++)
 +		for (int h = 0; h < PikiHappaCount; h++) fprintf(f, " %d", pikiInfMgr.mPikiCounts[c][h]);
 +	fprintf(f, "\nclock tod=%a day=%d\n", gameflow.mWorldClock.mTimeOfDay, gameflow.mWorldClock.mCurrentDay);
++	{
++		int tekiAlive = 0;
++		f32 healthSum = 0.0f;
++		f32 healthMin = 0.0f;
++		int nearType = -1;
++		f32 nearDist = -1.0f;
++		f32 nearHealth = -1.0f;
++		Navi* n0 = naviMgr ? naviMgr->getNavi() : nullptr;
++		if (tekiMgr) {
++			Iterator enemies(tekiMgr);
++			CI_LOOP(enemies)
++			{
++				Teki* t = static_cast<Teki*>(*enemies);
++				if (!t->isAlive()) continue;
++				++tekiAlive;
++				healthSum += t->mHealth;
++				if (tekiAlive == 1 || t->mHealth < healthMin) healthMin = t->mHealth;
++				if (n0) {
++					const f32 dx = t->mSRT.t.x - n0->mSRT.t.x;
++					const f32 dz = t->mSRT.t.z - n0->mSRT.t.z;
++					const f32 dist = sqrtf(dx * dx + dz * dz);
++					if (nearDist < 0.0f || dist < nearDist) {
++						nearDist   = dist;
++						nearType   = (int)t->mTekiType;
++						nearHealth = t->mHealth;
++					}
++				}
++			}
++		}
++		int bombs = 0, gens = 0;
++		if (itemMgr) {
++			Iterator items(itemMgr);
++			CI_LOOP(items)
++			{
++				Creature* c = *items;
++				if (c->mObjType == OBJTYPE_Bomb) ++bombs;
++				else if (c->mObjType == OBJTYPE_BombGen) ++gens;
++			}
++		}
++		int formation = 0, attack = 0, flying = 0, putbomb = 0, holdingBomb = 0;
++		if (pikiMgr) {
++			Iterator pit(pikiMgr);
++			CI_LOOP(pit)
++			{
++				Piki* p = static_cast<Piki*>(*pit);
++				if (!p->isAlive()) continue;
++				if (p->mMode == PikiMode::FormationMode) ++formation;
++				else if (p->mMode == PikiMode::AttackMode) ++attack;
++				else if (p->mMode == PikiMode::PutbombMode) ++putbomb;
++				if (p->getState() == PIKISTATE_Flying) ++flying;
++				if (p->hasBomb()) ++holdingBomb;
++			}
++		}
++		fprintf(f,
++		        "combat teki=%d health_sum=%.3f health_min=%.3f near_type=%d near_dist=%.2f near_health=%.3f bombs=%d "
++		        "gens=%d formation=%d attack=%d flying=%d putbomb=%d holding_bomb=%d\n",
++		        tekiAlive, healthSum, healthMin, nearType, nearDist, nearHealth, bombs, gens, formation, attack,
++		        flying, putbomb, holdingBomb);
++	}
 +	fflush(f);
 +}
 +void qsHookTickEnd()
@@ -647,7 +706,7 @@
  static void pcDebugKeys()
  {
  	// Off unless asked for: a stray F5 would otherwise fill someone's Onion
-@@ -2807,6 +3003,116 @@
+@@ -2807,6 +3062,116 @@
  	if (!pc_netplay_deterministic()) {
  		pcDebugKeys();
  		pcVsMarkKey();
@@ -764,7 +823,7 @@
  	}
  #endif
  	if (!gameflow.mMoviePlayer->mIsActive && !mDoneSundownWarn && gameflow.mWorldClock.mTimeOfDay >= gameflow.mParameters->mNightWarning()
-@@ -3020,6 +3326,10 @@
+@@ -3020,6 +3385,10 @@
  		photoToggle = (pc_netplay_deterministic() && pc_netplay_local_slots_filled())
  		                ? (pc_netplay_local_flags(0) & pc_input_log::kLocalPhotoToggle) != 0
  		                : pc_photo_mode_poll_toggle() != 0;
