@@ -1,0 +1,16 @@
+[
+  {
+    "name": "title-complete",
+    "gui": false,
+    "mode": "none",
+    "ticks": 6400,
+    "timeout": 300,
+    "savefrom": "{out}/title-fixture",
+    "copy_quicksaves": true,
+    "env": {
+      "PIKMIN_QS_PLUCK": "5:360:420:480:540:600:660",
+      "PIKMIN_QS_DSCRIPT": "{scripts}/g-day5-after1000.txt",
+      "PIKMIN_QS_SCRIPT": "{scripts}/title-action.txt"
+    }
+  }
+]

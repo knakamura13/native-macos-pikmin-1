@@ -1,0 +1,358 @@
+160 motion 5.75 0.0
+161 motion 5.75 0.0
+162 motion 5.75 0.0
+163 motion 5.75 0.0
+164 motion 5.75 0.0
+165 motion 5.75 0.0
+166 motion 5.75 0.0
+167 motion 5.75 0.0
+168 motion 5.75 0.0
+169 motion 5.75 0.0
+170 motion 5.75 0.0
+171 motion 5.75 0.0
+172 motion 5.75 0.0
+173 motion 5.75 0.0
+174 motion 5.75 0.0
+175 motion 5.75 0.0
+176 motion 5.75 0.0
+177 motion 5.75 0.0
+178 motion 5.75 0.0
+179 motion 5.75 0.0
+200 button 0100 12
+230 wheel 1
+240 motion 0.0 -3.3333333
+241 motion 0.0 -3.3333333
+242 motion 0.0 -3.3333333
+243 motion 0.0 -3.3333333
+244 motion 0.0 -3.3333333
+245 motion 0.0 -3.3333333
+246 motion 0.0 -3.3333333
+247 motion 0.0 -3.3333333
+248 motion 0.0 -3.3333333
+249 motion 0.0 -3.3333333
+250 motion 0.0 -3.3333333
+251 motion 0.0 -3.3333333
+252 motion 0.0 -3.3333333
+253 motion 0.0 -3.3333333
+254 motion 0.0 -3.3333333
+255 motion 0.0 -3.3333333
+256 motion 0.0 -3.3333333
+257 motion 0.0 -3.3333333
+258 motion 0.0 -3.3333333
+259 motion 0.0 -3.3333333
+260 drag 0.01
+261 drag 0.01
+262 drag 0.01
+263 drag 0.01
+264 drag 0.01
+265 drag 0.01
+266 drag 0.01
+267 drag 0.01
+268 drag 0.01
+269 drag 0.01
+270 drag 0.01
+271 drag 0.01
+272 drag 0.01
+273 drag 0.01
+274 drag 0.01
+275 drag 0.01
+276 drag 0.01
+277 drag 0.01
+278 drag 0.01
+279 drag 0.01
+280 drag 0.01
+281 drag 0.01
+282 drag 0.01
+283 drag 0.01
+284 drag 0.01
+285 drag 0.01
+286 drag 0.01
+287 drag 0.01
+288 drag 0.01
+289 drag 0.01
+290 button 0100 12
+290 drag 0.01
+291 drag 0.01
+292 drag 0.01
+293 drag 0.01
+294 drag 0.01
+295 drag 0.01
+296 drag 0.01
+297 drag 0.01
+298 drag 0.01
+299 drag 0.01
+300 drag 0.01
+301 drag 0.01
+302 drag 0.01
+303 drag 0.01
+304 drag 0.01
+305 drag 0.01
+306 drag 0.01
+307 drag 0.01
+308 drag 0.01
+309 drag 0.01
+310 drag 0.01
+311 drag 0.01
+312 drag 0.01
+313 drag 0.01
+314 drag 0.01
+315 drag 0.01
+316 drag 0.01
+317 drag 0.01
+318 drag 0.01
+319 drag 0.01
+320 wheel 1
+330 motion -8.5 1.1
+331 motion -8.5 1.1
+332 motion -8.5 1.1
+333 motion -8.5 1.1
+334 motion -8.5 1.1
+335 motion -8.5 1.1
+336 motion -8.5 1.1
+337 motion -8.5 1.1
+338 motion -8.5 1.1
+339 motion -8.5 1.1
+340 motion -8.5 1.1
+341 motion -8.5 1.1
+342 motion -8.5 1.1
+343 motion -8.5 1.1
+344 motion -8.5 1.1
+345 motion -8.5 1.1
+346 motion -8.5 1.1
+347 motion -8.5 1.1
+348 motion -8.5 1.1
+349 motion -8.5 1.1
+380 button 0100 12
+410 wheel -1
+420 motion 3.1 -2.7
+421 motion 3.1 -2.7
+422 motion 3.1 -2.7
+423 motion 3.1 -2.7
+424 motion 3.1 -2.7
+425 motion 3.1 -2.7
+426 motion 3.1 -2.7
+427 motion 3.1 -2.7
+428 motion 3.1 -2.7
+429 motion 3.1 -2.7
+430 motion 3.1 -2.7
+431 motion 3.1 -2.7
+432 motion 3.1 -2.7
+433 motion 3.1 -2.7
+434 motion 3.1 -2.7
+435 motion 3.1 -2.7
+436 motion 3.1 -2.7
+437 motion 3.1 -2.7
+438 motion 3.1 -2.7
+439 motion 3.1 -2.7
+450 drag -0.02
+451 drag -0.02
+452 drag -0.02
+453 drag -0.02
+454 drag -0.02
+455 drag -0.02
+456 drag -0.02
+457 drag -0.02
+458 drag -0.02
+459 drag -0.02
+470 button 0100 12
+500 wheel 2
+520 fp
+560 button 0100 12
+620 fp
+640 motion 1e-07 -0.0
+641 motion 1e-07 -0.0
+642 motion 1e-07 -0.0
+643 motion 1e-07 -0.0
+644 motion 1e-07 -0.0
+645 motion 1e-07 -0.0
+646 motion 1e-07 -0.0
+647 motion 1e-07 -0.0
+648 motion 1e-07 -0.0
+649 motion 1e-07 -0.0
+650 motion 1e-07 -0.0
+650 wheel -1
+651 motion 1e-07 -0.0
+652 motion 1e-07 -0.0
+653 motion 1e-07 -0.0
+654 motion 1e-07 -0.0
+655 motion 1e-07 -0.0
+656 motion 1e-07 -0.0
+657 motion 1e-07 -0.0
+658 motion 1e-07 -0.0
+659 motion 1e-07 -0.0
+700 button 0100 12
+760 motion -4.4 -4.4
+761 motion -4.4 -4.4
+762 motion -4.4 -4.4
+763 motion -4.4 -4.4
+764 motion -4.4 -4.4
+765 motion -4.4 -4.4
+766 motion -4.4 -4.4
+767 motion -4.4 -4.4
+768 motion -4.4 -4.4
+769 motion -4.4 -4.4
+770 motion -4.4 -4.4
+771 motion -4.4 -4.4
+772 motion -4.4 -4.4
+773 motion -4.4 -4.4
+774 motion -4.4 -4.4
+775 motion -4.4 -4.4
+776 motion -4.4 -4.4
+777 motion -4.4 -4.4
+778 motion -4.4 -4.4
+779 motion -4.4 -4.4
+780 motion -4.4 -4.4
+781 motion -4.4 -4.4
+782 motion -4.4 -4.4
+783 motion -4.4 -4.4
+784 motion -4.4 -4.4
+785 motion -4.4 -4.4
+786 motion -4.4 -4.4
+787 motion -4.4 -4.4
+788 motion -4.4 -4.4
+789 motion -4.4 -4.4
+820 button 0100 12
+940 button 0100 12
+960 motion 5.75 0.0
+961 motion 5.75 0.0
+962 motion 5.75 0.0
+963 motion 5.75 0.0
+964 motion 5.75 0.0
+965 motion 5.75 0.0
+966 motion 5.75 0.0
+967 motion 5.75 0.0
+968 motion 5.75 0.0
+969 motion 5.75 0.0
+970 motion 5.75 0.0
+971 motion 5.75 0.0
+972 motion 5.75 0.0
+973 motion 5.75 0.0
+974 motion 5.75 0.0
+975 motion 5.75 0.0
+976 motion 5.75 0.0
+977 motion 5.75 0.0
+978 motion 5.75 0.0
+979 motion 5.75 0.0
+1000 button 0100 12
+1030 wheel 1
+1040 motion 0.0 -3.3333333
+1041 motion 0.0 -3.3333333
+1042 motion 0.0 -3.3333333
+1043 motion 0.0 -3.3333333
+1044 motion 0.0 -3.3333333
+1045 motion 0.0 -3.3333333
+1046 motion 0.0 -3.3333333
+1047 motion 0.0 -3.3333333
+1048 motion 0.0 -3.3333333
+1049 motion 0.0 -3.3333333
+1050 motion 0.0 -3.3333333
+1051 motion 0.0 -3.3333333
+1052 motion 0.0 -3.3333333
+1053 motion 0.0 -3.3333333
+1054 motion 0.0 -3.3333333
+1055 motion 0.0 -3.3333333
+1056 motion 0.0 -3.3333333
+1057 motion 0.0 -3.3333333
+1058 motion 0.0 -3.3333333
+1059 motion 0.0 -3.3333333
+1090 button 0100 12
+1120 wheel 1
+1130 motion -8.5 1.1
+1131 motion -8.5 1.1
+1132 motion -8.5 1.1
+1133 motion -8.5 1.1
+1134 motion -8.5 1.1
+1135 motion -8.5 1.1
+1136 motion -8.5 1.1
+1137 motion -8.5 1.1
+1138 motion -8.5 1.1
+1139 motion -8.5 1.1
+1140 motion -8.5 1.1
+1141 motion -8.5 1.1
+1142 motion -8.5 1.1
+1143 motion -8.5 1.1
+1144 motion -8.5 1.1
+1145 motion -8.5 1.1
+1146 motion -8.5 1.1
+1147 motion -8.5 1.1
+1148 motion -8.5 1.1
+1149 motion -8.5 1.1
+1180 button 0100 12
+1210 wheel -1
+1220 motion 3.1 -2.7
+1221 motion 3.1 -2.7
+1222 motion 3.1 -2.7
+1223 motion 3.1 -2.7
+1224 motion 3.1 -2.7
+1225 motion 3.1 -2.7
+1226 motion 3.1 -2.7
+1227 motion 3.1 -2.7
+1228 motion 3.1 -2.7
+1229 motion 3.1 -2.7
+1230 motion 3.1 -2.7
+1231 motion 3.1 -2.7
+1232 motion 3.1 -2.7
+1233 motion 3.1 -2.7
+1234 motion 3.1 -2.7
+1235 motion 3.1 -2.7
+1236 motion 3.1 -2.7
+1237 motion 3.1 -2.7
+1238 motion 3.1 -2.7
+1239 motion 3.1 -2.7
+1270 button 0100 12
+1320 fp
+1360 button 0100 12
+1420 fp
+1440 motion 1e-07 -0.0
+1441 motion 1e-07 -0.0
+1442 motion 1e-07 -0.0
+1443 motion 1e-07 -0.0
+1444 motion 1e-07 -0.0
+1445 motion 1e-07 -0.0
+1446 motion 1e-07 -0.0
+1447 motion 1e-07 -0.0
+1448 motion 1e-07 -0.0
+1449 motion 1e-07 -0.0
+1450 motion 1e-07 -0.0
+1451 motion 1e-07 -0.0
+1452 motion 1e-07 -0.0
+1453 motion 1e-07 -0.0
+1454 motion 1e-07 -0.0
+1455 motion 1e-07 -0.0
+1456 motion 1e-07 -0.0
+1457 motion 1e-07 -0.0
+1458 motion 1e-07 -0.0
+1459 motion 1e-07 -0.0
+1500 button 0100 12
+1560 motion -4.4 -4.4
+1561 motion -4.4 -4.4
+1562 motion -4.4 -4.4
+1563 motion -4.4 -4.4
+1564 motion -4.4 -4.4
+1565 motion -4.4 -4.4
+1566 motion -4.4 -4.4
+1567 motion -4.4 -4.4
+1568 motion -4.4 -4.4
+1569 motion -4.4 -4.4
+1570 motion -4.4 -4.4
+1571 motion -4.4 -4.4
+1572 motion -4.4 -4.4
+1573 motion -4.4 -4.4
+1574 motion -4.4 -4.4
+1575 motion -4.4 -4.4
+1576 motion -4.4 -4.4
+1577 motion -4.4 -4.4
+1578 motion -4.4 -4.4
+1579 motion -4.4 -4.4
+1580 motion -4.4 -4.4
+1581 motion -4.4 -4.4
+1582 motion -4.4 -4.4
+1583 motion -4.4 -4.4
+1584 motion -4.4 -4.4
+1585 motion -4.4 -4.4
+1586 motion -4.4 -4.4
+1587 motion -4.4 -4.4
+1588 motion -4.4 -4.4
+1589 motion -4.4 -4.4
+1620 button 0100 12
+1740 button 0100 12

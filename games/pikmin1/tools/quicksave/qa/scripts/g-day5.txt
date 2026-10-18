@@ -1,0 +1,67 @@
+5 700 button 0200 60
+5 780 stick 0 100 60
+5 900 stick 90 0 40
+5 1050 motion 3.5 -1.25
+5 1051 motion 3.5 -1.25
+5 1052 motion 3.5 -1.25
+5 1053 motion 3.5 -1.25
+5 1054 motion 3.5 -1.25
+5 1055 motion 3.5 -1.25
+5 1056 motion 3.5 -1.25
+5 1057 motion 3.5 -1.25
+5 1058 motion 3.5 -1.25
+5 1059 motion 3.5 -1.25
+5 1060 motion 3.5 -1.25
+5 1061 motion 3.5 -1.25
+5 1062 motion 3.5 -1.25
+5 1063 motion 3.5 -1.25
+5 1064 motion 3.5 -1.25
+5 1065 motion 3.5 -1.25
+5 1066 motion 3.5 -1.25
+5 1067 motion 3.5 -1.25
+5 1068 motion 3.5 -1.25
+5 1069 motion 3.5 -1.25
+5 1070 motion 3.5 -1.25
+5 1071 motion 3.5 -1.25
+5 1072 motion 3.5 -1.25
+5 1073 motion 3.5 -1.25
+5 1074 motion 3.5 -1.25
+5 1075 motion 3.5 -1.25
+5 1076 motion 3.5 -1.25
+5 1077 motion 3.5 -1.25
+5 1078 motion 3.5 -1.25
+5 1079 motion 3.5 -1.25
+5 1080 motion 3.5 -1.25
+5 1081 motion 3.5 -1.25
+5 1082 motion 3.5 -1.25
+5 1083 motion 3.5 -1.25
+5 1084 motion 3.5 -1.25
+5 1085 motion 3.5 -1.25
+5 1086 motion 3.5 -1.25
+5 1087 motion 3.5 -1.25
+5 1088 motion 3.5 -1.25
+5 1089 motion 3.5 -1.25
+5 1100 stick -60 80 60
+5 1180 button 0200 30
+5 1250 stick 0 -100 80
+5 1400 stick 70 70 50
+5 1460 motion -2.0 1.5
+5 1461 motion -2.0 1.5
+5 1462 motion -2.0 1.5
+5 1463 motion -2.0 1.5
+5 1464 motion -2.0 1.5
+5 1465 motion -2.0 1.5
+5 1466 motion -2.0 1.5
+5 1467 motion -2.0 1.5
+5 1468 motion -2.0 1.5
+5 1469 motion -2.0 1.5
+5 1470 motion -2.0 1.5
+5 1471 motion -2.0 1.5
+5 1472 motion -2.0 1.5
+5 1473 motion -2.0 1.5
+5 1474 motion -2.0 1.5
+5 1475 motion -2.0 1.5
+5 1476 motion -2.0 1.5
+5 1477 motion -2.0 1.5
+5 1478 motion -2.0 1.5
+5 1479 motion -2.0 1.5

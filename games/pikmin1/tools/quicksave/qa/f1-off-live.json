@@ -1,0 +1,13 @@
+[
+  {
+    "name": "f1-off-live",
+    "gui": true,
+    "mode": "vs",
+    "unthrottled": false,
+    "ticks": 12000,
+    "timeout": 600,
+    "cfg": {
+      "quickSave": 0
+    }
+  }
+]

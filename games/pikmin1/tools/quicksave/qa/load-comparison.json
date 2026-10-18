@@ -1,0 +1,43 @@
+[
+  {
+    "name": "long-full",
+    "mode": "coop",
+    "gui": true,
+    "unthrottled": false,
+    "ticks": 27060,
+    "timeout": 300,
+    "cfg": {
+      "windowWidth": 2560,
+      "windowHeight": 1080
+    },
+    "args": [
+      "--quick-load",
+      "{out}/long-base/save/quicksave/0.qsv"
+    ],
+    "env": {
+      "PIKMIN_QS_SPAWN": "400:30",
+      "PIKMIN_QS_SCRIPT": "{scripts}/coop1-long-after27000.txt",
+      "PIKMIN_QS_NO_LOWRES": "1"
+    }
+  },
+  {
+    "name": "long-low",
+    "mode": "coop",
+    "gui": true,
+    "unthrottled": false,
+    "ticks": 27060,
+    "timeout": 300,
+    "cfg": {
+      "windowWidth": 2560,
+      "windowHeight": 1080
+    },
+    "args": [
+      "--quick-load",
+      "{out}/long-base/save/quicksave/0.qsv"
+    ],
+    "env": {
+      "PIKMIN_QS_SPAWN": "400:30",
+      "PIKMIN_QS_SCRIPT": "{scripts}/coop1-long-after27000.txt"
+    }
+  }
+]
