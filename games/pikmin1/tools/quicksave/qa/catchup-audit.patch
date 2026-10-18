@@ -93,20 +93,41 @@
      sRetraceCount++; 
      if (sPostRetraceCallback) {
          sPostRetraceCallback(sRetraceCount);
---- a/games/pikmin1/src/plugPikiColin/cardSelect.cpp
-+++ b/games/pikmin1/src/plugPikiColin/cardSelect.cpp
-@@ -609,6 +609,14 @@
- 					if (playerState->isTutorial()) {
- 						// we're in day 1, do things a bit differently
- 						StageInfo* stage       = (StageInfo*)flowCont.mStageList.mChild;
-+						// QA-only area coverage for a direct new run.
-+						if (const char* value = std::getenv("PIKMIN_QS_TEST_STAGE")) {
-+							FOREACH_NODE(StageInfo, flowCont.mStageList.mChild, candidate) {
-+								if ((int)candidate->mStageID == std::atoi(value)) stage = candidate;
-+							}
-+							printf("[QS-AREA] stage=%d file=%s\n", (int)stage->mStageID, stage->mFileName);
-+						}
-+
- 						flowCont.mCurrentStage = stage;
- 						sprintf(flowCont.mCurrStageFilePath, "%s", stage->mFileName);
- 						sprintf(flowCont.mDoorStageFilePath, "%s", stage->mFileName);
+--- a/games/pikmin1/src/plugPikiColin/mapSelect.cpp
++++ b/games/pikmin1/src/plugPikiColin/mapSelect.cpp
+@@ -1,5 +1,6 @@
+ #include "MapSelect.h"
+ #include <cstdint>
++#include <cstdlib>
+ 
+ #include "Camera.h"
+ #include "Controller.h"
+@@ -390,6 +391,13 @@
+ 	 */
+ 	void enterCourse(StageInfo* info)
+ 	{
++		// QA-only: select an ordinary story area from a continued card day.
++		if (const char* value = std::getenv("PIKMIN_QS_TEST_STAGE")) {
++			FOREACH_NODE(StageInfo, flowCont.mStageList.mChild, candidate) {
++				if ((int)candidate->mStageID == std::atoi(value) && candidate->mChalStageID == CHALSTAGE_NOT) info = candidate;
++			}
++			printf("[QS-AREA] stage=%d file=%s\n", (int)info->mStageID, info->mFileName);
++		}
+ 		flowCont.mCurrentStage = info;
+ #if defined(PIKI_PC_PORT)
+ 		// Speedrun: 5 Parts y el Desafío ponen el reloj en marcha al entrar.
+--- a/games/pikmin1/src/plugPikiKando/gameCoreSection.cpp
++++ b/games/pikmin1/src/plugPikiKando/gameCoreSection.cpp
+@@ -2681,6 +2681,12 @@
+ {
+ 	FILE* f = qsHookDumpFile();
+ 	if (!f) return;
++	int aliveTeki = 0;
++	if (tekiMgr) {
++		Iterator enemies(tekiMgr);
++		CI_LOOP(enemies) { if (static_cast<Teki*>(*enemies)->isAlive()) ++aliveTeki; }
++	}
++	fprintf(f, "live_teki=%d\n", aliveTeki);
+ 	fprintf(f, "== %s tick=%u day=%d stage=%d\n", tag, pc_netplay_tick(), gameflow.mWorldClock.mCurrentDay,
+ 	        flowCont.mCurrentStage ? (int)flowCont.mCurrentStage->mStageID : -1);
+ 	if (itemMgr && naviMgr) {

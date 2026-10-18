@@ -1,0 +1,19 @@
+4 100 button 0100 2
+4 200 button 0100 2
+4 300 button 0100 2
+4 400 button 0100 2
+4 500 button 0100 2
+4 600 button 0100 2
+4 700 button 0100 2
+4 800 button 0100 2
+4 900 button 0100 2
+4 1000 button 0100 2
+4 1100 button 0100 2
+4 1200 button 0100 2
+4 1300 button 0100 2
+4 1400 button 0100 2
+4 1500 stick 70 70 80
+4 2000 button 0100 12
+4 2300 wheel 1
+4 2500 stick -50 70 90
+4 3000 button 0100 12

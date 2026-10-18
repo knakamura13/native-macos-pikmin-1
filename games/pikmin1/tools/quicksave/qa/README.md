@@ -18,8 +18,9 @@ cmake --build /tmp/pikmin-qs-hooks/build -j 8
 
 `prepare.py` exports a committed ref (default HEAD) and patches that copy, so
 uncommitted source edits are excluded. A patch failure is a source-version
-mismatch, not a reason to apply the hooks to the real checkout. The patch was
-captured against `cc3e1c0e`; subsequent documentation/tool-only commits are fine.
+mismatch, not a reason to apply the hooks to the real checkout. The historical patch was captured against `cc3e1c0e`. On product catch-up
+source, `prepare.py` omits only the obsolete low-resolution control hunk; the
+remaining hooks still apply. See the current audit workflow below.
 
 ## Isolated runs
 
@@ -84,9 +85,12 @@ and limits. The earlier skip-entire-presentation experiment is ruled out for
 correct loading: its RNG hash diverged. A GPU-only suppression experiment must
 preserve both CPU passes and establish matching hashes before adoption.
 
-## Experimental GPU suppression
+## Historical GPU suppression experiment
 
-`catchup-gpu.patch` is an additional, test-only experiment. After `prepare.py`,
+`catchup-gpu.patch` applies to the historical pre-optimization game code at
+`fa2a74bf` (export that ref with `prepare.py --ref fa2a74bf`). Do not apply it to
+the product implementation, which already suppresses presentation graphics.
+This was an additional, test-only experiment. After `prepare.py`,
 apply it inside the exported `src/` with `patch --batch -p1 < /absolute/path/to/catchup-gpu.patch`.
 Build once, then record and load with that same executable. Set
 `PIKMIN_QS_TEST_NULL_GPU=1` only on experimental loads; leave it unset for the
@@ -123,3 +127,39 @@ See `docs/quick-save-catchup-gpu-experiment.md` and
 `catchup-gpu-results-macos.json` for the measured macOS results and limits.
 For cleanup after closing a test app, wait for the runner to finish before
 launching another case; do not query a closed app binding, which may relaunch it.
+
+
+## Current product catch-up audit
+
+Build the product code normally for shipping. For isolated QA, export an audited
+copy with `prepare.py --out /tmp/pikmin-qs-product --audit-catchup`, configure and
+build that exported `src/` as above, and never install it. `catchup-audit.patch`
+adds a raw renderer GL counter independent of the null-GX flag, an overlay-boundary
+leak check, and a test-only area selector. Set `PIKMIN_QS_AUDIT_GPU=1` in test cases.
+The measured interval starts before capture/renderall and ends after shape/camera
+restoration and deferred-batch discard. It does not include frame setup or UI.
+An unexpected raw call exits 88; a failed return to live rendering exits 89;
+null-GX leaking into the VI overlay boundary exits 90. `[QS-AUDIT] PASS` reports
+replay frame count, zero measured replay GL and resumed live GL calls.
+
+Run `catchup-product-record.json`, then copy `precision-base/save/` to
+`{out}/title-fixture/` (optionally add a newer invalid `quicksave/2.qsv`), then run
+`catchup-product-loads.json`. Compare precision/in-game/title ticks 4801..6400
+against `precision-base`; compare long-load ticks 11..27100 against `long-base`.
+The foreground long load leaves time to inspect native-resolution loading and
+resumed play before exiting naturally.
+
+`catchup-product-scenes.json` records/loads a VS arena and runs three loads in
+one process against a straight reference. Compare VS ticks 11..3200 and repeated
+loads ticks 11..2200. `catchup-product-areas.json` uses the private day-4 slot-1
+card fixture and the QA-only map selector to test ordinary story areas. Compare
+ticks 247..4200 and confirm stage paths and live enemy counts in the dumps.
+`catchup-product-cancel.json` requires the long fixture from the same executable;
+press Escape during replay, inspect the destination and close the window.
+These synthetic regressions do not replace real-play soak QA.
+
+The original product checks used three audited executable builds as the QA-only
+area hooks evolved. Each group recorded and loaded with its own exact executable;
+no compatibility bypass was used. Their hashes and event excerpts are in
+`catchup-product-results-macos.json`. Current hooks can reproduce all scenarios
+with a single fresh build. See `docs/quick-save-catchup-product-verification.md`.

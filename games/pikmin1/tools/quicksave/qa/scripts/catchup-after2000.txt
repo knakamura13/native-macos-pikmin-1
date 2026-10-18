@@ -77,6 +77,7 @@
 2263 motion 3.75 -2.25
 2264 motion 3.75 -2.25
 2270 wheel -1
+2300 bomb 0
 2310 button 0100 12
 2330 motion -2.125 1.0
 2331 motion -2.125 1.0

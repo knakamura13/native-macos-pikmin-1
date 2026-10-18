@@ -36,7 +36,7 @@
     "mode": "coop",
     "gui": true,
     "unthrottled": false,
-    "ticks": 27060,
+    "ticks": 28000,
     "timeout": 300,
     "cfg": {
       "windowWidth": 2560,
