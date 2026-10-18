@@ -25,10 +25,14 @@
 //
 // A load re-enters a story day from its card block, as the file select loads
 // a save. A day the game reached by continuing the previous one in memory,
-// without loading the file, can start differently from that block (the card
-// keeps buried Pikmin at whole-unit positions and drops their facing); the
-// hash check at the saved tick then refuses the load rather than continue a
-// different day.
+// without loading the file, starts from more exact state than that block
+// holds: the save's precision block (pc_quicksave_carry.h) keeps the buried
+// Pikmin as memory held them and the last day's living Pikmin count, and a
+// load puts them back.
+//
+// The state hash does not cover buried Pikmin until one is plucked; the
+// day-start blocks are compared byte for byte when the recorded day starts
+// again.
 //
 // Story mode and VS only; not with Permadeath, Speedrun, the Randomizer, the
 // Challenge Mode or a netplay session. With the feature off nothing here does

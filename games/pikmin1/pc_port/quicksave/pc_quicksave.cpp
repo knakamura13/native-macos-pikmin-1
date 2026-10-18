@@ -2,11 +2,14 @@
 
 #include "quicksave/pc_quicksave.h"
 
+#include "quicksave/pc_quicksave_carry.h"
 #include "quicksave/pc_quicksave_file.h"
 #include "quicksave/pc_quicksave_io.h"
 
+#include "BaseInf.h"
 #include "FlowController.h"
 #include "MemoryCard.h"
+#include "OnePlayerSection.h"
 #include "PlayerState.h"
 #include "Section.h"
 #include "WorldClock.h"
@@ -93,6 +96,7 @@ struct Day {
 	uint32_t clock[qs::kClockWords] = {};
 	std::vector<uint8_t> card;
 	std::vector<uint8_t> start;
+	std::vector<uint8_t> carry;
 	std::string modeText;
 	uint32_t seed         = 0;
 	int32_t day           = 0;
@@ -364,6 +368,95 @@ bool startStateRestore(const std::vector<uint8_t>& in)
 	return true;
 }
 
+// The day-start precision block (pc_quicksave_carry.h): every area's buried
+// Pikmin as memory holds them and the living Pikmin count of the last day's
+// result. A VS match keeps only the count: its areas are not played.
+std::vector<uint8_t> carrySave(bool areas)
+{
+	qs::Carry c;
+	c.livingPikis = playerState != nullptr ? playerState->mLivingPikiNum : 0;
+	if (areas) {
+		FOREACH_NODE(StageInfo, flowCont.mStageList.mChild, stage)
+		{
+			qs::CarryArea a;
+			a.id = (int32_t)stage->mStageID;
+			FOREACH_NODE(BPikiInf, stage->mStageInf.mBPikiInfMgr.mActiveList.mChild, inf)
+			{
+				qs::CarrySprout s;
+				s.pos[0] = inf->mPosition.x;
+				s.pos[1] = inf->mPosition.y;
+				s.pos[2] = inf->mPosition.z;
+				s.rot[0] = inf->mRotation.x;
+				s.rot[1] = inf->mRotation.y;
+				s.rot[2] = inf->mRotation.z;
+				s.colour = inf->mPikiColour;
+				s.stage  = inf->mNextKeyIndex;
+				a.sprouts.push_back(s);
+			}
+			c.areas.push_back(a);
+		}
+	}
+	std::vector<uint8_t> out;
+	qs::encode_carry(c, out);
+	return out;
+}
+
+// Puts the block back over what the card block reloaded: each buried Pikmin
+// must be the one the card holds in whole units (same area, order, colour and
+// growth stage), else nothing is changed. False with the reason in *why.
+bool carryRestore(const std::vector<uint8_t>& bytes, const char** why)
+{
+	qs::Carry c;
+	if (!qs::decode_carry(bytes.data(), bytes.size(), c)) {
+		*why = "the save's day-start precision block cannot be read";
+		return false;
+	}
+	if (!c.areas.empty()) {
+		size_t ai = 0;
+		FOREACH_NODE(StageInfo, flowCont.mStageList.mChild, stage)
+		{
+			if (ai >= c.areas.size() || c.areas[ai].id != (int32_t)stage->mStageID) {
+				*why = "the save's areas differ from this game's";
+				return false;
+			}
+			const std::vector<qs::CarrySprout>& sprouts = c.areas[ai].sprouts;
+			size_t k                                     = 0;
+			FOREACH_NODE(BPikiInf, stage->mStageInf.mBPikiInfMgr.mActiveList.mChild, inf)
+			{
+				const float card[3] = { inf->mPosition.x, inf->mPosition.y, inf->mPosition.z };
+				if (k >= sprouts.size() || !qs::carry_matches_card(sprouts[k], card, inf->mPikiColour, inf->mNextKeyIndex)) {
+					*why = "the save's buried Pikmin differ from its card block";
+					return false;
+				}
+				++k;
+			}
+			if (k != sprouts.size()) {
+				*why = "the save's buried Pikmin differ from its card block";
+				return false;
+			}
+			++ai;
+		}
+		if (ai != c.areas.size()) {
+			*why = "the save's areas differ from this game's";
+			return false;
+		}
+		ai = 0;
+		FOREACH_NODE(StageInfo, flowCont.mStageList.mChild, stage)
+		{
+			size_t k = 0;
+			FOREACH_NODE(BPikiInf, stage->mStageInf.mBPikiInfMgr.mActiveList.mChild, inf)
+			{
+				const qs::CarrySprout& s = c.areas[ai].sprouts[k++];
+				inf->mPosition.set(s.pos[0], s.pos[1], s.pos[2]);
+				inf->mRotation.set(s.rot[0], s.rot[1], s.rot[2]);
+			}
+			++ai;
+		}
+	}
+	if (playerState != nullptr) playerState->mLivingPikiNum = c.livingPikis;
+	return true;
+}
+
 void sinkRecord(const uint8_t record[104])
 {
 	if (sDay.valid && sDay.eligible) sRecords.insert(sRecords.end(), record, record + kRecordBytes);
@@ -380,6 +473,13 @@ bool readAndCheck(const std::string& path, qs::File& f, Mode& mode, std::string*
 		return false;
 	}
 	const qs::Result r = qs::decode(bytes.data(), bytes.size(), f);
+	if (r == qs::kBadVersion) {
+		char what[128];
+		std::snprintf(what, sizeof(what), "it was written by another version of Quick Save (file format %u, this game reads %u)",
+		              (unsigned)qs::file_version(bytes.data(), bytes.size()), (unsigned)qs::kVersion);
+		*why = what;
+		return false;
+	}
 	if (r != qs::kOk) {
 		*why = std::string("the file is ") + qs::result_name(r);
 		return false;
@@ -463,6 +563,7 @@ void doSave()
 	f.stateHash     = pc_state_hash_compute_total();
 	f.card          = sDay.card;
 	f.start         = sDay.start;
+	f.carry         = sDay.carry;
 	f.recordVersion = pc_input_log::kVersionV4;
 	f.recordSize    = (uint16_t)kRecordBytes;
 	f.records       = sRecords;
@@ -633,12 +734,17 @@ void pc_quicksave_day_prepare(void)
 		// one tick, so this is the tick the recorded day began on.
 		restoreClock(sLoad.clock);
 		if (!startStateRestore(sLoad.start)) failLoad("the save's day-start state cannot be read");
+		// What the card block keeps less exactly than the recorded day held it
+		// in memory (a day continued without reloading the file).
+		const char* why = "";
+		if (!carryRestore(sLoad.carry, &why)) failLoad(why);
 		pc_netplay_det_set_tick(sLoad.dayStartTick);
 		pc_state_hash_set_tick(sLoad.dayStartTick > 0 ? sLoad.dayStartTick - 1 : 0);
 	}
 	d.tutorial = (playerState != nullptr && playerState->mIsTutorialMode) ? 1 : 0;
 	captureClock(d.clock);
 	d.start = startStateSave();
+	d.carry = carrySave(!mode.vs);
 	if (d.eligible && !mode.vs) {
 		// The game file this day starts from, written from memory as the
 		// save writes it (the game itself is untouched). A load restores it
@@ -657,6 +763,7 @@ void pc_quicksave_day_prepare(void)
 		if (sDay.tutorial != sLoad.tutorial) failLoad("the day started with another tutorial state");
 		if (sDay.card != sLoad.card) failLoad("the day's start (its card block) differs from the recorded one");
 		if (sDay.start != sLoad.start) failLoad("the day's start (its carried-over state) differs from the recorded one");
+		if (sDay.carry != sLoad.carry) failLoad("the day's start (its precision block) differs from the recorded one");
 	}
 }
 
