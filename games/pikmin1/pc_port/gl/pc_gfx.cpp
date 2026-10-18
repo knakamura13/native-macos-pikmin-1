@@ -1,4 +1,5 @@
 #include "pc_gfx.h"
+#include "pc_menu_click.h"
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -1553,6 +1554,30 @@ bool pc_gfx_menu_tap_to_graph(float nx, float ny, float* x, float* y) {
     return true;
 }
 
+bool pc_gfx_menu_pointer_to_graph(float nx, float ny, float* x, float* y) {
+    // Scale and offset were captured when the menu drew, in that menu's graph
+    // pixels. The present letterbox is applied on top of the render target.
+    if (!sTapSpaceValid || sDrawableWidth <= 0 || sDrawableHeight <= 0) return false;
+    GLint outX, outY, outW, outH;
+    calculate_output_area(sDrawableWidth, sDrawableHeight, sCurrentAspectRatio, outX, outY, outW, outH);
+    PcMenuClickFrame frame;
+    frame.drawableW = sDrawableWidth;
+    frame.drawableH = sDrawableHeight;
+    frame.outX = int(outX);
+    frame.outY = int(outY);
+    frame.outW = int(outW);
+    frame.outH = int(outH);
+    frame.scaleX = sTapScaleX;
+    frame.scaleY = sTapScaleY;
+    frame.offsetX = sTapOffsetX;
+    frame.offsetY = sTapOffsetY;
+    frame.targetW = sTapTargetW;
+    frame.targetH = sTapTargetH;
+    frame.graphW = sTapGraphW;
+    frame.graphH = sTapGraphH;
+    return pc_menu_click_map_to_graph(frame, nx, ny, x, y);
+}
+
 static void map_gx_rect(float x, float y, float width, float height,
                         GLint& glX, GLint& glY, GLsizei& glWidth, GLsizei& glHeight) {
     float scaleX, scaleY, offsetX, offsetY;
@@ -2519,18 +2544,12 @@ float pc_gfx_get_window_aspect_ratio(void) {
 static void calculate_output_area(int drawableWidth, int drawableHeight,
                                   float renderedAspect, GLint& outX, GLint& outY,
                                   GLint& outWidth, GLint& outHeight) {
-    const float windowAspect = float(drawableWidth) / float(drawableHeight);
-    if (renderedAspect >= windowAspect) {
-        outWidth = drawableWidth;
-        outHeight = GLint(lroundf(float(drawableWidth) / renderedAspect));
-        outX = 0;
-        outY = (drawableHeight - outHeight) / 2;
-    } else {
-        outHeight = drawableHeight;
-        outWidth = GLint(lroundf(float(drawableHeight) * renderedAspect));
-        outX = (drawableWidth - outWidth) / 2;
-        outY = 0;
-    }
+    int x = 0, y = 0, w = 0, h = 0;
+    pc_menu_click_output_area(drawableWidth, drawableHeight, renderedAspect, &x, &y, &w, &h);
+    outX = x;
+    outY = y;
+    outWidth = w;
+    outHeight = h;
 }
 
 // Attribute indices are forced to fixed slots for every program so the one

@@ -2,6 +2,7 @@
 #include "port/jaudio_host.h"
 #endif
 #include "pc_window.h"
+#include "pc_menu_click.h"
 #include "pc_speedrun.h"
 #include "pc_gyro.h"
 #include "pc_icon.h"
@@ -269,6 +270,9 @@ static int sCStickInvert = 0;
 
 // Mouse input state for cursor (C-stick) control
 static bool sMouseRelativeMode = false;
+// Title and main menu release capture so the pointer can hit a button, then
+// put it back when the level (or any other screen) is showing again.
+static bool sRestoreMouseAfterMenu = false;
 static int sMouseCenterX = 0;
 // Centre of the window as it is now (fullscreen included), not the stored
 // windowed size.
@@ -1077,7 +1081,39 @@ static bool pc_window_read_gamepad(SDL_GameController* ctl, u16& button, s8& sti
         || abs(rx) > noticeZone || abs(ry) > noticeZone;
 }
 
+static void pc_sync_menu_pointer(void) {
+    const bool menu = pc_menu_click_pointer_menu_active();
+    if (menu) {
+        if (sMouseRelativeMode || SDL_GetRelativeMouseMode() == SDL_TRUE) {
+            if (!sRestoreMouseAfterMenu) {
+                sRestoreMouseAfterMenu = effectiveControlMode() == PC_CONTROL_MOUSE_CURSOR;
+            }
+            sMouseRelativeMode = false;
+            SDL_SetRelativeMouseMode(SDL_FALSE);
+            SDL_ShowCursor(SDL_ENABLE);
+        }
+        return;
+    }
+    if (!sRestoreMouseAfterMenu || sSettingsMenuOpen || effectiveControlMode() != PC_CONTROL_MOUSE_CURSOR) {
+        sRestoreMouseAfterMenu = false;
+        return;
+    }
+    sRestoreMouseAfterMenu = false;
+    sMouseRelativeMode = true;
+    SDL_SetRelativeMouseMode(SDL_TRUE);
+    SDL_ShowCursor(SDL_DISABLE);
+    int dummyX = 0;
+    int dummyY = 0;
+    SDL_GetRelativeMouseState(&dummyX, &dummyY);
+}
+
 void pc_window_poll_events(PADStatus* pad) {
+    // Age a menu click only on the logical input sample. The present path
+    // polls again with a null pad and must not drop a click the menu has not
+    // seen yet.
+    if (pad) {
+        pc_menu_click_begin_tick();
+    }
 #if PIKI_USE_JAUDIO
     PikiJAudioTick();
 #else
@@ -1132,6 +1168,7 @@ void pc_window_poll_events(PADStatus* pad) {
             }
 #endif
             case SDL_MOUSEBUTTONDOWN:
+                if (event.button.which != SDL_TOUCH_MOUSEID) pc_menu_click_disarm_hover();
                 // Edge mask for binding capture: a click shorter than a frame
                 // is invisible to SDL_GetMouseState, so remember every press.
                 if (event.button.button >= 1 && event.button.button <= 8)
@@ -1142,11 +1179,20 @@ void pc_window_poll_events(PADStatus* pad) {
                     int ww = 0, wh = 0;
                     SDL_GetWindowSize(sWindow, &ww, &wh);
                     if (ww > 0 && wh > 0) pc_settings_touch_tap(event.button.x / float(ww), event.button.y / float(wh));
+                } else if (!sSettingsMenuOpen && event.button.button == SDL_BUTTON_LEFT
+                           && event.button.which != SDL_TOUCH_MOUSEID) {
+                    int ww = 0, wh = 0;
+                    if (sWindow) SDL_GetWindowSize(sWindow, &ww, &wh);
+                    if (ww > 0 && wh > 0) {
+                        pc_menu_click_post(event.button.x / float(ww), event.button.y / float(wh));
+                    }
                 }
                 // Issue #52: Escape (or the OS) can drop the mouse out of
                 // relative mode, which froze the cursor until the option was
-                // toggled. A click in the window takes it back.
-                if (!sSettingsMenuOpen && effectiveControlMode() == PC_CONTROL_MOUSE_CURSOR && !sMouseRelativeMode
+                // toggled. A click in the window takes it back. The title and
+                // main menu keep the pointer free so the click can hit a button.
+                if (!sSettingsMenuOpen && !pc_menu_click_pointer_menu_active()
+                    && effectiveControlMode() == PC_CONTROL_MOUSE_CURSOR && !sMouseRelativeMode
                     && event.button.which != SDL_TOUCH_MOUSEID) {
                     sMouseRelativeMode = true;
                     SDL_SetRelativeMouseMode(SDL_TRUE);
@@ -1195,11 +1241,13 @@ void pc_window_poll_events(PADStatus* pad) {
                 pc_controller_close_instance(event.cdevice.which);
                 break;
             case SDL_CONTROLLERBUTTONDOWN:
+                pc_menu_click_disarm_hover();
                 sLastPressKind = PC_INPUT_DEV_GAMEPAD;
                 sLastPressId   = event.cbutton.which;
                 sLastPressSerial++;
                 break;
             case SDL_KEYDOWN:
+                pc_menu_click_disarm_hover();
                 if (!event.key.repeat && event.key.keysym.scancode != SDL_SCANCODE_ESCAPE) {
                     sLastPressKind = PC_INPUT_DEV_KEYBOARD;
                     sLastPressId   = -1;
@@ -1245,6 +1293,27 @@ void pc_window_poll_events(PADStatus* pad) {
         }
     }
 
+    if (pad) {
+        if (sSettingsMenuOpen || !sWindow) {
+            pc_menu_click_clear_pointer();
+        } else {
+            int ww = 0;
+            int wh = 0;
+            SDL_GetWindowSize(sWindow, &ww, &wh);
+            int mx = 0;
+            int my = 0;
+            SDL_GetMouseState(&mx, &my);
+            const bool inside = (SDL_GetWindowFlags(sWindow) & SDL_WINDOW_MOUSE_FOCUS) != 0 && ww > 0 && wh > 0 && mx >= 0
+                                && my >= 0 && mx < ww && my < wh;
+            if (inside) {
+                pc_menu_click_set_pointer(float(mx) / float(ww), float(my) / float(wh));
+            } else {
+                pc_menu_click_clear_pointer();
+            }
+        }
+        pc_sync_menu_pointer();
+    }
+
     if (!pad) return;
 
     // Reset pad status for Channel 0
@@ -1258,7 +1327,10 @@ void pc_window_poll_events(PADStatus* pad) {
 
     const Uint8* state = SDL_GetKeyboardState(NULL);
     // Bindings may name a mouse button (issue #42); sample the mouse once here.
-    const Uint32 boundMouse = SDL_GetMouseState(NULL, NULL);
+    Uint32 boundMouse = SDL_GetMouseState(NULL, NULL);
+    // While the title or main menu holds the pointer, a mouse button is that
+    // menu's click, not A or B. Keyboard and controller bindings stay.
+    if (pc_menu_click_pointer_menu_active()) boundMouse = 0;
     // La segunda tecla con un clic solo cuenta fuera de Classic, como los clics
     // fijos que sustituye (en Classic el ratón no juega).
     const bool mouseSecondOk = effectiveControlMode() != PC_CONTROL_CLASSIC;
@@ -1375,6 +1447,7 @@ void pc_window_poll_events(PADStatus* pad) {
         usedGamepad = pc_window_read_gamepad(sController, button, stickX, stickY, substickX, substickY,
                                              triggerL, triggerR, sSwarmHeld);
     }
+    if (usedKeyboard || usedGamepad) pc_menu_click_disarm_hover();
     // Flanco del swarm de P1 una vez juntos teclado y mando (Charge).
     if (sSwarmHeld && !sSwarmWasDown[0]) sSwarmPending[0] = true;
     sSwarmWasDown[0] = sSwarmHeld;
