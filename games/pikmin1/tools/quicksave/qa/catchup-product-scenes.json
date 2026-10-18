@@ -1,0 +1,117 @@
+[
+  {
+    "name": "forest-hope-base",
+    "mode": "coop",
+    "ticks": 3200,
+    "timeout": 180,
+    "env": {
+      "PIKMIN_QS_AUDIT_GPU": "1",
+      "PIKMIN_QS_SPAWN": "400:30",
+      "PIKMIN_QS_TEKI": "360:140",
+      "PIKMIN_QS_BOMBS": "1",
+      "PIKMIN_QS_SCRIPT": "{scripts}/coop1-long.txt",
+      "PIKMIN_QS_TEST_STAGE": "1",
+      "PIKMIN_QS_SAVE_AT": "2001"
+    }
+  },
+  {
+    "name": "forest-hope-load",
+    "mode": "coop",
+    "ticks": 3200,
+    "timeout": 180,
+    "env": {
+      "PIKMIN_QS_AUDIT_GPU": "1",
+      "PIKMIN_QS_SPAWN": "400:30",
+      "PIKMIN_QS_TEKI": "360:140",
+      "PIKMIN_QS_BOMBS": "1",
+      "PIKMIN_QS_SCRIPT": "{scripts}/catchup-after2000.txt",
+      "PIKMIN_QS_TEST_STAGE": "1"
+    },
+    "args": [
+      "--quick-load",
+      "{out}/forest-hope-base/save/quicksave/0.qsv"
+    ]
+  },
+  {
+    "name": "forest-navel-base",
+    "mode": "coop",
+    "ticks": 3200,
+    "timeout": 180,
+    "env": {
+      "PIKMIN_QS_AUDIT_GPU": "1",
+      "PIKMIN_QS_SPAWN": "400:30",
+      "PIKMIN_QS_TEKI": "360:140",
+      "PIKMIN_QS_BOMBS": "1",
+      "PIKMIN_QS_SCRIPT": "{scripts}/coop1-long.txt",
+      "PIKMIN_QS_TEST_STAGE": "2",
+      "PIKMIN_QS_SAVE_AT": "2001"
+    }
+  },
+  {
+    "name": "forest-navel-load",
+    "mode": "coop",
+    "ticks": 3200,
+    "timeout": 180,
+    "env": {
+      "PIKMIN_QS_AUDIT_GPU": "1",
+      "PIKMIN_QS_SPAWN": "400:30",
+      "PIKMIN_QS_TEKI": "360:140",
+      "PIKMIN_QS_BOMBS": "1",
+      "PIKMIN_QS_SCRIPT": "{scripts}/catchup-after2000.txt",
+      "PIKMIN_QS_TEST_STAGE": "2"
+    },
+    "args": [
+      "--quick-load",
+      "{out}/forest-navel-base/save/quicksave/0.qsv"
+    ]
+  },
+  {
+    "name": "vs-arena-base",
+    "mode": "vs",
+    "ticks": 3200,
+    "timeout": 180,
+    "env": {
+      "PIKMIN_QS_AUDIT_GPU": "1",
+      "PIKMIN_QS_SPAWN": "400:30",
+      "PIKMIN_QS_TEKI": "360:140",
+      "PIKMIN_QS_BOMBS": "1",
+      "PIKMIN_QS_SCRIPT": "{scripts}/coop1-long.txt",
+      "PIKMIN_QS_SAVE_AT": "2001"
+    }
+  },
+  {
+    "name": "vs-arena-load",
+    "mode": "vs",
+    "ticks": 3200,
+    "timeout": 180,
+    "env": {
+      "PIKMIN_QS_AUDIT_GPU": "1",
+      "PIKMIN_QS_SPAWN": "400:30",
+      "PIKMIN_QS_TEKI": "360:140",
+      "PIKMIN_QS_BOMBS": "1",
+      "PIKMIN_QS_SCRIPT": "{scripts}/catchup-after2000.txt"
+    },
+    "args": [
+      "--quick-load",
+      "{out}/vs-arena-base/save/quicksave/0.qsv"
+    ]
+  },
+  {
+    "name": "repeat-base",
+    "mode": "coop",
+    "ticks": 2200,
+    "env": {
+      "PIKMIN_QS_AUDIT_GPU": "1",
+      "PIKMIN_QS_SCRIPT": "{scripts}/catchup-repeat-base.txt"
+    }
+  },
+  {
+    "name": "repeat-loads",
+    "mode": "coop",
+    "ticks": 2200,
+    "env": {
+      "PIKMIN_QS_AUDIT_GPU": "1",
+      "PIKMIN_QS_SCRIPT": "{scripts}/catchup-repeat.txt"
+    }
+  }
+]

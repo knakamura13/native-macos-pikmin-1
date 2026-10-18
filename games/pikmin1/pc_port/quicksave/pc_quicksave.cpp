@@ -17,7 +17,6 @@
 #include "gameflow.h"
 
 #include "audio/pc_audio.h"
-#include "gl/pc_gfx.h"
 #include "mods/pc_vs_map.h"
 #include "netplay/pc_coop_switch.h"
 #include "netplay/pc_input_log.h"
@@ -121,10 +120,6 @@ enum Phase {
 	kReplay,   // replaying the recorded ticks
 };
 
-// The load screen renders the replay no larger than this (same aspect).
-constexpr int kCatchupMaxW = 1280;
-constexpr int kCatchupMaxH = 720;
-
 bool sEnabled = false;
 Day sDay;
 bool sPrepared = false;
@@ -141,11 +136,6 @@ Clock::time_point sLoadRequested;
 Clock::time_point sReplayStart;
 size_t sNextProgress = 0;
 bool sCancel         = false; // Escape: leave the load at the first chance
-
-// The catch-up's lower render resolution (pc_gfx), and what it replaced.
-bool sLowRes   = false;
-int sSavedResW = 0;
-int sSavedResH = 0;
 
 // The last save or load result, shown for a few seconds (pc_quicksave_toast).
 char sToast[192]    = {};
@@ -557,36 +547,12 @@ void notify(bool error, const char* fmt, ...)
 	pc_settings_post_notice(error ? 1 : 0, sToast);
 }
 
-// The catch-up renders at most kCatchupMaxW x kCatchupMaxH (the output's
-// aspect): the replay's frames are hidden behind the load screen, and the sim
-// does not depend on the resolution. Nothing changes when the game already
-// renders that small.
-void lowResBegin()
-{
-	if (sLowRes) return;
-	int w = 0, h = 0;
-	pc_gfx_get_render_size(&w, &h);
-	if (w <= kCatchupMaxW && h <= kCatchupMaxH) return;
-	pc_gfx_get_render_resolution(&sSavedResW, &sSavedResH);
-	const float scale = pc_gfx_get_render_scale();
-	pc_gfx_set_render_resolution((int)(kCatchupMaxW / scale), (int)(kCatchupMaxH / scale));
-	sLowRes = true;
-}
-
-void lowResEnd()
-{
-	if (!sLowRes) return;
-	pc_gfx_set_render_resolution(sSavedResW, sSavedResH);
-	sLowRes = false;
-}
-
 // A load is over (handed back or cancelled): the replay's switches go back.
 void endCatchup()
 {
 	if (pc_input_log_is_replay_active()) pc_input_log_replay_memory_end();
 	pc_netplay_det_set_catchup(false);
 	pc_audio_set_output_muted(false);
-	lowResEnd();
 }
 
 void dropLoad()
@@ -955,12 +921,11 @@ void pc_quicksave_day_begin(void)
 	if (!pc_input_log_replay_memory_begin(sLoad.records.data(), sLoad.ticks)) failLoad("an input replay is running");
 	pc_netplay_det_set_catchup(true);
 	pc_audio_set_output_muted(true);
-	lowResBegin();
 	sReplayStart  = Clock::now();
 	sNextProgress = 3000;
 	sPhase        = kReplay;
-	std::printf("[quicksave] replaying %u ticks of day %d (from tick %u), unthrottled, audio muted, %s\n", sLoad.ticks,
-	            (int)sLoad.day, sLoad.dayStartTick, sLowRes ? "lower render resolution" : "render resolution unchanged");
+	std::printf("[quicksave] replaying %u ticks of day %d (from tick %u), unthrottled, audio muted, world graphics suppressed\n",
+	            sLoad.ticks, (int)sLoad.day, sLoad.dayStartTick);
 	std::fflush(stdout);
 }
 

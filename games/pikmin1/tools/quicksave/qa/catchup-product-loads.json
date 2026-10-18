@@ -1,0 +1,55 @@
+[
+  {
+    "name": "precision-in-game",
+    "mode": "coop",
+    "ticks": 6400,
+    "env": {
+      "PIKMIN_QS_SPROUTS": "4:30:12",
+      "PIKMIN_QS_SUNSET": "4:300",
+      "PIKMIN_QS_DIRECT_SLOT": "1",
+      "PIKMIN_QS_PLUCK": "5:360:420:480:540:600:660",
+      "PIKMIN_QS_MENU_A": "1",
+      "PIKMIN_QS_DSCRIPT": "{scripts}/g-day5.txt",
+      "PIKMIN_QS_DUMP_OFFS": "99,400,700,1000,1001,1600",
+      "PIKMIN_QS_DUMP_FILE": "{out}/precision-in-game/dump.txt",
+      "PIKMIN_QS_LOAD_DAY": "5:1300:{out}/precision-base/save/quicksave/1.qsv",
+      "PIKMIN_QS_AUDIT_GPU": "1"
+    }
+  },
+  {
+    "name": "title-complete",
+    "gui": false,
+    "mode": "none",
+    "ticks": 6400,
+    "timeout": 300,
+    "savefrom": "{out}/title-fixture",
+    "copy_quicksaves": true,
+    "env": {
+      "PIKMIN_QS_PLUCK": "5:360:420:480:540:600:660",
+      "PIKMIN_QS_DSCRIPT": "{scripts}/g-day5-after1000.txt",
+      "PIKMIN_QS_SCRIPT": "{scripts}/title-action.txt",
+      "PIKMIN_QS_AUDIT_GPU": "1"
+    }
+  },
+  {
+    "name": "long-product",
+    "mode": "coop",
+    "gui": true,
+    "unthrottled": false,
+    "ticks": 27060,
+    "timeout": 300,
+    "cfg": {
+      "windowWidth": 2560,
+      "windowHeight": 1080
+    },
+    "args": [
+      "--quick-load",
+      "{out}/long-base/save/quicksave/0.qsv"
+    ],
+    "env": {
+      "PIKMIN_QS_SPAWN": "400:30",
+      "PIKMIN_QS_SCRIPT": "{scripts}/coop1-long-after27000.txt",
+      "PIKMIN_QS_AUDIT_GPU": "1"
+    }
+  }
+]

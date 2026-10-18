@@ -1,0 +1,112 @@
+--- a/games/pikmin1/pc_port/gl/pc_gfx.cpp
++++ b/games/pikmin1/pc_port/gl/pc_gfx.cpp
+@@ -164,8 +164,13 @@
+ // uniform wrappers below) counts as real GL while the null flag is on, so
+ // the authoritative pass's null_gl counter is a measurement. The
+ // parenthesised inner name calls the real function or pointer.
++// QA-only raw-call counter, independent of the null-GX flag.
++static unsigned long long sQaRawGlCalls = 0;
++extern "C" void pc_qa_note_raw_gl() { ++sQaRawGlCalls; }
++extern "C" unsigned long long pc_qa_raw_gl_calls() { return sQaRawGlCalls; }
+ static inline void pc_gfx_count_real_gl()
+ {
++    pc_qa_note_raw_gl();
+     if (pc_netplay_present_null_active()) {
+         pc_netplay_present_note_real();
+     }
+--- a/games/pikmin1/pc_port/gl/pc_texpack.cpp
++++ b/games/pikmin1/pc_port/gl/pc_texpack.cpp
+@@ -19,8 +19,10 @@
+ 
+ // Netplay null-GX tripwire, as in pc_gfx.cpp: GL issued here while the null
+ // flag is on counts as real GL.
++extern "C" void pc_qa_note_raw_gl();
+ static inline void pc_texpack_count_real_gl()
+ {
++    pc_qa_note_raw_gl();
+     if (pc_netplay_present_null_active()) pc_netplay_present_note_real();
+ }
+ #define glTexImage2D(...) (pc_texpack_count_real_gl(), (glTexImage2D)(__VA_ARGS__))
+--- a/games/pikmin1/src/plugPikiColin/plugPiki.cpp
++++ b/games/pikmin1/src/plugPikiColin/plugPiki.cpp
+@@ -11,6 +11,7 @@
+ 
+ #include <chrono>
+ #include <cstdlib>
++extern "C" unsigned long long pc_qa_raw_gl_calls();
+ 
+ #include "timing/pc_render_phase.h"
+ #include "timing/pc_tick_profiler.h"
+@@ -347,6 +348,8 @@
+ 			gsys->mDGXGfx->mLight.initCore("");
+ 			gsys->mDGXGfx->resetCacheBuffer();
+ 			gsys->resetLFlares();
++			const bool qaCatchup = pc_netplay_det_catchup();
++			const auto qaGlBefore = pc_qa_raw_gl_calls();
+ 			pc_gfx_begin_capture(pc_render_tick_serial());
+ 			renderall();
+ 			if (profiling) {
+@@ -358,6 +361,24 @@
+ 			pc_netplay_camlead_end_presentation(*gsys->mDGXGfx);
+ 			// Back to authoritative for doneRender, messages and the hash.
+ 			pc_render_end_presentation();
++			if (std::getenv("PIKMIN_QS_AUDIT_GPU")) {
++				static unsigned long long frames = 0;
++				const auto calls = pc_qa_raw_gl_calls() - qaGlBefore;
++				if (qaCatchup) {
++					++frames;
++					if (calls != 0) {
++						printf("[QS-AUDIT] FAIL tick=%u catch-up presentation issued %llu raw GL calls\n", pc_netplay_tick(), calls);
++						fflush(stdout);
++						std::exit(88);
++					}
++				} else if (frames != 0) {
++					printf("[QS-AUDIT] PASS replay_frames=%llu replay_gl=0 live_gl=%llu null_off=%d\n",
++					       frames, calls, !pc_netplay_present_null_active());
++					fflush(stdout);
++					if (pc_netplay_present_null_active() || calls == 0) std::exit(89);
++					frames = 0;
++				}
++			}
+ 		}
+ 		const unsigned tick = pc_netplay_tick();
+ 		if (tick % 600 == 0) {
+--- a/games/pikmin1/pc_port/dolphin_stubs/vi_stubs.cpp
++++ b/games/pikmin1/pc_port/dolphin_stubs/vi_stubs.cpp
+@@ -10,6 +10,8 @@
+ #include "pc_keycaps.h"
+ #include <cstdio>
+ #include <cstring>
++#include <cstdlib>
++#include "netplay/pc_netplay_present.h"
+ 
+ #if defined(PIKI_PC_PORT) && defined(PIKI_PC_SETTINGS_MENU)
+ #include "settings/pc_settings.h"
+@@ -41,6 +43,10 @@
+ }
+ void VIFlush(void)             { }
+ void VIWaitForRetrace(void)    { 
++    if (std::getenv("PIKMIN_QS_AUDIT_GPU") && pc_netplay_present_null_active()) {
++        fprintf(stderr, "[QS-AUDIT] FAIL null-GX leaked into overlays\n");
++        std::exit(90);
++    }
+     sRetraceCount++; 
+     if (sPostRetraceCallback) {
+         sPostRetraceCallback(sRetraceCount);
+--- a/games/pikmin1/src/plugPikiColin/cardSelect.cpp
++++ b/games/pikmin1/src/plugPikiColin/cardSelect.cpp
+@@ -609,6 +609,14 @@
+ 					if (playerState->isTutorial()) {
+ 						// we're in day 1, do things a bit differently
+ 						StageInfo* stage       = (StageInfo*)flowCont.mStageList.mChild;
++						// QA-only area coverage for a direct new run.
++						if (const char* value = std::getenv("PIKMIN_QS_TEST_STAGE")) {
++							FOREACH_NODE(StageInfo, flowCont.mStageList.mChild, candidate) {
++								if ((int)candidate->mStageID == std::atoi(value)) stage = candidate;
++							}
++							printf("[QS-AREA] stage=%d file=%s\n", (int)stage->mStageID, stage->mFileName);
++						}
++
+ 						flowCont.mCurrentStage = stage;
+ 						sprintf(flowCont.mCurrStageFilePath, "%s", stage->mFileName);
+ 						sprintf(flowCont.mDoorStageFilePath, "%s", stage->mFileName);
