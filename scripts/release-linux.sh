@@ -21,7 +21,7 @@ if [[ "${1:-}" == "--clean" ]]; then
     rm -rf "${build_dir}" "${out_dir}"
 fi
 
-launcher_version="$(python3 -c "import json;print(json.load(open('${root}/versions.json'))['launcher'])")"
+launcher_version="$(python3 -c "import json;print(json.load(open('${root}/versions.json'))['release'])")"
 if ! command -v podman >/dev/null 2>&1; then
     printf 'Hace falta podman: sudo apt install podman\n' >&2
     exit 1
@@ -33,16 +33,19 @@ podman build -q -t "${image}" -f "${root}/games/pikmin1/packaging/linux/Containe
 
 printf '[2/4] Compilando el launcher, Pikmin 1 y Pikmin 2 en el contenedor...\n'
 podman run --rm --userns=keep-id -v "${root}":/src -e OPEN_NECTAR_VERSION="${launcher_version}" \
+    -e NECTAR_RELEASE_ONLINE="${NECTAR_RELEASE_ONLINE:-0}" \
     "${image}" bash /src/scripts/release/container-build-linux.sh
 
 launcher="${build_dir}/p1-usa/bin/nectar-launcher"
 usa="${build_dir}/p1-usa/bin/nectar"
 pal="${build_dir}/p1-pal/bin/nectar"
 p2="${build_dir}/p2/pikmin2_pc"
+p2usa="${build_dir}/p2-usa/pikmin2_pc"
+mapmaker="${build_dir}/p1-usa/bin/nectar-mapmaker"
 
 # Solo glibc, libGL y libX11: cualquier otra dependencia es un error de empaquetado.
-allowed='^(libc|libm|libdl|libpthread|librt|ld-linux-x86-64)\.so|^libGL\.so\.1$|^libX11\.so\.6$'
-for exe in "${launcher}" "${usa}" "${pal}" "${p2}"; do
+allowed='^(libc|libm|libdl|libpthread|librt|libgcc_s|ld-linux-x86-64)\.so|^libGL\.so\.1$|^libX11\.so\.6$'
+for exe in "${launcher}" "${usa}" "${pal}" "${p2}" "${p2usa}" "${mapmaker}"; do
     [[ -f "${exe}" ]] || { printf 'No se generó %s\n' "${exe}" >&2; exit 1; }
     while read -r lib; do
         if ! printf '%s\n' "${lib}" | grep -Eq "${allowed}"; then
@@ -59,10 +62,12 @@ cp "${launcher}" "${stripped}/nectar-launcher"
 cp "${usa}" "${stripped}/nectar"
 cp "${pal}" "${stripped}/nectar-pal"
 cp "${p2}" "${stripped}/pikmin2_pc"
+cp "${p2usa}" "${stripped}/pikmin2_pc-usa"
+cp "${mapmaker}" "${stripped}/nectar-mapmaker"
 strip "${stripped}"/* 2>/dev/null || true
 python3 "${root}/scripts/release/make_release.py" --os linux --out "${out_dir}" \
     --launcher "${stripped}/nectar-launcher" --p1-usa "${stripped}/nectar" \
-    --p1-pal "${stripped}/nectar-pal" --p2 "${stripped}/pikmin2_pc" \
+    --p1-pal "${stripped}/nectar-pal" --p2 "${stripped}/pikmin2_pc" --p2-usa "${stripped}/pikmin2_pc-usa" --mapmaker "${stripped}/nectar-mapmaker" \
     --extra "${root}/games/pikmin1/packaging/linux/README.txt" \
     --extra "${root}/games/pikmin1/packaging/linux/LEEME.txt" \
     --extra "${root}/games/pikmin1/packaging/icon/open_nectar.png"
