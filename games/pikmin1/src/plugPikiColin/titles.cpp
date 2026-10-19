@@ -26,6 +26,7 @@
 #include "pc_speedrun.h"
 #include "pc_vs.h"
 #include "netplay/pc_coop_switch.h"
+#include "quicksave/pc_quicksave.h"
 #endif
 
 class TitleSetupSection;
@@ -377,6 +378,17 @@ public:
 
 			if (mState == STATE_Active) {
 #if defined(PIKI_PC_PORT)
+				// Quick save load at launch (--quick-load, a story save): its
+				// own run, as the co-op direct boot below starts one.
+				if (pc_quicksave_take_title()) {
+					mNextSectionsFlag                = PACK_NEXT_ONEPLAYER(ONEPLAYER_GameSetup);
+					gameflow.mGamePrefs.mHasSaveGame = false;
+					gameflow.mIsChallengeMode        = FALSE;
+					Jac_SceneExit(SCENE_Exit, 0);
+					mState = STATE_ExitPending;
+					gsys->setFade(0.0f);
+					return;
+				}
 				// Editor de mapas (--vs-map): directo al VS, como si se hubiera
 				// elegido en el menú (ogTitle) y sin pasar por él.
 				if (pc_vs_direct_take_title()) {

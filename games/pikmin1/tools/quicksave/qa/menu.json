@@ -1,0 +1,9 @@
+[
+  {
+    "name": "menu-on-v2",
+    "mode": "vs",
+    "env": {
+      "PIKMIN_QS_SCRIPT": "{scripts}/menu-on.txt"
+    }
+  }
+]

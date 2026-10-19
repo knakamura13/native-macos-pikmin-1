@@ -1,0 +1,3 @@
+300 settingok Quick_Save_now
+400 settingok Quick_Load_now
+500 setting Quick_Save_(experimental) 1

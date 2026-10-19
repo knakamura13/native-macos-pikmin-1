@@ -1,0 +1,45 @@
+[
+  {
+    "name": "vs-arena-base",
+    "mode": "vs",
+    "ticks": 3200,
+    "timeout": 180,
+    "env": {
+      "PIKMIN_QS_AUDIT_GPU": "1",
+      "PIKMIN_QS_SCRIPT": "{scripts}/catchup-scenes.txt",
+      "PIKMIN_QS_SAVE_AT": "2001"
+    }
+  },
+  {
+    "name": "vs-arena-load",
+    "mode": "vs",
+    "ticks": 3200,
+    "timeout": 180,
+    "env": {
+      "PIKMIN_QS_AUDIT_GPU": "1",
+      "PIKMIN_QS_SCRIPT": "{scripts}/catchup-after2000.txt"
+    },
+    "args": [
+      "--quick-load",
+      "{out}/vs-arena-base/save/quicksave/0.qsv"
+    ]
+  },
+  {
+    "name": "repeat-base",
+    "mode": "vs",
+    "ticks": 2200,
+    "env": {
+      "PIKMIN_QS_AUDIT_GPU": "1",
+      "PIKMIN_QS_SCRIPT": "{scripts}/catchup-repeat-base.txt"
+    }
+  },
+  {
+    "name": "repeat-loads",
+    "mode": "vs",
+    "ticks": 2200,
+    "env": {
+      "PIKMIN_QS_AUDIT_GPU": "1",
+      "PIKMIN_QS_SCRIPT": "{scripts}/catchup-repeat.txt"
+    }
+  }
+]

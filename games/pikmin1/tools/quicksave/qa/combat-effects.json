@@ -1,0 +1,65 @@
+[
+  {
+    "name": "combat-base",
+    "mode": "vs",
+    "ticks": 2000,
+    "timeout": 240,
+    "cfg": {
+      "fpsMode": 1,
+      "lockOn": 0,
+      "charge": 0,
+      "throwWhileMoving": 1,
+      "bombControl": 1,
+      "quickGrab": 1,
+      "whistlePluck": 0,
+      "tekiHealthPct": 100,
+      "naviHealthPct": 100,
+      "naviSpeedPct": 100,
+      "throwSpeedPct": 100,
+      "pikiInvincible": 0,
+      "vsDuration": 2,
+      "vsPikiLimit": 2
+    },
+    "env": {
+      "PIKMIN_QS_AUDIT_GPU": "1",
+      "PIKMIN_QS_SCRIPT": "{scripts}/combat-effects.txt",
+      "PIKMIN_QS_SAVE_AT": "1301",
+      "PIKMIN_QS_DUMP_OFFS": "210,400,790,1190,1290,1590,1890",
+      "PIKMIN_QS_DUMP_FILE": "{out}/combat-base/dump.txt",
+      "PIKMIN_QS_NAVILOG": "40"
+    }
+  },
+  {
+    "name": "combat-load",
+    "mode": "vs",
+    "ticks": 2000,
+    "timeout": 240,
+    "cfg": {
+      "fpsMode": 1,
+      "lockOn": 0,
+      "charge": 0,
+      "throwWhileMoving": 1,
+      "bombControl": 1,
+      "quickGrab": 1,
+      "whistlePluck": 0,
+      "tekiHealthPct": 100,
+      "naviHealthPct": 100,
+      "naviSpeedPct": 100,
+      "throwSpeedPct": 100,
+      "pikiInvincible": 0,
+      "vsDuration": 2,
+      "vsPikiLimit": 2
+    },
+    "env": {
+      "PIKMIN_QS_AUDIT_GPU": "1",
+      "PIKMIN_QS_SCRIPT": "{scripts}/combat-effects-after.txt",
+      "PIKMIN_QS_DUMP_OFFS": "210,400,790,1190,1290,1590,1890",
+      "PIKMIN_QS_DUMP_FILE": "{out}/combat-load/dump.txt",
+      "PIKMIN_QS_NAVILOG": "40"
+    },
+    "args": [
+      "--quick-load",
+      "{out}/combat-base/save/quicksave/0.qsv"
+    ]
+  }
+]

@@ -1,0 +1,171 @@
+{
+  "product_code_commit": "7be75896b326083a9828148fbda4689bd28514c5",
+  "clean_exe_sha256": "b5b93cf22f54040555021adb389697242f03ca95ca0f0d02320b9262447acfc6",
+  "runs": [
+    {
+      "exe_sha256": "0f5e2ed6de7a70f303fc2e07ace21fb389d677d4f5b1d2ae2497a7d2e65e9114",
+      "cases": [
+        {
+          "name": "precision-base",
+          "exit": 0,
+          "seconds": 17.45,
+          "events": [],
+          "live_teki": []
+        },
+        {
+          "name": "precision-load",
+          "exit": 0,
+          "seconds": 3.83,
+          "events": [
+            "[quicksave] loaded /private/tmp/pikmin-qs-product-green/cases/precision-base/save/quicksave/1.qsv: tick 999 of day 5 (tick 5799) hash 88624d0fa6d69280 matched; replay 0.89 s (1120 ticks/s), 1.16 s since the load began; live input from the next tick",
+            "[QS-AUDIT] PASS replay_frames=999 replay_gl=0 live_gl=27084 null_off=1"
+          ],
+          "live_teki": []
+        },
+        {
+          "name": "precision-in-game",
+          "exit": 0,
+          "seconds": 18.05,
+          "events": [
+            "[quicksave] loaded /private/tmp/pikmin-qs-product-green/cases/precision-base/save/quicksave/1.qsv: tick 999 of day 5 (tick 5799) hash 88624d0fa6d69280 matched; replay 0.87 s (1154 ticks/s), 0.87 s since the load began; live input from the next tick",
+            "[QS-AUDIT] PASS replay_frames=999 replay_gl=0 live_gl=13345 null_off=1"
+          ],
+          "live_teki": []
+        },
+        {
+          "name": "title-complete",
+          "exit": 0,
+          "seconds": 6.02,
+          "events": [
+            "[quicksave] loaded /private/tmp/pikmin-qs-product-green/cases/title-complete/save/quicksave/1.qsv: tick 999 of day 5 (tick 5799) hash 88624d0fa6d69280 matched; replay 0.88 s (1138 ticks/s), 0.90 s since the load began; live input from the next tick",
+            "[QS-AUDIT] PASS replay_frames=999 replay_gl=0 live_gl=27084 null_off=1"
+          ]
+        },
+        {
+          "name": "long-base",
+          "exit": 0,
+          "seconds": 85.27,
+          "events": []
+        },
+        {
+          "name": "long-product",
+          "exit": 0,
+          "seconds": 42.76,
+          "events": [
+            "[quicksave] loaded /private/tmp/pikmin-qs-product-green/cases/long-base/save/quicksave/0.qsv: tick 26990 of day 1 (tick 27000) hash 3926b35b15e35d85 matched; replay 24.54 s (1100 ticks/s), 24.92 s since the load began; live input from the next tick",
+            "[QS-AUDIT] PASS replay_frames=26990 replay_gl=0 live_gl=25613 null_off=1"
+          ]
+        },
+        {
+          "name": "product-cancel",
+          "exit": 0,
+          "seconds": 15.9,
+          "events": [
+            "[quicksave] load of /private/tmp/pikmin-qs-product-green/cases/long-base/save/quicksave/0.qsv cancelled at tick 6094 of 26990 of the replay; leaving the day for the card select",
+            "[QS-AUDIT] PASS replay_frames=6094 replay_gl=0 live_gl=6501 null_off=1"
+          ]
+        }
+      ]
+    },
+    {
+      "exe_sha256": "baf9ce454a181e9f8459fefbcb451e9cb3fa706af347edcf0127841f4e9cf92f",
+      "cases": [
+        {
+          "name": "vs-arena-base",
+          "exit": 0,
+          "seconds": 12.03,
+          "events": []
+        },
+        {
+          "name": "vs-arena-load",
+          "exit": 0,
+          "seconds": 6.5,
+          "events": [
+            "[quicksave] loaded /private/tmp/pikmin-qs-product-scenes-v2/vs-arena-base/save/quicksave/0.qsv: tick 1990 of day 1 (tick 2000) hash cc79d15015ef940b matched; replay 2.10 s (949 ticks/s), 2.39 s since the load began; live input from the next tick",
+            "[QS-AUDIT] PASS replay_frames=1990 replay_gl=0 live_gl=30623 null_off=1"
+          ]
+        },
+        {
+          "name": "repeat-base",
+          "exit": 0,
+          "seconds": 9.82,
+          "events": []
+        },
+        {
+          "name": "repeat-loads",
+          "exit": 0,
+          "seconds": 17.01,
+          "events": [
+            "[quicksave] loaded /private/tmp/pikmin-qs-product-scenes-v2/repeat-loads/save/quicksave/0.qsv: tick 789 of day 1 (tick 799) hash 2936582d0d237cbc matched; replay 0.97 s (812 ticks/s), 0.98 s since the load began; live input from the next tick",
+            "[QS-AUDIT] PASS replay_frames=789 replay_gl=0 live_gl=11276 null_off=1",
+            "[quicksave] loaded /private/tmp/pikmin-qs-product-scenes-v2/repeat-loads/save/quicksave/0.qsv: tick 789 of day 1 (tick 799) hash 2936582d0d237cbc matched; replay 0.92 s (862 ticks/s), 0.92 s since the load began; live input from the next tick",
+            "[QS-AUDIT] PASS replay_frames=789 replay_gl=0 live_gl=11276 null_off=1",
+            "[quicksave] loaded /private/tmp/pikmin-qs-product-scenes-v2/repeat-loads/save/quicksave/0.qsv: tick 789 of day 1 (tick 799) hash 2936582d0d237cbc matched; replay 1.63 s (484 ticks/s), 1.64 s since the load began; live input from the next tick",
+            "[QS-AUDIT] PASS replay_frames=789 replay_gl=0 live_gl=11276 null_off=1"
+          ]
+        }
+      ]
+    },
+    {
+      "exe_sha256": "4649b5f4b8053e0da108727bef48632ae418eee9077105e0f976e03285ced0ea",
+      "cases": [
+        {
+          "name": "forest-hope-base",
+          "exit": 0,
+          "seconds": 16.44,
+          "events": [
+            "[QS-AREA] stage=1 file=stages/stage1.ini"
+          ],
+          "live_teki": [
+            "live_teki=0",
+            "live_teki=38"
+          ]
+        },
+        {
+          "name": "forest-hope-load",
+          "exit": 0,
+          "seconds": 8.18,
+          "events": [
+            "[quicksave] loaded /private/tmp/pikmin-qs-product-areas/forest-hope-base/save/quicksave/1.qsv: tick 2799 of day 4 (tick 3045) hash dac9a188c32726c1 matched; replay 2.81 s (996 ticks/s), 3.10 s since the load began; live input from the next tick",
+            "[QS-AUDIT] PASS replay_frames=2799 replay_gl=0 live_gl=29529 null_off=1"
+          ],
+          "live_teki": [
+            "live_teki=0",
+            "live_teki=38"
+          ]
+        },
+        {
+          "name": "forest-navel-base",
+          "exit": 0,
+          "seconds": 16.4,
+          "events": [
+            "[QS-AREA] stage=2 file=stages/stage2.ini"
+          ],
+          "live_teki": [
+            "live_teki=0",
+            "live_teki=58"
+          ]
+        },
+        {
+          "name": "forest-navel-load",
+          "exit": 0,
+          "seconds": 8.08,
+          "events": [
+            "[quicksave] loaded /private/tmp/pikmin-qs-product-areas/forest-navel-base/save/quicksave/1.qsv: tick 2799 of day 4 (tick 3045) hash 89bab07405d0dfaf matched; replay 3.08 s (908 ticks/s), 3.39 s since the load began; live input from the next tick",
+            "[QS-AUDIT] PASS replay_frames=2799 replay_gl=0 live_gl=30109 null_off=1"
+          ],
+          "live_teki": [
+            "live_teki=0",
+            "live_teki=58"
+          ]
+        }
+      ]
+    }
+  ],
+  "host_tests": {
+    "passed": 37,
+    "total": 38,
+    "known_failure": "pc_tev_shader_test: uChan0AlphaEn/uChan0AlphaDiff"
+  },
+  "red": "Old implementation exited 88 at tick4801: 24010 raw GL calls."
+}

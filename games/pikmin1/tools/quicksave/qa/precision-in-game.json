@@ -1,0 +1,18 @@
+[
+  {
+    "name": "precision-in-game",
+    "mode": "coop",
+    "ticks": 6400,
+    "env": {
+      "PIKMIN_QS_SPROUTS": "4:30:12",
+      "PIKMIN_QS_SUNSET": "4:300",
+      "PIKMIN_QS_DIRECT_SLOT": "1",
+      "PIKMIN_QS_PLUCK": "5:360:420:480:540:600:660",
+      "PIKMIN_QS_MENU_A": "1",
+      "PIKMIN_QS_DSCRIPT": "{scripts}/g-day5.txt",
+      "PIKMIN_QS_DUMP_OFFS": "99,400,700,1000,1001,1600",
+      "PIKMIN_QS_DUMP_FILE": "{out}/precision-in-game/dump.txt",
+      "PIKMIN_QS_LOAD_DAY": "5:1300:{out}/precision-base/save/quicksave/1.qsv"
+    }
+  }
+]

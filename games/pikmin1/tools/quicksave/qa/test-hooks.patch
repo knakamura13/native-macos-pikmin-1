@@ -1,0 +1,979 @@
+--- a/games/pikmin1/pc_port/audio/pc_audio.cpp
++++ b/games/pikmin1/pc_port/audio/pc_audio.cpp
+@@ -481,7 +481,27 @@
+         dst[frame * 2] = clamp_s16(mixedLeft);
+         dst[frame * 2 + 1] = clamp_s16(mixedRight);
+     }
++    static const bool qsAudioLog = std::getenv("PIKMIN_QS_AUDIOLOG") != nullptr;
++    long qsMixNonzero = 0;
++    if (qsAudioLog) for (int qi = 0; qi < byteCount / 2; ++qi) qsMixNonzero += reinterpret_cast<s16*>(output)[qi] != 0;
+     if (sOutputMuted.load(std::memory_order_relaxed)) std::memset(output, 0, static_cast<size_t>(byteCount));
++    if (qsAudioLog) {
++        static long qsMix = 0, qsOut = 0, qsSamples = 0;
++        static Uint32 qsLast = 0;
++        long outNonzero = 0;
++        for (int qi = 0; qi < byteCount / 2; ++qi) outNonzero += reinterpret_cast<s16*>(output)[qi] != 0;
++        qsMix += qsMixNonzero;
++        qsOut += outNonzero;
++        qsSamples += byteCount / 2;
++        const Uint32 now = SDL_GetTicks();
++        if (now - qsLast >= 1000) {
++            printf("[QS-AUDIO] ms=%u muted=%d samples=%ld mixNonzero=%ld outNonzero=%ld\n", now,
++                   sOutputMuted.load(std::memory_order_relaxed) ? 1 : 0, qsSamples, qsMix, qsOut);
++            fflush(stdout);
++            qsMix = qsOut = qsSamples = 0;
++            qsLast = now;
++        }
++    }
+ 
+     if (sDMAReadCursor >= sDMAQueue.size()) {
+         sDMAQueue.clear();
+--- a/games/pikmin1/pc_port/pc_window.cpp
++++ b/games/pikmin1/pc_port/pc_window.cpp
+@@ -1100,12 +1100,319 @@
+         || abs(rx) > noticeZone || abs(ry) > noticeZone;
+ }
+ 
++// ---- QS TEST HOOK (scratch only, never committed) ----
++// PIKMIN_QS_SCRIPT=<file>, one event per line, "<tick> <kind> [args]"; <tick>
++// is the 1-based tick whose sim consumes the input:
++//   motion dx dy | wheel n | button mask-hex hold | fp
++//   bomb p | lockon p | charge p          window press queues of player p
++//   swarm hold                            Swarm button held (player 0)
++//   drag v                                camera drag of player 0
++//   vpad                                  attach a virtual game controller
++//   vpaddown hold                         its D-pad Down held
++//   paddown hold                          D-pad Down as the gamepad reader sets it
++//   photo                                 photo mode toggle request
++//   photomove x y hold                    photo mode touch move
++//   stick x y hold                        pad 0 main stick override
++//   setting Label_With_Underscores dir    F1 row change through the rows API
++//   settingsreset                         the "Reset all settings" row
++#include "settings/pc_settings_rows.h"
++#include "pc_photo_mode.h"
++struct QsEv { unsigned tick; int kind; float a; float b; int hold; std::string s; };
++static std::vector<QsEv> sQsEvents;
++static bool sQsLoaded = false;
++static unsigned sQsLastTick = 0xFFFFFFFFu;
++static SDL_Joystick* sQsVJoy = nullptr;
++static void qsLoad() {
++    if (sQsLoaded) return;
++    sQsLoaded = true;
++    const char* path = std::getenv("PIKMIN_QS_SCRIPT");
++    if (path == nullptr || *path == '\0') return;
++    FILE* f = std::fopen(path, "r");
++    if (f == nullptr) { printf("[QS-INJ] cannot open %s\n", path); return; }
++    char line[256];
++    while (std::fgets(line, sizeof(line), f)) {
++        unsigned tick = 0; char kind[32] = {}; char a[64] = {}; char b[64] = {}; char c[64] = {};
++        const int n = std::sscanf(line, "%u %31s %63s %63s %63s", &tick, kind, a, b, c);
++        if (n < 2) continue;
++        QsEv ev{ tick, -1, 0.0f, 0.0f, 0, std::string() };
++        if (std::strcmp(kind, "motion") == 0 && n >= 4) { ev.kind = 0; ev.a = std::strtof(a, nullptr); ev.b = std::strtof(b, nullptr); }
++        else if (std::strcmp(kind, "wheel") == 0) { ev.kind = 1; ev.a = std::strtof(a, nullptr); }
++        else if (std::strcmp(kind, "button") == 0 && n >= 4) { ev.kind = 2; ev.a = (float)std::strtoul(a, nullptr, 16); ev.hold = std::atoi(b); }
++        else if (std::strcmp(kind, "fp") == 0) { ev.kind = 3; }
++        else if (std::strcmp(kind, "bomb") == 0) { ev.kind = 4; ev.a = (float)std::atoi(a); }
++        else if (std::strcmp(kind, "lockon") == 0) { ev.kind = 5; ev.a = (float)std::atoi(a); }
++        else if (std::strcmp(kind, "charge") == 0) { ev.kind = 6; ev.a = (float)std::atoi(a); }
++        else if (std::strcmp(kind, "swarm") == 0) { ev.kind = 7; ev.hold = std::atoi(a); }
++        else if (std::strcmp(kind, "drag") == 0) { ev.kind = 8; ev.a = std::strtof(a, nullptr); }
++        else if (std::strcmp(kind, "vpad") == 0) { ev.kind = 9; }
++        else if (std::strcmp(kind, "vpaddown") == 0) { ev.kind = 10; ev.hold = std::atoi(a); }
++        else if (std::strcmp(kind, "paddown") == 0) { ev.kind = 11; ev.hold = std::atoi(a); }
++        else if (std::strcmp(kind, "photo") == 0) { ev.kind = 12; }
++        else if (std::strcmp(kind, "photomove") == 0 && n >= 5) { ev.kind = 13; ev.a = std::strtof(a, nullptr); ev.b = std::strtof(b, nullptr); ev.hold = std::atoi(c); }
++        else if (std::strcmp(kind, "stick") == 0 && n >= 5) { ev.kind = 14; ev.a = std::strtof(a, nullptr); ev.b = std::strtof(b, nullptr); ev.hold = std::atoi(c); }
++        else if (std::strcmp(kind, "setting") == 0 && n >= 4) { ev.kind = 15; ev.s = a; for (char& ch : ev.s) if (ch == '_') ch = ' '; ev.a = (float)std::atoi(b); }
++        else if (std::strcmp(kind, "settingsreset") == 0) { ev.kind = 16; ev.s = "Reset all settings to defaults"; }
++        else if (std::strcmp(kind, "settingok") == 0 && n >= 3) { ev.kind = 17; ev.s = a; for (char& ch : ev.s) if (ch == '_') ch = ' '; }
++        if (ev.kind >= 0) sQsEvents.push_back(ev);
++    }
++    std::fclose(f);
++    printf("[QS-INJ] loaded %u events from %s\n", (unsigned)sQsEvents.size(), path);
++    fflush(stdout);
++}
++static const QsEv* qsHeld(int kind) {
++    qsLoad();
++    const unsigned next = pc_netplay_tick() + 1;
++    for (const QsEv& ev : sQsEvents) {
++        if (ev.kind == kind && next >= ev.tick && next < ev.tick + (unsigned)ev.hold) return &ev;
++    }
++    return nullptr;
++}
++static bool qsFindRow(const std::string& label, int* group, int* row) {
++    for (int g = 0; g < PC_SET_GROUP_COUNT; g++) {
++        const int n = pc_settings_rows_count(g);
++        for (int r = 0; r < n; r++) {
++            const char* l = pc_settings_row_label(g, r);
++            if (l != nullptr && label == l) { *group = g; *row = r; return true; }
++        }
++    }
++    return false;
++}
++static void qsSettingAttempt(const QsEv& ev, unsigned next) {
++    int g = -1, r = -1;
++    if (!qsFindRow(ev.s, &g, &r)) { printf("[QS-SET] tick=%u row '%s' not found\n", next, ev.s.c_str()); return; }
++    char before[96] = {}, after[96] = {};
++    pc_settings_row_value(g, r, before, sizeof(before));
++    const unsigned long long hashBefore = pc_settings_sim_config_hash();
++    const bool enabled = pc_settings_row_enabled(g, r);
++    pc_settings_rows_begin();
++    pc_settings_row_change(g, r, ev.kind >= 16 ? 0 : (int)ev.a, ev.kind >= 16);
++    pc_settings_rows_end(true);
++    pc_settings_row_value(g, r, after, sizeof(after));
++    printf("[QS-SET] tick=%u row '%s' (g%d r%d) enabled=%d locked=%d value '%s' -> '%s' simhash %016llx -> %016llx help='%s'\n",
++           next, ev.s.c_str(), g, r, enabled ? 1 : 0, pc_settings_sim_locked(), before, after, hashBefore,
++           pc_settings_sim_config_hash(), pc_settings_row_help(g, r));
++}
++void pc_coop_direct_set_slot(int slot);
++static void qsQuickSaveHooks() {
++    static bool init = false;
++    static std::vector<unsigned> saves;
++    static unsigned loadTick = 0;
++    static std::string loadPath;
++    static unsigned last = 0xFFFFFFFFu;
++    if (!init) {
++        init = true;
++        // PIKMIN_QS_DIRECT_SLOT=<1-3>: --coop-direct continues that card file.
++        if (const char* s = std::getenv("PIKMIN_QS_DIRECT_SLOT")) {
++            pc_coop_direct_set_slot(std::atoi(s));
++            printf("[QS-HOOK] co-op direct boot into file %d\n", std::atoi(s));
++        }
++        if (const char* s = std::getenv("PIKMIN_QS_SAVE_AT")) {
++            const char* p = s;
++            while (*p) {
++                char* end = nullptr;
++                const unsigned long v = std::strtoul(p, &end, 10);
++                if (end == p) break;
++                saves.push_back((unsigned)v);
++                p = (*end == ',') ? end + 1 : end;
++            }
++        }
++        if (const char* s = std::getenv("PIKMIN_QS_LOAD_AT")) {
++            char* end = nullptr;
++            loadTick = (unsigned)std::strtoul(s, &end, 10);
++            if (end && *end == ':') loadPath = end + 1;
++        }
++    }
++    const unsigned next = pc_netplay_tick() + 1;
++    if (next == last) return;
++    last = next;
++    for (unsigned& t : saves) {
++        if (t != 0 && t == next) {
++            printf("[QS-HOOK] tick=%u quick save action\n", next);
++            fflush(stdout);
++            t = 0;
++            pc_quicksave_request_save();
++        }
++    }
++    if (loadTick != 0 && loadTick == next) {
++        printf("[QS-HOOK] tick=%u quick load action %s\n", next, loadPath.c_str());
++        fflush(stdout);
++        loadTick = 0;
++        pc_quicksave_request_load_file(loadPath.c_str());
++    }
++}
++extern int gQsHookDay;
++extern unsigned gQsHookDayStart;
++extern bool gQsHookInDay;
++static std::vector<unsigned> sQsDaySaves;
++static unsigned sQsDayLoadTick = 0;
++static std::string sQsDayLoadPath;
++void qsHookDayBegin(int day, unsigned start) {
++    qsLoad();
++    gQsHookDay = day;
++    gQsHookDayStart = start;
++    gQsHookInDay = true;
++    printf("[QS-HOOK] day %d begins at tick %u\n", day, start);
++    // A day's script is placed once: a load re-enters the day at the same
++    // tick numbers, and the events already placed stay.
++    static std::vector<int> sQsScriptDays;
++    bool scripted = false;
++    for (int d : sQsScriptDays) scripted = scripted || d == day;
++    sQsScriptDays.push_back(day);
++    if (const char* path = scripted ? nullptr : std::getenv("PIKMIN_QS_DSCRIPT")) {
++        if (FILE* f = std::fopen(path, "r")) {
++            char line[256];
++            int added = 0;
++            while (std::fgets(line, sizeof(line), f)) {
++                int d = 0; unsigned o = 0; char rest[200] = {};
++                if (std::sscanf(line, "%d %u %199[^\n]", &d, &o, rest) != 3 || d != day) continue;
++                char conv[256];
++                std::snprintf(conv, sizeof(conv), "%u %s\n", start + o, rest);
++                unsigned tick = 0; char kind[32] = {}; char a[64] = {}; char b[64] = {}; char c[64] = {};
++                const int n = std::sscanf(conv, "%u %31s %63s %63s %63s", &tick, kind, a, b, c);
++                QsEv ev{ tick, -1, 0.0f, 0.0f, 0, std::string() };
++                if (std::strcmp(kind, "motion") == 0 && n >= 4) { ev.kind = 0; ev.a = std::strtof(a, nullptr); ev.b = std::strtof(b, nullptr); }
++                else if (std::strcmp(kind, "wheel") == 0) { ev.kind = 1; ev.a = std::strtof(a, nullptr); }
++                else if (std::strcmp(kind, "button") == 0 && n >= 4) { ev.kind = 2; ev.a = (float)std::strtoul(a, nullptr, 16); ev.hold = std::atoi(b); }
++                else if (std::strcmp(kind, "bomb") == 0) { ev.kind = 4; ev.a = (float)std::atoi(a); }
++                else if (std::strcmp(kind, "stick") == 0 && n >= 5) { ev.kind = 14; ev.a = std::strtof(a, nullptr); ev.b = std::strtof(b, nullptr); ev.hold = std::atoi(c); }
++                if (ev.kind >= 0) { sQsEvents.push_back(ev); added++; }
++            }
++            std::fclose(f);
++            printf("[QS-HOOK] day %d: %d day-script events from tick %u\n", day, added, start);
++        }
++    }
++    if (const char* s = scripted ? nullptr : std::getenv("PIKMIN_QS_SAVE_DAY")) {
++        const char* p = s;
++        while (*p) {
++            int d = 0; unsigned o = 0; int used = 0;
++            if (std::sscanf(p, "%d:%u%n", &d, &o, &used) != 2) break;
++            if (d == day) sQsDaySaves.push_back(start + o);
++            p += used;
++            if (*p == ',') p++;
++        }
++    }
++    if (const char* s = scripted ? nullptr : std::getenv("PIKMIN_QS_LOAD_DAY")) {
++        int d = 0; unsigned o = 0; int used = 0;
++        if (std::sscanf(s, "%d:%u:%n", &d, &o, &used) == 2 && d == day && used > 0) {
++            sQsDayLoadTick = start + o;
++            sQsDayLoadPath = s + used;
++        }
++    }
++    fflush(stdout);
++}
++static void qsDayHooks() {
++    const unsigned next = pc_netplay_tick() + 1;
++    static unsigned last = 0xFFFFFFFFu;
++    if (next == last) return;
++    last = next;
++    for (unsigned& t : sQsDaySaves) {
++        if (t != 0 && t == next) {
++            printf("[QS-HOOK] tick=%u quick save action (day %d, offset %u)\n", next, gQsHookDay, next - gQsHookDayStart);
++            fflush(stdout);
++            t = 0;
++            pc_quicksave_request_save();
++        }
++    }
++    if (sQsDayLoadTick != 0 && sQsDayLoadTick == next) {
++        printf("[QS-HOOK] tick=%u quick load action %s\n", next, sQsDayLoadPath.c_str());
++        fflush(stdout);
++        sQsDayLoadTick = 0;
++        pc_quicksave_request_load_file(sQsDayLoadPath.c_str());
++    }
++}
++static void qsInjectStream() {
++    qsLoad();
++    qsQuickSaveHooks();
++    qsDayHooks();
++    if (sQsEvents.empty()) return;
++    const unsigned next = pc_netplay_tick() + 1;
++    if (next == sQsLastTick) return;
++    sQsLastTick = next;
++    if (sQsVJoy != nullptr) {
++        const bool down = qsHeld(10) != nullptr;
++        const int setRc = SDL_JoystickSetVirtualButton(sQsVJoy, SDL_CONTROLLER_BUTTON_DPAD_DOWN, down ? 1 : 0);
++        static bool sQsPrevDown = false;
++        if (down || sQsPrevDown) {
++            SDL_JoystickUpdate();
++            printf("[QS-VPAD] tick=%u want=%d setRc=%d joyBtn=%d ctl=%p explicit=%d gcBtn=%d held=%d\n", next, down ? 1 : 0, setRc,
++                   (int)SDL_JoystickGetButton(sQsVJoy, SDL_CONTROLLER_BUTTON_DPAD_DOWN), (void*)sControllers[0],
++                   sPlayerDeviceExplicit ? 1 : 0,
++                   sControllers[0] ? (int)SDL_GameControllerGetButton(sControllers[0], SDL_CONTROLLER_BUTTON_DPAD_DOWN) : -1,
++                   sPadDpadDownHeld[0] ? 1 : 0);
++        }
++        sQsPrevDown = down;
++    }
++    const QsEv* pm = qsHeld(13);
++    pc_photo_mode_set_touch_move(pm ? pm->a : 0.0f, pm ? pm->b : 0.0f);
++    for (const QsEv& ev : sQsEvents) {
++        if (ev.tick != next) continue;
++        if (ev.kind == 0) {
++            pc_window_add_cursor_delta(ev.a, ev.b);
++            printf("[QS-INJ] tick=%u motion %a %a\n", next, ev.a, ev.b);
++        } else if (ev.kind == 1) {
++            SDL_Event e;
++            std::memset(&e, 0, sizeof(e));
++            e.type            = SDL_MOUSEWHEEL;
++            e.wheel.y         = (int)ev.a;
++            e.wheel.preciseY  = ev.a;
++            e.wheel.direction = SDL_MOUSEWHEEL_NORMAL;
++            e.wheel.windowID  = SDL_GetWindowID(sWindow);
++            const int pushed  = SDL_PushEvent(&e);
++            sMouseWheelSteps  = std::clamp(sMouseWheelSteps + (int)ev.a, -kMaxPendingWheelSteps, kMaxPendingWheelSteps);
++            printf("[QS-INJ] tick=%u wheel %d pushed=%d pending=%d\n", next, (int)ev.a, pushed, sMouseWheelSteps);
++        } else if (ev.kind == 3) {
++            pc_window_request_firstperson_press();
++            printf("[QS-INJ] tick=%u first-person toggle\n", next);
++        } else if (ev.kind == 4) {
++            pc_window_request_bomb_press((int)ev.a);
++            printf("[QS-INJ] tick=%u bomb p%d\n", next, (int)ev.a);
++        } else if (ev.kind == 5) {
++            pc_window_request_lockon_press((int)ev.a);
++            printf("[QS-INJ] tick=%u lockon p%d\n", next, (int)ev.a);
++        } else if (ev.kind == 6) {
++            pc_window_request_charge_press((int)ev.a);
++            printf("[QS-INJ] tick=%u charge p%d\n", next, (int)ev.a);
++        } else if (ev.kind == 8) {
++            pc_window_add_camera_drag_player(0, ev.a);
++            printf("[QS-INJ] tick=%u drag %a\n", next, ev.a);
++        } else if (ev.kind == 9) {
++            const int idx = SDL_JoystickAttachVirtual(SDL_JOYSTICK_TYPE_GAMECONTROLLER, SDL_CONTROLLER_AXIS_MAX,
++                                                      SDL_CONTROLLER_BUTTON_MAX, 0);
++            sQsVJoy = idx >= 0 ? SDL_JoystickOpen(idx) : nullptr;
++            printf("[QS-INJ] tick=%u vpad attach idx=%d joy=%p gc=%d err='%s'\n", next, idx, (void*)sQsVJoy,
++                   idx >= 0 ? (int)SDL_IsGameController(idx) : -1, SDL_GetError());
++        } else if (ev.kind == 12) {
++            pc_photo_mode_request_toggle();
++            printf("[QS-INJ] tick=%u photo toggle request\n", next);
++        } else if (ev.kind == 15 || ev.kind == 16 || ev.kind == 17) {
++            static std::vector<const QsEv*> consumed;
++            if (std::find(consumed.begin(), consumed.end(), &ev) != consumed.end()) continue;
++            consumed.push_back(&ev);
++            qsSettingAttempt(ev, next);
++        }
++    }
++    fflush(stdout);
++}
++static u16 qsButtons() {
++    qsLoad();
++    const unsigned next = pc_netplay_tick() + 1;
++    u16 mask = 0;
++    for (const QsEv& ev : sQsEvents) {
++        if (ev.kind == 2 && next >= ev.tick && next < ev.tick + (unsigned)ev.hold) mask |= (u16)ev.a;
++    }
++    static const bool menuA = std::getenv("PIKMIN_QS_MENU_A") != nullptr;
++    if (menuA && !gQsHookInDay && next >= 60 && next % 40 < 2) mask |= PAD_BUTTON_A;
++    return mask;
++}
++// ---- end QS TEST HOOK ----
++
+ void pc_window_poll_events(PADStatus* pad) {
+ #if PIKI_USE_JAUDIO
+     PikiJAudioTick();
+ #else
+     pc_audio_tick();
+ #endif
++    qsInjectStream(); // QS TEST HOOK
+ 
+     SDL_Event event;
+     while (SDL_PollEvent(&event)) {
+@@ -1188,6 +1495,7 @@
+                     steps = -steps;
+                 }
+                 sMouseWheelSteps = std::clamp(sMouseWheelSteps + steps, -kMaxPendingWheelSteps, kMaxPendingWheelSteps);
++                if (std::getenv("PIKMIN_QS_TRACE")) printf("[QS-WHEELEV] y=%d preciseY=%f steps=%d pending=%d\n", event.wheel.y, event.wheel.preciseY, steps, sMouseWheelSteps); // QS TEST HOOK
+                 break;
+             }
+             case SDL_WINDOWEVENT:
+@@ -1392,6 +1700,7 @@
+     bool usedKeyboard = button != 0 || dirX != 0 || dirY != 0 || cdirX != 0 || cdirY != 0;
+     bool usedGamepad = false;
+     sSwarmHeld = held(PC_KEY_ACT_SWARM);
++    if (qsHeld(7) != nullptr) sSwarmHeld = true; // QS TEST HOOK
+     // Netplay input ownership: a `gamepad` peer ignores every key.
+     if (PC_NETPLAY_IGNORE_KEYBOARD) {
+         button = 0;
+@@ -1431,6 +1740,7 @@
+         usedGamepad = pc_window_read_gamepad(sController, button, stickX, stickY, substickX, substickY,
+                                              triggerL, triggerR, sSwarmHeld);
+     }
++    if (!sController) { const bool qd = qsHeld(11) != nullptr; sPadDpadDownHeld[0] = qd; if (qd) { button |= PAD_BUTTON_DOWN; sSwarmHeld = true; } } // QS TEST HOOK
+     // Flanco del swarm de P1 una vez juntos teclado y mando (Charge).
+     if (sSwarmHeld && !sSwarmWasDown[0]) sSwarmPending[0] = true;
+     sSwarmWasDown[0] = sSwarmHeld;
+@@ -1547,7 +1857,8 @@
+         (void)mouseState;
+     }
+ 
+-    pad[0].button      = button;
++    pad[0].button      = button | qsButtons(); // QS TEST HOOK
++    if (const QsEv* qs = qsHeld(14)) { stickX = (s8)qs->a; stickY = (s8)qs->b; } // QS TEST HOOK
+     pad[0].stickX     = stickX;
+     pad[0].stickY     = stickY;
+     pad[0].substickX  = substickX;
+--- a/games/pikmin1/pc_port/quicksave/pc_quicksave.cpp
++++ b/games/pikmin1/pc_port/quicksave/pc_quicksave.cpp
+@@ -563,7 +563,7 @@
+ // renders that small.
+ void lowResBegin()
+ {
+-	if (sLowRes) return;
++	if (sLowRes || std::getenv("PIKMIN_QS_NO_LOWRES") != nullptr) return;
+ 	int w = 0, h = 0;
+ 	pc_gfx_get_render_size(&w, &h);
+ 	if (w <= kCatchupMaxW && h <= kCatchupMaxH) return;
+@@ -691,7 +691,8 @@
+ 		failLoad("the replayed input differs from the saved input");
+ 	}
+ 	pc_input_log_replay_memory_end();
+-	const bool viewOk  = sLoad.view.empty() || pc_gamecore_view_state_restore(sLoad.view.data(), sLoad.view.size());
++	const bool viewOk  = std::getenv("PIKMIN_QS_NO_VIEW") != nullptr || sLoad.view.empty()
++	                    || pc_gamecore_view_state_restore(sLoad.view.data(), sLoad.view.size());
+ 	const bool localOk = localStateRestore(sLoad.local);
+ 	endCatchup();
+ 	const double replaySecs = secondsSince(sReplayStart);
+@@ -869,9 +870,13 @@
+ 	std::fflush(stdout);
+ }
+ 
++void qsHookDump(const char* tag);
++void qsHookDayBegin(int day, unsigned start);
++void qsHookTickEnd();
+ void pc_quicksave_day_prepare(void)
+ {
+ 	if (!sEnabled) return;
++	qsHookDump("prepare");
+ 	sPrepared = true;
+ 	Day d;
+ 	const Mode mode = currentMode();
+@@ -940,6 +945,7 @@
+ 	sDay.valid        = true;
+ 	sRecords.clear();
+ 	if (sDay.eligible) sRecords.reserve(60000 * kRecordBytes);
++	qsHookDayBegin(sDay.day, sDay.dayStartTick);
+ 	if (sPhase != kDay) return;
+ 
+ 	if (sDay.day != sLoad.day || sDay.stage != sLoad.stage) {
+@@ -1108,6 +1114,7 @@
+ void pc_quicksave_tick_end(void)
+ {
+ 	if (!sEnabled) return;
++	qsHookTickEnd();
+ 	if (sDay.valid && !dayRunning()) {
+ 		sDay.valid = false;
+ 		std::vector<uint8_t>().swap(sRecords);
+--- a/games/pikmin1/src/plugPikiKando/gameCoreSection.cpp
++++ b/games/pikmin1/src/plugPikiKando/gameCoreSection.cpp
+@@ -27,6 +27,7 @@
+ #include "ItemObject.h"
+ #include "UfoItem.h"
+ #include "TekiPersonality.h"
++#include "Interactions.h"
+ #include "teki.h"
+ #include <algorithm>
+ #include <vector>
+@@ -2660,6 +2661,260 @@
+ 	fflush(stderr);
+ }
+ 
++// ---- QS 2B HOOK (scratch only) ----
++#include "PaniPikiAnimator.h"
++static void qsHookPluck();
++int gQsHookDay = 0;
++unsigned gQsHookDayStart = 0;
++bool gQsHookInDay = false;
++static FILE* qsHookDumpFile()
++{
++	static FILE* f = nullptr;
++	static bool tried = false;
++	if (!tried) {
++		tried = true;
++		if (const char* p = getenv("PIKMIN_QS_DUMP_FILE")) f = fopen(p, "a");
++	}
++	return f;
++}
++void qsHookDump(const char* tag)
++{
++	FILE* f = qsHookDumpFile();
++	if (!f) return;
++	fprintf(f, "== %s tick=%u day=%d stage=%d\n", tag, pc_netplay_tick(), gameflow.mWorldClock.mCurrentDay,
++	        flowCont.mCurrentStage ? (int)flowCont.mCurrentStage->mStageID : -1);
++	if (itemMgr && naviMgr) {
++		int i = 0;
++		Iterator it(itemMgr->getPikiHeadMgr());
++		CI_LOOP(it)
++		{
++			Creature* c = *it;
++			if (c->mObjType != OBJTYPE_Pikihead) continue;
++			PikiHeadItem* s = static_cast<PikiHeadItem*>(c);
++			AState<AICreature>* st = s->getCurrState();
++			fprintf(f, "sprout %d pos=(%a %a %a) rot=(%a %a %a) face=%a color=%d stage=%d state=%d\n", i++, s->mSRT.t.x,
++			        s->mSRT.t.y, s->mSRT.t.z, s->mSRT.r.x, s->mSRT.r.y, s->mSRT.r.z, s->mFaceDirection, s->mSeedColor,
++			        s->mFlowerStage, st ? st->getID() : -1);
++		}
++		Iterator nit(naviMgr);
++		CI_LOOP(nit)
++		{
++			Navi* n = static_cast<Navi*>(*nit);
++			fprintf(f, "navi %d pos=(%a %a %a) face=%a\n", n->mNaviID, n->mSRT.t.x, n->mSRT.t.y, n->mSRT.t.z, n->mFaceDirection);
++		}
++		if (pikiMgr) {
++			int np = 0;
++			Iterator pit(pikiMgr);
++			CI_LOOP(pit)
++			{
++				Piki* p = static_cast<Piki*>(*pit);
++				fprintf(f, "piki %d color=%d happa=%d pos=(%a %a %a) face=%a\n", np++, p->mColor, p->mHappa, p->mSRT.t.x,
++				        p->mSRT.t.y, p->mSRT.t.z, p->mFaceDirection);
++			}
++		}
++	}
++	FOREACH_NODE(StageInfo, flowCont.mStageList.mChild, stage)
++	{
++		int i = 0;
++		FOREACH_NODE(BPikiInf, stage->mStageInf.mBPikiInfMgr.mActiveList.mChild, inf)
++		{
++			fprintf(f, "binf stage=%d %d pos=(%a %a %a) rot=(%a %a %a) col=%d key=%d\n", (int)stage->mStageID, i++,
++			        inf->mPosition.x, inf->mPosition.y, inf->mPosition.z, inf->mRotation.x, inf->mRotation.y, inf->mRotation.z,
++			        inf->mPikiColour, inf->mNextKeyIndex);
++		}
++	}
++	if (playerState) {
++		PlayerState* ps = playerState;
++		fprintf(f, "ps living=%d born=%d dead=%d sprouted=%d lostBattle=%d leftBehind=%d plucked=%d currParts=%d req=%d "
++		           "cont=%d tut=%d disp=%d shipfx=%d upg=%d regparts=%d extinct=%d dayend=%d pilot=%d lastUpd=%d\n",
++		        ps->mLivingPikiNum, ps->mTotalBornPikiNum, ps->mTotalDeadPikiNum, ps->mSproutedNum, ps->mLostBattlePikis,
++		        ps->mLeftBehindPikis, ps->mTotalPluckedPikiCount, ps->mCurrParts, ps->mRequiredUfoPartCount, ps->mContainerFlag,
++		        ps->mIsTutorialMode, ps->mDisplayPikiFlag, ps->mShipEffectPartFlag, ps->mShipUpgradeLevel,
++		        ps->mTotalRegisteredParts, ps->mHasExtinctionDemoPlayed, ps->mInDayEnd, ps->mIsNaviPilot, ps->mLastUpdatedTime);
++	}
++	fprintf(f, "onion counts:");
++	for (int c = 0; c < PikiColorCount; c++)
++		for (int h = 0; h < PikiHappaCount; h++) fprintf(f, " %d", pikiInfMgr.mPikiCounts[c][h]);
++	fprintf(f, "\nclock tod=%a day=%d\n", gameflow.mWorldClock.mTimeOfDay, gameflow.mWorldClock.mCurrentDay);
++	{
++		int tekiAlive = 0;
++		f32 healthSum = 0.0f;
++		f32 healthMin = 0.0f;
++		int nearType = -1;
++		f32 nearDist = -1.0f;
++		f32 nearHealth = -1.0f;
++		Navi* n0 = naviMgr ? naviMgr->getNavi() : nullptr;
++		if (tekiMgr) {
++			Iterator enemies(tekiMgr);
++			CI_LOOP(enemies)
++			{
++				Teki* t = static_cast<Teki*>(*enemies);
++				if (!t->isAlive()) continue;
++				++tekiAlive;
++				healthSum += t->mHealth;
++				if (tekiAlive == 1 || t->mHealth < healthMin) healthMin = t->mHealth;
++				if (n0) {
++					const f32 dx = t->mSRT.t.x - n0->mSRT.t.x;
++					const f32 dz = t->mSRT.t.z - n0->mSRT.t.z;
++					const f32 dist = sqrtf(dx * dx + dz * dz);
++					if (nearDist < 0.0f || dist < nearDist) {
++						nearDist   = dist;
++						nearType   = (int)t->mTekiType;
++						nearHealth = t->mHealth;
++					}
++				}
++			}
++		}
++		int bombs = 0, gens = 0;
++		if (itemMgr) {
++			Iterator items(itemMgr);
++			CI_LOOP(items)
++			{
++				Creature* c = *items;
++				if (c->mObjType == OBJTYPE_Bomb) ++bombs;
++				else if (c->mObjType == OBJTYPE_BombGen) ++gens;
++			}
++		}
++		int formation = 0, attack = 0, flying = 0, putbomb = 0, holdingBomb = 0;
++		if (pikiMgr) {
++			Iterator pit(pikiMgr);
++			CI_LOOP(pit)
++			{
++				Piki* p = static_cast<Piki*>(*pit);
++				if (!p->isAlive()) continue;
++				if (p->mMode == PikiMode::FormationMode) ++formation;
++				else if (p->mMode == PikiMode::AttackMode) ++attack;
++				else if (p->mMode == PikiMode::PutbombMode) ++putbomb;
++				if (p->getState() == PIKISTATE_Flying) ++flying;
++				if (p->hasBomb()) ++holdingBomb;
++			}
++		}
++		fprintf(f,
++		        "combat teki=%d health_sum=%.3f health_min=%.3f near_type=%d near_dist=%.2f near_health=%.3f bombs=%d "
++		        "gens=%d formation=%d attack=%d flying=%d putbomb=%d holding_bomb=%d\n",
++		        tekiAlive, healthSum, healthMin, nearType, nearDist, nearHealth, bombs, gens, formation, attack,
++		        flying, putbomb, holdingBomb);
++	}
++	fflush(f);
++}
++void qsHookTickEnd()
++{
++	static int from = -2, to = 0;
++	if (from == -2) {
++		from = -1;
++		if (const char* s = getenv("PIKMIN_QS_CAMLOG")) sscanf(s, "%d:%d", &from, &to);
++	}
++	const int t = (int)pc_netplay_tick();
++	// Dumps and the captain's log, by the tick's offset in the day.
++	static unsigned seen = 0xFFFFFFFFu;
++	if (gQsHookInDay && pc_netplay_tick() != seen) {
++		seen          = pc_netplay_tick();
++		const int off = (int)(pc_netplay_tick() - gQsHookDayStart);
++		if (off == 1) qsHookDump("first");
++		if (const char* s = getenv("PIKMIN_QS_DUMP_OFFS")) {
++			const char* p = s;
++			while (*p) {
++				char* end    = nullptr;
++				const long v = strtol(p, &end, 10);
++				if (end == p) break;
++				if (v == off) {
++					char tag[32];
++					snprintf(tag, sizeof(tag), "off%ld", v);
++					qsHookDump(tag);
++				}
++				p = (*end == ',') ? end + 1 : end;
++			}
++		}
++		static const int every = getenv("PIKMIN_QS_NAVILOG") ? atoi(getenv("PIKMIN_QS_NAVILOG")) : 0;
++		if (every > 0 && off % every == 0 && naviMgr) {
++			Navi* n    = naviMgr->getNavi();
++			int sprouts = 0, pikis = 0;
++			if (itemMgr) {
++				Iterator it(itemMgr->getPikiHeadMgr());
++				CI_LOOP(it) sprouts++;
++			}
++			if (pikiMgr) {
++				Iterator it(pikiMgr);
++				CI_LOOP(it) pikis++;
++			}
++			printf("[QS-NAVI] t=%u off=%d pos=(%.2f %.2f) face=%.3f state=%d pikis=%d sprouts=%d\n", pc_netplay_tick(), off,
++			       n->mSRT.t.x, n->mSRT.t.z, n->mFaceDirection, n->getCurrState() ? n->getCurrState()->getID() : -1, pikis,
++			       sprouts);
++			fflush(stdout);
++		}
++	}
++	if (from < 0 || t < from || t > to || !naviMgr || !cameraMgr) return;
++	PcamCamera* c = cameraMgr->mCamera;
++	printf("[QS-CAM] t=%d event=%d vp=(%a %a %a) wp=(%a %a %a) rot=%a cam=(%a %a %a)\n", t, cameraMgr->mCurrEventIndex,
++	       c->mViewpoint.x, c->mViewpoint.y, c->mViewpoint.z, c->mWatchpoint.x, c->mWatchpoint.y, c->mWatchpoint.z,
++	       c->mRotationAngle, c->mCamera->mPosition.x, c->mCamera->mPosition.y, c->mCamera->mPosition.z);
++	fflush(stdout);
++}
++static void qsHookPlantSprouts(int count)
++{
++	Navi* n = naviMgr ? naviMgr->getNavi() : nullptr;
++	if (!n) return;
++	int planted = 0;
++	for (int i = 0; i < count; i++) {
++		PikiHeadItem* item = static_cast<PikiHeadItem*>(itemMgr->birth(OBJTYPE_Pikihead));
++		if (!item) break;
++		const f32 ang = 0.7f * i + 0.31f, r = 24.0f + 3.37f * i;
++		item->mSRT.t.set(n->mSRT.t.x + r * sinf(ang) + 0.413f, 0.0f, n->mSRT.t.z + r * cosf(ang) + 0.271f);
++		item->mSRT.r.set(0.0f, 0.37f * i + 0.5f, 0.0f);
++		item->mSRT.t.y = mapMgr->getMinY(item->mSRT.t.x, item->mSRT.t.z, true);
++		item->init(item->mSRT.t);
++		item->setColor(Red);
++		item->mFlowerStage = i % 3;
++		item->startAI(0);
++		C_SAI(item)->start(item, PikiHeadAI::PIKIHEAD_Wait);
++		planted++;
++	}
++	printf("[QS-SPROUTS] tick=%u planted %d around (%.2f %.2f)\n", pc_netplay_tick(), planted, n->mSRT.t.x, n->mSRT.t.z);
++	fflush(stdout);
++}
++// Captain 0 goes for the nearest sprout he can pull and plucks it, as the
++// pluck button does in range (Navi's own NukuAdjust path, any distance).
++static void qsHookPluck()
++{
++	Navi* n = naviMgr ? naviMgr->getNavi() : nullptr;
++	if (!n || !itemMgr) return;
++	PikiHeadItem* best = nullptr;
++	f32 bestDist       = 1e30f;
++	Iterator it(itemMgr->getPikiHeadMgr());
++	CI_LOOP(it)
++	{
++		Creature* c = *it;
++		if (c->mObjType != OBJTYPE_Pikihead) continue;
++		PikiHeadItem* s = static_cast<PikiHeadItem*>(c);
++		if (!s->canPullout()) continue;
++		const f32 dx = s->mSRT.t.x - n->mSRT.t.x, dz = s->mSRT.t.z - n->mSRT.t.z;
++		const f32 d  = dx * dx + dz * dz;
++		if (d < bestDist) {
++			bestDist = d;
++			best     = s;
++		}
++	}
++	const int state = n->getCurrState() ? n->getCurrState()->getID() : -1;
++	if (!best || state != NAVISTATE_Walk) {
++		printf("[QS-PLUCK] tick=%u nothing (sprout %p, navi state %d)\n", pc_netplay_tick(), (void*)best, state);
++		fflush(stdout);
++		return;
++	}
++	n->mPressedTimer = 0.0f;
++	n->startMotion(PaniMotionInfo(PIKIANIM_Asibumi), PaniMotionInfo(PIKIANIM_Asibumi));
++	Vector3f sep     = best->mSRT.t - n->mSRT.t;
++	n->_7D0          = angDist(roundAng(atan2f(sep.x, sep.z)), n->mFaceDirection) / 10.0f;
++	const f32 dist   = sep.length();
++	n->_7C4          = 3.0003002f * ((1.0f / dist) * (dist - 15.0f)) * sep;
++	n->_7B8          = 2;
++	n->mSproutToPluck = best;
++	n->mPikiToPluck   = 0;
++	n->mStateMachine->transit(n, NAVISTATE_NukuAdjust);
++	printf("[QS-PLUCK] tick=%u sprout at (%.3f %.3f) dist %.2f\n", pc_netplay_tick(), best->mSRT.t.x, best->mSRT.t.z, dist);
++	fflush(stdout);
++}
++// ---- end QS 2B HOOK ----
++
+ static void pcDebugKeys()
+ {
+ 	// Off unless asked for: a stray F5 would otherwise fill someone's Onion
+@@ -2807,6 +3062,116 @@
+ 	if (!pc_netplay_deterministic()) {
+ 		pcDebugKeys();
+ 		pcVsMarkKey();
++	}
++	// QS TEST HOOK (scratch only): PIKMIN_QS_SPAWN=<tick>:<count> spawns Pikmin
++	// (blue/red/yellow) around captain 0 in the sim of that tick, every run alike.
++	{
++		static int qsSpawnTick = -2, qsSpawnCount = 0;
++		if (qsSpawnTick == -2) {
++			qsSpawnTick = -1;
++			if (const char* s = getenv("PIKMIN_QS_SPAWN")) sscanf(s, "%d:%d", &qsSpawnTick, &qsSpawnCount);
++		}
++		static unsigned qsSpawnSeen = 0xFFFFFFFFu;
++		static bool qsSpawnDone = false;
++		if (pc_netplay_tick() != qsSpawnSeen) {
++			qsSpawnSeen = pc_netplay_tick();
++			qsSpawnDone = false;
++		}
++		if (qsSpawnTick > 0 && (int)pc_netplay_tick() == qsSpawnTick && !qsSpawnDone) {
++			qsSpawnDone = true;
++			pcRecordSpawnPikis(qsSpawnCount);
++			if (getenv("PIKMIN_QS_BOMBS") != nullptr) {
++				int armed = 0;
++				Iterator qsIt(pikiMgr);
++				CI_LOOP(qsIt)
++				{
++					Piki* qp = static_cast<Piki*>(*qsIt);
++					if (qp->mColor != Yellow || qp->isHolding()) continue;
++					BombItem* bomb = static_cast<BombItem*>(itemMgr->birth(OBJTYPE_Bomb));
++					if (!bomb) break;
++					bomb->init(qp->mSRT.t);
++					bomb->startAI(0);
++					if (bomb->stimulate(InteractGrab(qp))) armed++;
++				}
++				printf("[QS-SPAWN] yellows armed with bombs: %d\n", armed);
++			}
++			printf("[QS-SPAWN] tick=%u count=%d\n", pc_netplay_tick(), qsSpawnCount);
++			fflush(stdout);
++		}
++	}
++	{
++		static int qsTekiTick = -2;
++		static float qsTekiDist = 0.0f;
++		if (qsTekiTick == -2) {
++			qsTekiTick = -1;
++			if (const char* s = getenv("PIKMIN_QS_TEKI")) sscanf(s, "%d:%f", &qsTekiTick, &qsTekiDist);
++		}
++		static unsigned qsTekiSeen = 0xFFFFFFFFu;
++		static bool qsTekiDone = false;
++		if (pc_netplay_tick() != qsTekiSeen) {
++			qsTekiSeen = pc_netplay_tick();
++			qsTekiDone = false;
++		}
++		if (qsTekiTick > 0 && (int)pc_netplay_tick() == qsTekiTick && !qsTekiDone) {
++			qsTekiDone = true;
++			Navi* qn  = naviMgr ? naviMgr->getNavi() : nullptr;
++			Teki* qt  = qn ? tekiMgr->newTeki(TEKI_Swallow) : nullptr;
++			if (qt) {
++				const f32 face = qn->mFaceDirection;
++				Vector3f at(qn->mSRT.t.x + sinf(face) * qsTekiDist, 0.0f, qn->mSRT.t.z + cosf(face) * qsTekiDist);
++				at.y = mapMgr->getMinY(at.x, at.z, true);
++				TekiPersonality pers;
++				pers.mPosition       = at;
++				pers.mNestPosition   = at;
++				pers.mFaceDirection  = face + 3.1415927f;
++				pers.setF(TekiPersonality::FLT_TerritoryRange, 250.0f);
++				qt->mPersonality->input(pers);
++				qt->reset();
++				qt->startAI(0);
++				qt->mSRT.r.set(0.0f, pers.mFaceDirection, 0.0f);
++				printf("[QS-TEKI] tick=%u at=(%.1f %.1f %.1f)\n", pc_netplay_tick(), at.x, at.y, at.z);
++			} else {
++				printf("[QS-TEKI] tick=%u spawn failed\n", pc_netplay_tick());
++			}
++			fflush(stdout);
++		}
++	}
++	// QS 2B HOOK: day-relative sprouts, sunset and dumps.
++	{
++		static unsigned seen = 0xFFFFFFFFu;
++		const bool fresh = pc_netplay_tick() != seen;
++		seen = pc_netplay_tick();
++		const int off = (int)(pc_netplay_tick() - gQsHookDayStart);
++		if (fresh && gQsHookInDay) {
++			int d = 0, o = 0, c = 0;
++			if (const char* s = getenv("PIKMIN_QS_SPROUTS"))
++				if (sscanf(s, "%d:%d:%d", &d, &o, &c) == 3 && d == gQsHookDay && o == off) qsHookPlantSprouts(c);
++			if (const char* s = getenv("PIKMIN_QS_SUNSET")) {
++				if (sscanf(s, "%d:%d", &d, &o) == 2 && d == gQsHookDay && o == off) {
++					forceDayEnd();
++					gameflow.mIsPauseAllowed    = FALSE;
++					gameflow.mIsDayEndTriggered = TRUE;
++					gQsHookInDay                = false;
++					printf("[QS-SUNSET] tick=%u day %d: go to sunset\n", pc_netplay_tick(), gQsHookDay);
++					fflush(stdout);
++				}
++			}
++			if (const char* s = getenv("PIKMIN_QS_PLUCK")) {
++				// <day>:<off>[:<off>...]: captain 0 goes for the nearest sprout
++				// and plucks it, as the pluck button does.
++				int pd = 0, used = 0;
++				if (sscanf(s, "%d%n", &pd, &used) == 1 && pd == gQsHookDay) {
++					const char* p = s + used;
++					while (*p == ':') {
++						char* end    = nullptr;
++						const long v = strtol(p + 1, &end, 10);
++						if (end == p + 1) break;
++						if (v == off) qsHookPluck();
++						p = end;
++					}
++				}
++			}
++		}
+ 	}
+ #endif
+ 	if (!gameflow.mMoviePlayer->mIsActive && !mDoneSundownWarn && gameflow.mWorldClock.mTimeOfDay >= gameflow.mParameters->mNightWarning()
+@@ -3020,6 +3385,10 @@
+ 		photoToggle = (pc_netplay_deterministic() && pc_netplay_local_slots_filled())
+ 		                ? (pc_netplay_local_flags(0) & pc_input_log::kLocalPhotoToggle) != 0
+ 		                : pc_photo_mode_poll_toggle() != 0;
++	}
++	if (photoToggle && getenv("PIKMIN_QS_TRACE") != nullptr) {
++		printf("[QS-PHOTO] t=%u toggle (active before=%d)\n", pc_netplay_tick(), pc_photo_mode_active());
++		fflush(stdout);
+ 	}
+ 	if (photoToggle) {
+ 		PcamCamera* pcam = cameraMgr->mCamera;
+--- a/games/pikmin1/src/plugPikiKando/navi.cpp
++++ b/games/pikmin1/src/plugPikiKando/navi.cpp
+@@ -2219,6 +2219,16 @@
+ 		mCursorPosition       = detOffset;
+ 		mCursorTargetPosition = detOffset;
+ 		mCursorNaviDist       = detReach;
++		// QS TEST HOOK (scratch only): the det pin against the view-matrix pin.
++		if (getenv("PIKMIN_QS_TRACE") != nullptr) {
++			Camera* qsCam = controlCamera();
++			if (qsCam) {
++				Vector3f qf(-qsCam->mLookAtMtx.mMtx[2][0], 0.0f, -qsCam->mLookAtMtx.mMtx[2][2]);
++				qf.normalise();
++				printf("[QS-PIN] t=%u navi=%d det=(%.4f,%.4f) viewPin=(%.4f,%.4f)\n", pc_netplay_tick(), mNaviID, detOffset.x,
++				       detOffset.z, qf.x * detReach, qf.z * detReach);
++			}
++		}
+ 		return;
+ 	}
+ #endif
+@@ -2275,8 +2285,43 @@
+ #endif
+ #if defined(PIKI_PC_PORT)
+ 	pcApplySyncedCursorRotate(this);
++	static const bool qsTr = getenv("PIKMIN_QS_TRACE") != nullptr;
++	Creature* const qsLockBefore = mPcLockTarget;
++	const bool qsCharging        = mPcChargeTime > 0.0f;
+ 	pcUpdateLockOn();
++	if (qsTr && mPcLockTarget != qsLockBefore) {
++		printf("[QS-LOCK] t=%u navi=%d target=%d at=(%.2f %.2f)\n", pc_netplay_tick(), mNaviID,
++		       mPcLockTarget ? (int)mPcLockTarget->mObjType : -1, mPcLockTarget ? mPcLockTarget->mSRT.t.x : 0.0f,
++		       mPcLockTarget ? mPcLockTarget->mSRT.t.z : 0.0f);
++	}
++	if (qsTr && (mPcChargeTime > 0.0f) != qsCharging) {
++		printf("[QS-CHARGE] t=%u navi=%d charging=%d\n", pc_netplay_tick(), mNaviID, mPcChargeTime > 0.0f ? 1 : 0);
++	}
++	int qsBombs = 0;
++	if (qsTr && pikiMgr) {
++		Iterator qsIt(pikiMgr);
++		CI_LOOP(qsIt)
++		{
++			Piki* qp = static_cast<Piki*>(*qsIt);
++			if (qp->isAlive() && qp->hasBomb()) qsBombs++;
++		}
++	}
++	const int qsModeBefore = qsBombs;
+ 	pcUpdateBombCommand();
++	if (qsTr && pikiMgr) {
++		int after = 0;
++		Iterator qsIt(pikiMgr);
++		CI_LOOP(qsIt)
++		{
++			Piki* qp = static_cast<Piki*>(*qsIt);
++			if (qp->isAlive() && qp->hasBomb() && qp->mMode != PikiMode::PutbombMode) after++;
++		}
++		static int qsPrev = -1;
++		if (after != qsPrev) {
++			printf("[QS-BOMB] t=%u navi=%d bomb holders=%d (not put-bomb %d)\n", pc_netplay_tick(), mNaviID, qsModeBefore, after);
++			qsPrev = after;
++		}
++	}
+ #endif
+ 	if (!mGroundTriangle) {
+ 		f32 maxY = mapMgr->getMaxY(mSRT.t.x, mSRT.t.z, true);
+@@ -3505,6 +3550,23 @@
+ 			}
+ 		}
+ 		Vector3f mouseDelta = (screenRight * mouseX + screenDown * mouseY) * kMouseCursorWorldScale;
++		// QS TEST HOOK (scratch only): trace the consumed delta, the cursor and
++		// both bases (camera-derived vs quantised-yaw-derived).
++		static const bool qsTrace = getenv("PIKMIN_QS_TRACE") != nullptr;
++		if (qsTrace && (mouseX != 0.0f || mouseY != 0.0f)) {
++			Vector3f cr(ctrlCam->mViewXAxis.x, 0.0f, ctrlCam->mViewXAxis.z);
++			Vector3f cd(-ctrlCam->mViewZAxis.x, 0.0f, -ctrlCam->mViewZAxis.z);
++			Vector3f cf(-ctrlCam->mLookAtMtx.mMtx[2][0], 0.0f, -ctrlCam->mLookAtMtx.mMtx[2][2]);
++			cr.normalise();
++			cd.normalise();
++			cf.normalise();
++			f32 ys = 0.0f, yc = 1.0f;
++			pc_netplay_control_yaw(mNaviID, &ys, &yc);
++			printf("[QS-CUR] t=%u navi=%d det=%d d=(%a,%a) off=(%.4f,%.4f) camR=(%.4f,%.4f) camD=(%.4f,%.4f) camF=(%.4f,%.4f) "
++			       "yawR=(%.4f,%.4f) yawD=(%.4f,%.4f) yawF=(%.4f,%.4f)\n",
++			       pc_netplay_tick(), mNaviID, detMode ? 1 : 0, mouseX, mouseY, mCursorPosition.x, mCursorPosition.z, cr.x, cr.z,
++			       cd.x, cd.z, cf.x, cf.z, yc, ys, -ys, yc, ys, -yc);
++		}
+ 
+ 		// Direct displacement: targetPos = currentPos + delta
+ 		Vector3f targetPos = mCursorPosition + mouseDelta;
+@@ -3715,6 +3777,13 @@
+ 	// captain's synced input.
+ 	const bool swarmHeld = pc_netplay_deterministic() ? (pc_netplay_ext_bits(mNaviID) & pc_input_log::kExtSwarm) != 0
+ 	                                                  : (mNaviID == 0 ? pc_window_swarm_held() : pc_window_swarm_held_p2());
++	{
++		static bool qsSwarmPrev[2] = { false, false };
++		if (getenv("PIKMIN_QS_TRACE") != nullptr && mNaviID >= 0 && mNaviID < 2 && swarmHeld != qsSwarmPrev[mNaviID]) {
++			printf("[QS-SWARM] t=%u navi=%d held=%d\n", pc_netplay_tick(), mNaviID, swarmHeld ? 1 : 0);
++			qsSwarmPrev[mNaviID] = swarmHeld;
++		}
++	}
+ 	// Durante el Charge el empuje va al objetivo fijado en vez de al cursor.
+ 	const bool charging = mPcChargeTime > 0.0f && mPcLockTarget;
+ 	// Con el Charge activo el botón solo carga si hay a quién: sin objetivo
+@@ -4815,6 +4884,13 @@
+ #endif
+ 	piki->mTargetVelocity = piki->mVelocity;
+ 	piki->mVolatileVelocity.set(0.0f, 0.0f, 0.0f);
++	// QS TEST HOOK (scratch only)
++	if (getenv("PIKMIN_QS_TRACE") != nullptr) {
++		printf("[QS-THROW] t=%u navi=%d piki=%p color=%d target=(%.3f,%.3f,%.3f) cursorOff=(%.4f,%.4f) navi=(%.3f,%.3f,%.3f)\n",
++		       pc_netplay_tick(), mNaviID, (void*)piki, piki->mColor, pos.x, pos.y, pos.z, mCursorPosition.x, mCursorPosition.z,
++		       mSRT.t.x, mSRT.t.y, mSRT.t.z);
++		fflush(stdout);
++	}
+ }
+ 
+ /**
+--- a/games/pikmin1/src/plugPikiKando/naviState.cpp
++++ b/games/pikmin1/src/plugPikiKando/naviState.cpp
+@@ -712,6 +712,10 @@
+ #else
+ 	if (!playerState->isTutorial() && navi->mGroundTriangle && navi->mKontroller->keyClick(KBBTN_DPAD_DOWN)) {
+ #endif
++		if (getenv("PIKMIN_QS_TRACE") != nullptr) {
++			printf("[QS-LIEDOWN] t=%u navi=%d\n", pc_netplay_tick(), navi->mNaviID);
++			fflush(stdout);
++		}
+ 		navi->mStateMachine->transit(navi, NAVISTATE_Pellet);
+ 		return;
+ 	}
+--- a/games/pikmin1/src/plugPikiKando/pikiState.cpp
++++ b/games/pikmin1/src/plugPikiKando/pikiState.cpp
+@@ -2229,6 +2229,12 @@
+  */
+ void PikiFlyingState::procBounceMsg(Piki* piki, MsgBounce*)
+ {
++	// QS TEST HOOK (scratch only)
++	if (getenv("PIKMIN_QS_TRACE") != nullptr) {
++		printf("[QS-LAND] piki=%p bounced=%d pos=(%.3f,%.3f,%.3f)\n", (void*)piki, mHasBounced ? 1 : 0, piki->mSRT.t.x,
++		       piki->mSRT.t.y, piki->mSRT.t.z);
++		fflush(stdout);
++	}
+ 	if (mHasBounced) {
+ 		piki->restartAI();
+ 		transit(piki, PIKISTATE_Normal);
