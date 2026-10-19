@@ -199,6 +199,38 @@ void testClickOnce()
 	check(!pc_menu_click_pending(nullptr, nullptr), "clear drops a click before the next screen");
 }
 
+// A recorded day (Quick Save, netplay) does not record pointer menu input, so
+// while disabled the pointer neither clicks, highlights nor claims a menu.
+void testDisabled()
+{
+	pc_menu_click_reset();
+	pc_menu_click_set_enabled(true);
+	pc_menu_click_set_pointer(0.2f, 0.2f);
+	pc_menu_click_set_pointer(0.3f, 0.3f);
+	pc_menu_click_post(0.3f, 0.3f);
+	pc_menu_click_claim_pointer_menu();
+
+	pc_menu_click_set_enabled(false);
+	float nx = 0.0f;
+	float ny = 0.0f;
+	check(!pc_menu_click_pending(&nx, &ny), "disabling drops a pending click");
+	check(!pc_menu_click_read_pointer_normalized(&nx, &ny), "disabling drops the highlight pointer");
+	check(!pc_menu_click_pointer_menu_active(), "disabled menus do not claim the pointer");
+	pc_menu_click_take_activity();
+	pc_menu_click_post(0.5f, 0.5f);
+	check(!pc_menu_click_take(&nx, &ny), "a click while disabled is ignored");
+	pc_menu_click_set_pointer(0.6f, 0.6f);
+	pc_menu_click_set_pointer(0.7f, 0.7f);
+	check(!pc_menu_click_read_pointer_normalized(&nx, &ny), "a move while disabled does not highlight");
+	check(!pc_menu_click_take_activity(), "pointer input while disabled is not activity");
+	pc_menu_click_claim_pointer_menu();
+	check(!pc_menu_click_pointer_menu_active(), "a claim while disabled does not hold");
+
+	pc_menu_click_set_enabled(true);
+	pc_menu_click_post(0.4f, 0.4f);
+	check(pc_menu_click_take(&nx, &ny) && near(nx, 0.4f), "clicks work again once enabled");
+}
+
 } // namespace
 
 int main()
@@ -207,6 +239,7 @@ int main()
 	testMapCenters();
 	testHits();
 	testClickOnce();
+	testDisabled();
 	if (sFailures != 0) {
 		std::printf("pc_menu_click_test: %d failed\n", sFailures);
 		return 1;

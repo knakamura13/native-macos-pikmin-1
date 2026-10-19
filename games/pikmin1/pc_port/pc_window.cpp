@@ -1118,6 +1118,10 @@ void pc_window_poll_events(PADStatus* pad) {
     // polls again with a null pad and must not drop a click the menu has not
     // seen yet.
     if (pad) {
+        // A deterministic day (Quick Save, netplay) records no pointer menu
+        // input, so pointer clicks would replay differently: menus take keys
+        // and pads only while one runs.
+        pc_menu_click_set_enabled(!(sGameplayActive && pc_netplay_deterministic()));
         pc_menu_click_begin_tick();
     }
 #if PIKI_USE_JAUDIO
