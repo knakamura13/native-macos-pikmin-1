@@ -487,7 +487,7 @@ bool readAndCheck(const std::string& path, qs::File& f, Mode& mode, std::string*
 {
 	std::vector<uint8_t> bytes;
 	std::string err;
-	if (!qs::read_file(path, bytes, &err)) {
+	if (!qs::read_file(path, bytes, &err, qs::kMaxFileBytes)) {
 		*why = err;
 		return false;
 	}
@@ -530,8 +530,16 @@ bool readAndCheck(const std::string& path, qs::File& f, Mode& mode, std::string*
 		*why = "its card block has the wrong size";
 		return false;
 	}
+	if (mode.vs ? f.slot != 0 : (f.slot < 1 || f.slot > 3)) {
+		*why = "its file slot is out of range";
+		return false;
+	}
 	return true;
 }
+
+// A slot file must hold that slot's save (a copied or renamed file would load
+// into another file).
+bool slotMatchesPath(const qs::File& f, const std::string& path) { return path == slotPath(f.slot); }
 
 [[noreturn]] void failLoad(const char* what)
 {
@@ -583,7 +591,7 @@ void lowResEnd()
 // A load is over (handed back or cancelled): the replay's switches go back.
 void endCatchup()
 {
-	if (pc_input_log_is_replay_active()) pc_input_log_replay_memory_end();
+	if (pc_input_log_replay_memory_active()) pc_input_log_replay_memory_end();
 	pc_netplay_det_set_catchup(false);
 	pc_audio_set_output_muted(false);
 	lowResEnd();
@@ -755,6 +763,10 @@ void requestMenuLoad(int place)
 			if (firstWhy.empty()) firstWhy = "the newest quick save is a VS match, which loads only at launch with --vs-map";
 			continue;
 		}
+		if (!slotMatchesPath(f, path)) {
+			if (firstWhy.empty()) firstWhy = "a quick save file was copied or renamed from another slot";
+			continue;
+		}
 		sLoad     = std::move(f);
 		sLoadMode = m;
 		sLoadPath = path;
@@ -842,12 +854,21 @@ void pc_quicksave_request_load_file(const char* path)
 		notify(true, "Quick Load: the day is not in play (a cutscene, the day's start or its end).");
 		return;
 	}
+	if (!sDay.eligible) {
+		notify(true, "Quick Load does not work in %s.", sDay.why);
+		return;
+	}
 	std::string why;
 	qs::File f;
 	Mode m;
 	if (!readAndCheck(path, f, m, &why)) {
 		std::printf("[quicksave] load of %s refused: %s\n", path, why.c_str());
 		notify(true, "Quick Load refused: %s.", why.c_str());
+		return;
+	}
+	if (f.slot != sDay.slot || !slotMatchesPath(f, path)) {
+		std::printf("[quicksave] load of %s refused: it holds slot %d, this day is slot %d\n", path, (int)f.slot, (int)sDay.slot);
+		notify(true, "Quick Load refused: the save belongs to another file.");
 		return;
 	}
 	Mode now;
@@ -1047,6 +1068,11 @@ const char* pc_quicksave_load_unavailable(void)
 	if (!sEnabled) return "Quick Save is off. Turn it on above, then restart the game.";
 	if (sPhase != kIdle) return "A quick load is under way.";
 	if (sDay.valid) {
+		if (!sDay.eligible) {
+			static char why[96];
+			std::snprintf(why, sizeof(why), "Quick Load does not work in %s.", sDay.why);
+			return why;
+		}
 		return qs::existing_newest_first({ slotPath(sDay.slot) }).empty() ? "There is no quick save of this file yet." : "";
 	}
 	if (menuPlace() == 0) return "Only in a day, on the title screen or in the file select.";

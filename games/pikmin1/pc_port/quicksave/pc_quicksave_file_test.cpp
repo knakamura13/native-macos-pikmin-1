@@ -303,6 +303,9 @@ void test_io()
 	check(q::read_file(path, back, &err) && back == b, "read back the second write");
 	check(!fs::exists(fs::path(path + ".tmp"), ec), "no temporary file left behind");
 	check(!q::read_file((dir / "missing.qsv").string(), back, &err) && !err.empty(), "a missing file fails with a reason");
+	err.clear();
+	check(!q::read_file(path, back, &err, b.size() - 1) && back.empty() && !err.empty(), "a file over the size cap is refused unread");
+	check(q::read_file(path, back, &err, b.size()) && back == b, "a file at the size cap is read");
 
 	// The newest of the slot files that exist, as a load from the title picks.
 	const std::string s0 = (dir / "quicksave" / "0.qsv").string();

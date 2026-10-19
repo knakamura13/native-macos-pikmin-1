@@ -14,8 +14,9 @@ namespace pc_quicksave {
 // the parent folder. False with *err set on failure (path untouched).
 bool write_file_atomic(const std::string& path, const std::vector<uint8_t>& data, std::string* err);
 
-// Reads a whole file. False with *err set on failure.
-bool read_file(const std::string& path, std::vector<uint8_t>& out, std::string* err);
+// Reads a whole file. False with *err set on failure, or when the file is
+// larger than maxBytes (checked before reading).
+bool read_file(const std::string& path, std::vector<uint8_t>& out, std::string* err, uint64_t maxBytes = UINT64_MAX);
 
 // The paths among `paths` that name an existing file, newest first by
 // modification time (equal times keep the order given).
