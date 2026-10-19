@@ -274,9 +274,6 @@ static int sCStickInvert = 0;
 
 // Mouse input state for cursor (C-stick) control
 static bool sMouseRelativeMode = false;
-// Title and main menu release capture so the pointer can hit a button, then
-// put it back when the level (or any other screen) is showing again.
-static bool sRestoreMouseAfterMenu = false;
 static int sMouseCenterX = 0;
 // Centre of the window as it is now (fullscreen included), not the stored
 // windowed size.
@@ -295,10 +292,12 @@ static int effectiveControlMode() { return pc_speedrun_active() ? PC_CONTROL_CLA
 static float sMouseSensitivity = 2.0f;
 static bool sSettingsMenuOpen = false;
 // Pointer capture needs a running level (GameCoreSection sets this), so the
-// title and file screens keep a free pointer even in Mouse Cursor mode.
+// title and file screens keep a free pointer even in Mouse Cursor mode. A menu
+// that takes pointer clicks (pause, Options) frees it while it shows.
 static bool sGameplayActive = false;
 static bool captureAllowed() {
-    return sGameplayActive && !sSettingsMenuOpen && effectiveControlMode() == PC_CONTROL_MOUSE_CURSOR;
+    return sGameplayActive && !sSettingsMenuOpen && !pc_menu_click_pointer_menu_active()
+           && effectiveControlMode() == PC_CONTROL_MOUSE_CURSOR;
 }
 // Every relative-mode change goes through here so the gate always applies.
 // The system cursor hides only while the game owns the pointer.
@@ -1099,30 +1098,19 @@ static bool pc_window_read_gamepad(SDL_GameController* ctl, u16& button, s8& sti
         || abs(rx) > noticeZone || abs(ry) > noticeZone;
 }
 
-static void pc_sync_menu_pointer(void) {
-    const bool menu = pc_menu_click_pointer_menu_active();
-    if (menu) {
-        if (sMouseRelativeMode || SDL_GetRelativeMouseMode() == SDL_TRUE) {
-            if (!sRestoreMouseAfterMenu) {
-                sRestoreMouseAfterMenu = effectiveControlMode() == PC_CONTROL_MOUSE_CURSOR;
-            }
-            sMouseRelativeMode = false;
-            SDL_SetRelativeMouseMode(SDL_FALSE);
-            SDL_ShowCursor(SDL_ENABLE);
-        }
-        return;
+// A pointer menu opening or closing changes captureAllowed() without any
+// event, so re-apply the gate when its answer changes.
+static void pc_apply_capture_on_change(void) {
+    static bool sLastAllowed = false;
+    const bool allowed = captureAllowed();
+    if (allowed == sLastAllowed) return;
+    sLastAllowed = allowed;
+    applyMouseCapture();
+    if (allowed && sMouseRelativeMode) {
+        int dummyX = 0;
+        int dummyY = 0;
+        SDL_GetRelativeMouseState(&dummyX, &dummyY);
     }
-    if (!sRestoreMouseAfterMenu || sSettingsMenuOpen || effectiveControlMode() != PC_CONTROL_MOUSE_CURSOR) {
-        sRestoreMouseAfterMenu = false;
-        return;
-    }
-    sRestoreMouseAfterMenu = false;
-    sMouseRelativeMode = true;
-    SDL_SetRelativeMouseMode(SDL_TRUE);
-    SDL_ShowCursor(SDL_DISABLE);
-    int dummyX = 0;
-    int dummyY = 0;
-    SDL_GetRelativeMouseState(&dummyX, &dummyY);
 }
 
 void pc_window_poll_events(PADStatus* pad) {
@@ -1327,7 +1315,7 @@ void pc_window_poll_events(PADStatus* pad) {
                 pc_menu_click_clear_pointer();
             }
         }
-        pc_sync_menu_pointer();
+        pc_apply_capture_on_change();
     }
 
     if (!pad) return;
