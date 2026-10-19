@@ -1483,7 +1483,8 @@ void pc_window_poll_events(PADStatus* pad) {
     if (effectiveControlMode() != PC_CONTROL_CLASSIC) {
         int mouseX, mouseY;
         Uint32 mouseState = 0;
-        bool isRelative = sMouseRelativeMode;
+        // A free pointer (off-level, settings menu) moves the system cursor, not the game's.
+        bool isRelative = sMouseRelativeMode && captureAllowed();
 
         // Issue #52: if SDL let go of relative mode behind our back (long
         // idle in a menu, screen lock), the cursor stopped until the option
