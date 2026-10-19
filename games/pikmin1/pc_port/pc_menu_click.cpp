@@ -14,6 +14,7 @@ static bool sSeenPointer = false;
 static bool sMouseDrives = false;
 static bool sActivity    = false;
 static int sClaimTick    = -100;
+static bool sEnabled     = true;
 
 void pc_menu_click_output_area(int drawableW, int drawableH, float renderedAspect, int* outX, int* outY, int* outW, int* outH)
 {
@@ -192,6 +193,9 @@ void pc_menu_click_reset(void)
 
 void pc_menu_click_set_pointer(float nx, float ny)
 {
+	if (!sEnabled) {
+		return;
+	}
 	if (sSeenPointer && (nx != sPointerNx || ny != sPointerNy)) {
 		sMouseDrives = true;
 		sActivity    = true;
@@ -235,12 +239,15 @@ bool pc_menu_click_take_activity(void)
 
 void pc_menu_click_claim_pointer_menu(void)
 {
+	if (!sEnabled) {
+		return;
+	}
 	sClaimTick = sTick;
 }
 
 bool pc_menu_click_pointer_menu_active(void)
 {
-	return sTick - sClaimTick <= 2;
+	return sEnabled && sTick - sClaimTick <= 2;
 }
 
 void pc_menu_click_begin_tick(void)
@@ -253,6 +260,9 @@ void pc_menu_click_begin_tick(void)
 
 void pc_menu_click_post(float nx, float ny)
 {
+	if (!sEnabled) {
+		return;
+	}
 	sActivity   = true;
 	sPending    = true;
 	sNx         = nx;
@@ -292,4 +302,15 @@ bool pc_menu_click_take(float* nx, float* ny)
 	}
 	sPending = false;
 	return true;
+}
+
+void pc_menu_click_set_enabled(bool enabled)
+{
+	sEnabled = enabled;
+	if (!enabled) {
+		sPending     = false;
+		sHasPointer  = false;
+		sMouseDrives = false;
+		sClaimTick   = -100;
+	}
 }

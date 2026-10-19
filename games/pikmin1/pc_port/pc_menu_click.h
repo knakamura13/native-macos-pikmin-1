@@ -130,4 +130,9 @@ void pc_menu_click_clear(void);
 bool pc_menu_click_pending(float* nx, float* ny);
 bool pc_menu_click_take(float* nx, float* ny);
 
+// Off while a recorded day runs (Quick Save, netplay): those records hold no
+// pointer menu input, so the pointer neither clicks, highlights nor claims a
+// menu, and disabling drops anything already pending.
+void pc_menu_click_set_enabled(bool enabled);
+
 #endif
