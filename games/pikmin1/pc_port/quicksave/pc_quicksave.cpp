@@ -119,6 +119,7 @@ enum Phase {
 	kEnter,    // waiting for the card select to enter the day
 	kDay,      // waiting for the day to start
 	kReplay,   // replaying the recorded ticks
+	kFailed,   // an in-game load failed: leave the day for the title (pc_quicksave_take_leave)
 };
 
 // The load screen renders the replay no larger than this (same aspect).
@@ -141,6 +142,8 @@ Clock::time_point sLoadRequested;
 Clock::time_point sReplayStart;
 size_t sNextProgress = 0;
 bool sCancel         = false; // Escape: leave the load at the first chance
+bool sLoadFromCli    = false; // --quick-load: a failure exits with a code, for the QA tools
+std::string sFailWhy;
 
 // The catch-up's lower render resolution (pc_gfx), and what it replaced.
 bool sLowRes   = false;
@@ -541,13 +544,33 @@ bool readAndCheck(const std::string& path, qs::File& f, Mode& mode, std::string*
 // into another file).
 bool slotMatchesPath(const qs::File& f, const std::string& path) { return path == slotPath(f.slot); }
 
-[[noreturn]] void failLoad(const char* what)
+// A failure the game cannot continue past (the day already ran to its end,
+// where its save would write the diverged replay).
+[[noreturn]] void stopGame(const char* what)
 {
 	std::printf("[quicksave] load FAILED: %s. The recorded day cannot be reproduced; the game stops here.\n", what);
 	std::fflush(stdout);
 	pc_state_hash_flush();
 	pc_input_log_flush();
 	std::exit(pc_quicksave_exit::kLoadFailed);
+}
+
+void notify(bool error, const char* fmt, ...);
+void endCatchup();
+
+// A load that cannot reproduce the recorded day. From --quick-load the game
+// exits with kLoadFailed (the QA tools read the code); an in-game load stops
+// the replay and leaves the day for the title at its first running tick, with
+// the reason on screen. The caller returns at once.
+void failLoad(const char* what)
+{
+	if (sLoadFromCli) stopGame(what);
+	std::printf("[quicksave] load FAILED: %s; leaving the day for the title\n", what);
+	endCatchup();
+	sFailWhy = what;
+	sCancel  = false;
+	sPhase   = kFailed;
+	notify(true, "Quick Load failed: %s.", what);
 }
 
 // A result the player should see: the console, the in-game toast and the
@@ -599,9 +622,10 @@ void endCatchup()
 
 void dropLoad()
 {
-	sPhase  = kIdle;
-	sCancel = false;
-	sLoad   = qs::File();
+	sPhase       = kIdle;
+	sCancel      = false;
+	sLoadFromCli = false;
+	sLoad        = qs::File();
 }
 
 // Where a load can start outside a day: 1 the title screen, 2 the card select
@@ -694,9 +718,11 @@ void handoff()
 		std::snprintf(what, sizeof(what), "the state hash at tick %u of the day is %016llx, the save has %016llx", sLoad.ticks,
 		              (unsigned long long)hash, (unsigned long long)sLoad.stateHash);
 		failLoad(what);
+		return;
 	}
 	if (sRecords.size() != sLoad.records.size() || std::memcmp(sRecords.data(), sLoad.records.data(), sRecords.size()) != 0) {
 		failLoad("the replayed input differs from the saved input");
+		return;
 	}
 	pc_input_log_replay_memory_end();
 	const bool viewOk  = sLoad.view.empty() || pc_gamecore_view_state_restore(sLoad.view.data(), sLoad.view.size());
@@ -808,7 +834,8 @@ void pc_quicksave_init(int argc, char** argv)
 		std::fflush(stdout);
 		std::exit(pc_quicksave_exit::kRefused);
 	}
-	sLoadPath = path;
+	sLoadPath    = path;
+	sLoadFromCli = true;
 	// A VS save rides the --vs-map boot into the arena; a story save starts
 	// its own run from the title.
 	sPhase = sLoadMode.vs ? kDay : kTitle;
@@ -908,13 +935,17 @@ void pc_quicksave_day_prepare(void)
 		// and the logs count the same ticks. The whole day start runs within
 		// one tick, so this is the tick the recorded day began on.
 		restoreClock(sLoad.clock);
-		if (!startStateRestore(sLoad.start)) failLoad("the save's day-start state cannot be read");
-		// What the card block keeps less exactly than the recorded day held it
-		// in memory (a day continued without reloading the file).
 		const char* why = "";
-		if (!carryRestore(sLoad.carry, &why)) failLoad(why);
-		pc_netplay_det_set_tick(sLoad.dayStartTick);
-		pc_state_hash_set_tick(sLoad.dayStartTick > 0 ? sLoad.dayStartTick - 1 : 0);
+		if (!startStateRestore(sLoad.start)) {
+			failLoad("the save's day-start state cannot be read");
+		} else if (!carryRestore(sLoad.carry, &why)) {
+			// What the card block keeps less exactly than the recorded day held
+			// it in memory (a day continued without reloading the file).
+			failLoad(why);
+		} else {
+			pc_netplay_det_set_tick(sLoad.dayStartTick);
+			pc_state_hash_set_tick(sLoad.dayStartTick > 0 ? sLoad.dayStartTick - 1 : 0);
+		}
 	}
 	d.tutorial = (playerState != nullptr && playerState->mIsTutorialMode) ? 1 : 0;
 	captureClock(d.clock);
@@ -929,16 +960,14 @@ void pc_quicksave_day_prepare(void)
 	}
 	sDay = std::move(d);
 	if (sPhase == kDay) {
-		if (!sDay.eligible) {
-			char what[160];
-			std::snprintf(what, sizeof(what), "quick save does not work in %s", sDay.why);
-			failLoad(what);
-		}
-		if (sDay.modeText != sLoad.modeText) failLoad("the day started in another mode than the recorded one");
-		if (sDay.tutorial != sLoad.tutorial) failLoad("the day started with another tutorial state");
-		if (sDay.card != sLoad.card) failLoad("the day's start (its card block) differs from the recorded one");
-		if (sDay.start != sLoad.start) failLoad("the day's start (its carried-over state) differs from the recorded one");
-		if (sDay.carry != sLoad.carry) failLoad("the day's start (its precision block) differs from the recorded one");
+		char what[160];
+		std::snprintf(what, sizeof(what), "quick save does not work in %s", sDay.why);
+		if (!sDay.eligible) failLoad(what);
+		else if (sDay.modeText != sLoad.modeText) failLoad("the day started in another mode than the recorded one");
+		else if (sDay.tutorial != sLoad.tutorial) failLoad("the day started with another tutorial state");
+		else if (sDay.card != sLoad.card) failLoad("the day's start (its card block) differs from the recorded one");
+		else if (sDay.start != sLoad.start) failLoad("the day's start (its carried-over state) differs from the recorded one");
+		else if (sDay.carry != sLoad.carry) failLoad("the day's start (its precision block) differs from the recorded one");
 	}
 }
 
@@ -968,12 +997,13 @@ void pc_quicksave_day_begin(void)
 		std::snprintf(what, sizeof(what), "the day started is day %d stage %d, the save is day %d stage %d", (int)sDay.day,
 		              (int)sDay.stage, (int)sLoad.day, (int)sLoad.stage);
 		failLoad(what);
+		return;
 	}
-	if (sDay.seed != sLoad.seed) failLoad("the session seed differs");
-	if (sDay.simHash != sLoad.simHash) failLoad("the sim settings changed");
-	if (sDay.dayStartTick != sLoad.dayStartTick) failLoad("the day did not start within one tick");
+	if (sDay.seed != sLoad.seed) return failLoad("the session seed differs");
+	if (sDay.simHash != sLoad.simHash) return failLoad("the sim settings changed");
+	if (sDay.dayStartTick != sLoad.dayStartTick) return failLoad("the day did not start within one tick");
 	if (pc_photo_mode_active()) pc_photo_mode_exit();
-	if (!pc_input_log_replay_memory_begin(sLoad.records.data(), sLoad.ticks)) failLoad("an input replay is running");
+	if (!pc_input_log_replay_memory_begin(sLoad.records.data(), sLoad.ticks)) return failLoad("an input replay is running");
 	pc_netplay_det_set_catchup(true);
 	pc_audio_set_output_muted(true);
 	lowResBegin();
@@ -994,6 +1024,14 @@ int pc_quicksave_take_leave(void)
 {
 	if (!sEnabled) return 0;
 	if (sPhase == kReplay && sCancel) return cancelLeave();
+	if (sPhase == kFailed) {
+		std::printf("[quicksave] leaving the day after the failed load of %s\n", sLoadPath.c_str());
+		notify(true, "Quick Load failed: %s.", sFailWhy.c_str());
+		const bool vs = sLoadMode.vs != 0;
+		dropLoad();
+		if (vs) pc_vs_note_left_to_title();
+		return 3;
+	}
 	if (sPhase != kLeave) return 0;
 	sPhase = sLoadMode.vs ? kDay : kSetup;
 	return sLoadMode.vs ? 2 : 1;
@@ -1123,7 +1161,13 @@ bool pc_quicksave_take_enter(void)
 			break;
 		}
 	}
-	if (found == nullptr) failLoad("the recorded stage does not exist in this game");
+	if (found == nullptr) {
+		if (sLoadFromCli) stopGame("the recorded stage does not exist in this game");
+		std::printf("[quicksave] load of %s refused: the recorded stage does not exist in this game\n", sLoadPath.c_str());
+		notify(true, "Quick Load refused: the recorded stage does not exist in this game.");
+		dropLoad();
+		return false;
+	}
 	flowCont.mCurrentStage = found;
 	std::snprintf(flowCont.mCurrStageFilePath, sizeof(flowCont.mCurrStageFilePath), "%s", found->mFileName);
 	std::snprintf(flowCont.mDoorStageFilePath, sizeof(flowCont.mDoorStageFilePath), "%s", found->mFileName);
@@ -1137,7 +1181,7 @@ void pc_quicksave_tick_end(void)
 	if (sDay.valid && !dayRunning()) {
 		sDay.valid = false;
 		std::vector<uint8_t>().swap(sRecords);
-		if (sPhase == kReplay) failLoad("the day ended before the saved tick");
+		if (sPhase == kReplay) stopGame("the day ended before the saved tick");
 	}
 	if (sPhase == kReplay) {
 		sSaveRequested    = false;
