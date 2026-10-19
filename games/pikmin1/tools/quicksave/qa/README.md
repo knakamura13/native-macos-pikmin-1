@@ -163,3 +163,28 @@ area hooks evolved. Each group recorded and loaded with its own exact executable
 no compatibility bypass was used. Their hashes and event excerpts are in
 `catchup-product-results-macos.json`. Current hooks can reproduce all scenarios
 with a single fresh build. See `docs/quick-save-catchup-product-verification.md`.
+
+## Combat and effects
+
+`combat-effects.json` is an ordinary Impact Arena match. It does not use
+`PIKMIN_QS_SPAWN`, `PIKMIN_QS_TEKI`, or `PIKMIN_QS_BOMBS`. That synthetic
+enemy/bomb recording crashed in the straight run before a save existed, so it
+is not evidence about quick load.
+
+The match starts with the arena's squad and a sleeping bulborb. The script
+walks south through the base, then east through the south gate gap, whistles
+(`button 0200`), and throws (`button 0100`). It does not press the bomb
+button. The case pins the sim settings in `cfg`, including lock-on and charge
+off, so the run does not follow later edits to the private settings file. The
+straight case must exit 0 and write `quicksave/0.qsv` before the load case is
+evidence. Judge the load only after that save exists and a dump from before
+the save shows the captain reached an enemy. The load script contains only
+the post-save inputs; replay supplies the earlier ones.
+
+Compare ticks 11..2000, all columns, against `combat-base`. The save is
+requested at tick 1301, so the range includes live ticks after handoff. The
+walk lengths come from a measured 2.64 units per tick. Dumps add a `combat`
+line: enemy health, nearest enemy, bomb items, and throw/attack counts.
+Effect-shape lists stay uncounted because that list is protected.
+`[QS-AUDIT] PASS` on the load is the GPU suppression check. See
+`docs/quick-save-combat-effects.md`.
