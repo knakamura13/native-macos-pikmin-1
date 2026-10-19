@@ -106,6 +106,10 @@ int pc_quicksave_setup_slot(void);    // ...and the card file to commit (1-3, 0 
 // as a new run: its quick save belongs to a game that no longer exists, so it
 // is deleted. Runs whether or not Quick Save is on.
 void pc_quicksave_forget_slot(int gameSlot);
+// The text to confirm a Quick Load with: what will be loaded and what it
+// replaces (in a day, the exact days this file rolls back). False with the
+// reason when the load would be refused. Does not start anything.
+bool pc_quicksave_load_confirm_text(char* out, size_t n);
 // CardSelect exit: puts the recorded day's start back (the card block, the
 // clock, the stage). True when it did; the next section is the day.
 bool pc_quicksave_take_enter(void);

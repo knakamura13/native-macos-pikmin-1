@@ -1313,7 +1313,7 @@ void pc_window_poll_events(PADStatus* pad) {
         const bool saveDown = quickHeld(PC_KEY_ACT_QUICKSAVE);
         const bool loadDown = quickHeld(PC_KEY_ACT_QUICKLOAD);
         if (saveDown && !sQuickSaveWasDown) pc_quicksave_request_save();
-        if (loadDown && !sQuickLoadWasDown) pc_quicksave_request_load();
+        if (loadDown && !sQuickLoadWasDown) pc_settings_request_quick_load_confirm();
         sQuickSaveWasDown = saveDown;
         sQuickLoadWasDown = loadDown;
         // Escape (or player 1's B) cancels a load under way: a fresh press

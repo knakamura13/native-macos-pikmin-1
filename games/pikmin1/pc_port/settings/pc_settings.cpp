@@ -49,6 +49,9 @@
 #include "mods/pc_vs_map.h"
 #include "netplay/pc_netplay_det.h"
 #include "quicksave/pc_quicksave.h"
+// Quick Load confirm (defined at the end of this file).
+int quickLoadRow();
+void armQuickLoad();
 #include "quicksave/pc_quicksave_progress.h"
 #include "settings/pc_sim_settings_text.h"
 #include "pc_achievements.h"
@@ -535,6 +538,11 @@ bool sWaitingForButton = false;
 // de la columna izquierda (cuenta también las cabeceras).
 int sOpenGroup = -1;
 int sGroupSel = 0;
+// Quick Load confirm: F7 (or the first A on the row) arms Data > Quick Load
+// now with the text of what it replaces; the next A on that row loads.
+bool sQuickLoadOpenRequested = false;
+bool sQuickLoadArmed         = false;
+char sQuickLoadConfirm[400]  = {};
 int sF1Scroll = 0;
 // Mientras se sondean las opciones de una fila (columna derecha) los cambios
 // solo tocan sPending: nada se aplica al vídeo ni al render.
@@ -982,6 +990,7 @@ void closeMenu() {
     sWaitingForButton = false;
     sCaptureWaitRelease = false;
     sOpenGroup = -1;
+    sQuickLoadArmed = false;
     sMenuOpen = false;
     pc_window_set_settings_menu_open(false);
 }
@@ -2084,6 +2093,19 @@ void pollMenuInput() {
         openMenu();
         return;
     }
+    if (sQuickLoadOpenRequested) {
+        sQuickLoadOpenRequested = false;
+        if (!sMenuOpen) {
+            sMenuPlayer = 0;
+            openMenu();
+        }
+        sOpenGroup = PC_SET_GROUP_DATA;
+        sGroupSel  = quickLoadRow();
+        armQuickLoad();
+        return;
+    }
+    // Moving off the armed row (or to another page) takes the confirm back.
+    if (sQuickLoadArmed && (sOpenGroup != PC_SET_GROUP_DATA || sGroupSel != quickLoadRow())) sQuickLoadArmed = false;
 
     if (!sMenuOpen) {
         // No arrastrar a un menú futuro un toque hecho durante el juego.
@@ -8053,6 +8075,7 @@ const char* pc_settings_row_help(int group, int row) {
         return help;
     }
     if (const GroupRow* r = groupRow(group, row)) {
+        if (r->src == SRC_QUICKSAVE && r->idx == 2 && sQuickLoadArmed) return sQuickLoadConfirm;
         const char* reason = disabledReason(*r);
         return reason ? reason : r->help;
     }
@@ -8143,7 +8166,7 @@ void pc_settings_row_value(int group, int row, char* out, unsigned long n) {
                 const bool on = sPending.quickSave != 0;
                 snprintf(out, n, "%s%s", on ? "On" : "Off", on != pc_quicksave_enabled() ? "  (restart required)" : "");
             } else {
-                snprintf(out, n, "%s", r->idx == 1 ? "A: save" : "A: load");
+                snprintf(out, n, "%s", r->idx == 1 ? "A: save" : sQuickLoadArmed ? "A: confirm" : "A: load");
             }
             break;
         case SRC_KEYS:
@@ -8230,7 +8253,10 @@ void pc_settings_row_change(int group, int row, int dir, bool ok) {
                 if (ok || left || right) sPending.quickSave = sPending.quickSave ? 0 : 1;
             } else if (ok && r->idx == 1) {
                 pc_quicksave_request_save(); // the result shows as the menu's notice
+            } else if (ok && r->idx == 2 && !sQuickLoadArmed) {
+                armQuickLoad(); // the first A shows what the load replaces
             } else if (ok && r->idx == 2) {
+                sQuickLoadArmed = false;
                 pc_quicksave_request_load();
                 // A load under way: the menus get out of the load screen's way.
                 if (pc_quicksave_load_active()) {
@@ -8556,3 +8582,28 @@ int pc_settings_cli(int argc, char** argv) {
     SDL_QuitSubSystem(SDL_INIT_VIDEO);
     return result;
 }
+
+void pc_settings_request_quick_load_confirm(void) { sQuickLoadOpenRequested = true; }
+
+// The Data page's "Quick Load now" row.
+int quickLoadRow() {
+    int count = 0;
+    const GroupRow* rows = groupRows(PC_SET_GROUP_DATA, &count);
+    for (int i = 0; i < count; i++) {
+        if (rows[i].src == SRC_QUICKSAVE && rows[i].idx == 2) return i;
+    }
+    return 0;
+}
+
+void armQuickLoad() {
+    char text[sizeof(sQuickLoadConfirm)];
+    if (!pc_quicksave_load_confirm_text(text, sizeof(text))) {
+        sQuickLoadArmed = false;
+        pc_settings_post_notice(1, text);
+        return;
+    }
+    snprintf(sQuickLoadConfirm, sizeof(sQuickLoadConfirm), "%s", text);
+    sQuickLoadArmed = true;
+    pc_settings_post_notice(0, "Quick Load: press A again to load, or move away to keep playing.");
+}
+

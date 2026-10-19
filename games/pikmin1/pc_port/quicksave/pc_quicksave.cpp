@@ -769,12 +769,14 @@ void startMenuLoad(int place)
 
 // F7 (or the menu) on the title or in the card select: the newest story save
 // that this game can load.
-void requestMenuLoad(int place)
+// The newest story save a load from the title or the card select would take.
+// False with the reason in *why.
+bool pickMenuLoad(qs::File& out, Mode& outMode, std::string& outPath, std::string* why)
 {
 	const std::vector<std::string> saves = savesNewestFirst();
 	if (saves.empty()) {
-		notify(true, "Quick Load: there is no quick save yet.");
-		return;
+		*why = "there is no quick save yet";
+		return false;
 	}
 	std::string firstWhy;
 	for (const std::string& path : saves) {
@@ -793,14 +795,27 @@ void requestMenuLoad(int place)
 			if (firstWhy.empty()) firstWhy = "a quick save file was copied or renamed from another slot";
 			continue;
 		}
-		sLoad     = std::move(f);
-		sLoadMode = m;
-		sLoadPath = path;
-		startMenuLoad(place);
+		out     = std::move(f);
+		outMode = m;
+		outPath = path;
+		return true;
+	}
+	*why = firstWhy;
+	return false;
+}
+
+void requestMenuLoad(int place)
+{
+	std::string why;
+	if (!pickMenuLoad(sLoad, sLoadMode, sLoadPath, &why)) {
+		sLoad = qs::File();
+		if (why == "there is no quick save yet") notify(true, "Quick Load: there is no quick save yet.");
+		else notify(true, "Quick Load refused: %s.", why.c_str());
 		return;
 	}
-	notify(true, "Quick Load refused: %s.", firstWhy.c_str());
+	startMenuLoad(place);
 }
+
 
 } // namespace
 
@@ -893,7 +908,7 @@ void pc_quicksave_request_load_file(const char* path)
 		notify(true, "Quick Load refused: %s.", why.c_str());
 		return;
 	}
-	if (f.slot != sDay.slot || !slotMatchesPath(f, path)) {
+	if (f.slot != sDay.slot) {
 		std::printf("[quicksave] load of %s refused: it holds slot %d, this day is slot %d\n", path, (int)f.slot, (int)sDay.slot);
 		notify(true, "Quick Load refused: the save belongs to another file.");
 		return;
@@ -1146,6 +1161,38 @@ bool pc_quicksave_take_setup(void)
 }
 
 int pc_quicksave_setup_slot(void) { return sLoad.slot; }
+
+bool pc_quicksave_load_confirm_text(char* out, size_t n)
+{
+	if (out == nullptr || n == 0) return false;
+	const char* unavailable = pc_quicksave_load_unavailable();
+	if (unavailable[0] != '\0') {
+		std::snprintf(out, n, "%s", unavailable);
+		return false;
+	}
+	qs::File f;
+	Mode m;
+	std::string why;
+	if (sDay.valid) {
+		const std::string path = slotPath(sDay.slot);
+		if (!readAndCheck(path, f, m, &why)) {
+			std::snprintf(out, n, "Quick Load refused: %s.", why.c_str());
+			return false;
+		}
+		if (f.slot != sDay.slot) {
+			std::snprintf(out, n, "Quick Load refused: the save belongs to another file.");
+			return false;
+		}
+		// The file is on the day being played: its card holds that day's start.
+		return qs::describe_load(f.day, sDay.day, true, out, n);
+	}
+	std::string path;
+	if (!pickMenuLoad(f, m, path, &why)) {
+		std::snprintf(out, n, "Quick Load refused: %s.", why.c_str());
+		return false;
+	}
+	return qs::describe_load(f.day, -1, false, out, n);
+}
 
 void pc_quicksave_forget_slot(int gameSlot)
 {
