@@ -297,11 +297,14 @@ static bool captureAllowed() {
     return sGameplayActive && !sSettingsMenuOpen && effectiveControlMode() == PC_CONTROL_MOUSE_CURSOR;
 }
 // Every relative-mode change goes through here so the gate always applies.
-// The system cursor hides only while the game owns the pointer.
+// In Mouse Cursor mode the system cursor hides only while the game owns the
+// pointer. Classic keeps the original cursor handling (F1 shows, closing hides).
 static void applyMouseCapture() {
     const bool capture = sMouseRelativeMode && captureAllowed();
     SDL_SetRelativeMouseMode(capture ? SDL_TRUE : SDL_FALSE);
-    SDL_ShowCursor(capture ? SDL_DISABLE : SDL_ENABLE);
+    if (effectiveControlMode() == PC_CONTROL_MOUSE_CURSOR) {
+        SDL_ShowCursor(capture ? SDL_DISABLE : SDL_ENABLE);
+    }
 }
 
 // Virtual cursor (mouse-controlled cursor, separate from movement stick)
@@ -1982,6 +1985,7 @@ void pc_window_set_settings_menu_open(bool open) {
     }
 
     sMouseRelativeMode = effectiveControlMode() == PC_CONTROL_MOUSE_CURSOR;
+    if (!sMouseRelativeMode) SDL_ShowCursor(SDL_DISABLE);
     applyMouseCapture();
     
     // Consume any pending relative mouse motion after menu closes
