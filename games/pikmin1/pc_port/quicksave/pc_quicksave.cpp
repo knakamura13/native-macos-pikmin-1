@@ -1147,6 +1147,19 @@ bool pc_quicksave_take_setup(void)
 
 int pc_quicksave_setup_slot(void) { return sLoad.slot; }
 
+void pc_quicksave_forget_slot(int gameSlot)
+{
+	if (gameSlot < 0 || gameSlot > 2) return;
+	const std::string path = slotPath(gameSlot + 1);
+	if (qs::existing_newest_first({ path }).empty()) return;
+	if (qs::remove_file(path)) {
+		std::printf("[quicksave] %s deleted: its card file was erased, overwritten or started over\n", path.c_str());
+	} else {
+		std::printf("[quicksave] %s could not be deleted after its card file changed\n", path.c_str());
+	}
+	std::fflush(stdout);
+}
+
 bool pc_quicksave_take_enter(void)
 {
 	if (!sEnabled || sPhase != kEnter) return false;

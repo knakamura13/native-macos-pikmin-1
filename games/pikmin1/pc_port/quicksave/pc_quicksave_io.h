@@ -22,6 +22,9 @@ bool read_file(const std::string& path, std::vector<uint8_t>& out, std::string* 
 // modification time (equal times keep the order given).
 std::vector<std::string> existing_newest_first(const std::vector<std::string>& paths);
 
+// Deletes path if it exists. False only when it exists and cannot be deleted.
+bool remove_file(const std::string& path);
+
 // The running executable's path ("" when the platform cannot tell).
 std::string executable_path();
 

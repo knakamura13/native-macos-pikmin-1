@@ -322,6 +322,8 @@ void test_io()
 	const std::vector<std::string> tie = q::existing_newest_first({ s2, path });
 	check(tie.size() == 2 && tie[0] == s2 && tie[1] == path, "equal times keep the given order");
 	check(q::existing_newest_first({ s3 }).empty(), "none exists");
+	check(q::remove_file(s2) && q::existing_newest_first({ s2 }).empty(), "remove_file deletes an existing file");
+	check(q::remove_file(s3), "remove_file on a missing file is not an error");
 	fs::remove_all(dir, ec);
 
 	uint8_t d1[32], d2[32];

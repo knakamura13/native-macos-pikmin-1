@@ -584,6 +584,7 @@ struct CardSelectSetupSection : public Node {
 							pc_permadeath_begin_new_run();
 							pc_hardmode_begin_new_run();
 							pc_randomizer_begin_new_run();
+							pc_quicksave_forget_slot(gameflow.mGamePrefs.mMostRecentFileSlot);
 #endif
 						}
 
@@ -600,6 +601,7 @@ struct CardSelectSetupSection : public Node {
 						pc_permadeath_begin_new_run();
 						pc_hardmode_begin_new_run();
 						pc_randomizer_begin_new_run();
+						pc_quicksave_forget_slot(gameflow.mGamePrefs.mMostRecentFileSlot);
 #endif
 
 						// next subsection will be the new game intro cutscene

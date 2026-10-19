@@ -156,6 +156,13 @@ bool read_file(const std::string& path, std::vector<uint8_t>& out, std::string* 
 	return true;
 }
 
+bool remove_file(const std::string& path)
+{
+	std::error_code ec;
+	fs::remove(fs::path(path), ec);
+	return !ec;
+}
+
 std::vector<std::string> existing_newest_first(const std::vector<std::string>& paths)
 {
 	struct Entry {

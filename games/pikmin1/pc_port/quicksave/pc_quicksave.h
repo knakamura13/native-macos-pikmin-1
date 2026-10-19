@@ -102,6 +102,10 @@ bool pc_quicksave_boot_pending(void); // logo: a --quick-load is waiting (no log
 bool pc_quicksave_take_title(void);   // title: a story load starts its run
 bool pc_quicksave_take_setup(void);   // CardSelect: skip the menus for a story load
 int pc_quicksave_setup_slot(void);    // ...and the card file to commit (1-3, 0 none)
+// A card file (game slot 0-2) was erased, overwritten by a copy or started over
+// as a new run: its quick save belongs to a game that no longer exists, so it
+// is deleted. Runs whether or not Quick Save is on.
+void pc_quicksave_forget_slot(int gameSlot);
 // CardSelect exit: puts the recorded day's start back (the card block, the
 // clock, the stage). True when it did; the next section is the day.
 bool pc_quicksave_take_enter(void);
