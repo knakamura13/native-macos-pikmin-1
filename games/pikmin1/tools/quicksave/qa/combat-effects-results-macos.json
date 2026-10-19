@@ -1,0 +1,44 @@
+{
+  "commit": "b8479302bf62d1aa7468c67463075d06f5eeb82c",
+  "binary_sha256": "0ff939624eb94848ed4315b87da7106abf2ba437eccb97814cfc4dafd3fd9877",
+  "platform": "macOS arm64",
+  "audio": "dummy",
+  "scenario": "combat-effects.json",
+  "save_requested_tick": 1301,
+  "saved_hash": "f7877ff635250292",
+  "saved_day_tick": 1290,
+  "saved_absolute_tick": 1300,
+  "hash_comparison": {
+    "from_tick": 11,
+    "through_tick": 2000,
+    "result": "IDENTICAL",
+    "ticks": 1990,
+    "columns": "all"
+  },
+  "gpu_audit": {
+    "result": "PASS",
+    "replay_frames": 1290,
+    "replay_gl": 0,
+    "live_gl": 23659,
+    "null_off": 1
+  },
+  "enemies": {
+    "alive": 2,
+    "type": 4,
+    "starting_health_each": 1100,
+    "damaged": 1,
+    "samples": [
+      {"tick": 11, "near_dist": 1028.83, "health_min": 1100.0, "health_sum": 2200.0, "attack": 0, "flying": 0, "bombs": 0},
+      {"tick": 800, "near_dist": 75.68, "health_min": 1100.0, "health_sum": 2200.0, "attack": 0, "flying": 0, "bombs": 0},
+      {"tick": 1200, "near_dist": 75.82, "health_min": 1049.782, "health_sum": 2149.782, "attack": 4, "flying": 1, "bombs": 0},
+      {"tick": 1300, "near_dist": 76.64, "health_min": 1036.86, "health_sum": 2136.86, "attack": 6, "flying": 0, "bombs": 0},
+      {"tick": 1600, "near_dist": 76.83, "health_min": 983.108, "health_sum": 2083.108, "attack": 4, "flying": 0, "bombs": 0},
+      {"tick": 1900, "near_dist": 76.81, "health_min": 989.36, "health_sum": 2089.36, "attack": 3, "flying": 0, "bombs": 0}
+    ]
+  },
+  "excluded": [
+    "first wall stop at the base gate, no enemy contact",
+    "second wall stop at the south map edge, no enemy contact",
+    "prior synthetic enemy/bomb recording that crashed before saving"
+  ]
+}

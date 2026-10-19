@@ -18,8 +18,9 @@ cmake --build /tmp/pikmin-qs-hooks/build -j 8
 
 `prepare.py` exports a committed ref (default HEAD) and patches that copy, so
 uncommitted source edits are excluded. A patch failure is a source-version
-mismatch, not a reason to apply the hooks to the real checkout. The patch was
-captured against `cc3e1c0e`; subsequent documentation/tool-only commits are fine.
+mismatch, not a reason to apply the hooks to the real checkout. The historical patch was captured against `cc3e1c0e`. On product catch-up
+source, `prepare.py` omits only the obsolete low-resolution control hunk; the
+remaining hooks still apply. See the current audit workflow below.
 
 ## Isolated runs
 
@@ -83,3 +84,107 @@ See `docs/quick-save-phase-2b-verification.md` for the original measured results
 and limits. The earlier skip-entire-presentation experiment is ruled out for
 correct loading: its RNG hash diverged. A GPU-only suppression experiment must
 preserve both CPU passes and establish matching hashes before adoption.
+
+## Historical GPU suppression experiment
+
+`catchup-gpu.patch` applies to the historical pre-optimization game code at
+`fa2a74bf` (export that ref with `prepare.py --ref fa2a74bf`). Do not apply it to
+the product implementation, which already suppresses presentation graphics.
+This was an additional, test-only experiment. After `prepare.py`,
+apply it inside the exported `src/` with `patch --batch -p1 < /absolute/path/to/catchup-gpu.patch`.
+Build once, then record and load with that same executable. Set
+`PIKMIN_QS_TEST_NULL_GPU=1` only on experimental loads; leave it unset for the
+control. It keeps both CPU passes and suppresses presentation GL during catch-up,
+restoring it before the loading UI and swap. `[QS-GPU]` reports suppressed frames
+and real GL calls observed inside the gated presentation interval. This is not a
+claim that the entire frame performs zero GPU work. Hash correctness and a measured
+speedup are prerequisites for considering a product implementation.
+
+
+The experiment scenarios use the same `--out` root in this order:
+
+1. `catchup-gpu-precision.json`: record the precision fixture, then control and
+   experimental loads. Compare ticks 4801..6400 against `precision-base`.
+2. `catchup-gpu-record-long.json`: record the long fixture with this executable.
+3. `catchup-gpu-comparison.json`: sequential control and experimental long loads.
+   Compare ticks 11..27060 against `long-base` for both.
+4. `catchup-gpu-load-paths.json`: in-game and title load checks. First copy
+   `precision-base/save/` to `{out}/title-fixture/`; optionally add a newer invalid
+   `quicksave/2.qsv` there to test fallback. Compare ticks 4801..6400, using the
+   last occurrence of a tick, against `precision-base`.
+5. `catchup-gpu-visible.json`: a foreground long load with time to inspect the
+   loading overlay and resumed game. `catchup-gpu-cancel.json` is the equivalent
+   cancellation check: press Escape during replay, inspect the destination, then
+   close the test window. These checks require Computer Use.
+
+Invoke `run.py` as above with the selected JSON file. All cases refuse existing
+case directories. Reference save files are specific to the exact instrumented
+executable; do not rebuild between recording and loading.
+
+`catchup-gpu-fullres.json` repeats the experimental long load without the
+resolution reduction, using the existing test-only `PIKMIN_QS_NO_LOWRES` hook.
+See `docs/quick-save-catchup-gpu-experiment.md` and
+`catchup-gpu-results-macos.json` for the measured macOS results and limits.
+For cleanup after closing a test app, wait for the runner to finish before
+launching another case; do not query a closed app binding, which may relaunch it.
+
+
+## Current product catch-up audit
+
+Build the product code normally for shipping. For isolated QA, export an audited
+copy with `prepare.py --out /tmp/pikmin-qs-product --audit-catchup`, configure and
+build that exported `src/` as above, and never install it. `catchup-audit.patch`
+adds a raw renderer GL counter independent of the null-GX flag, an overlay-boundary
+leak check, and a test-only area selector. Set `PIKMIN_QS_AUDIT_GPU=1` in test cases.
+The measured interval starts before capture/renderall and ends after shape/camera
+restoration and deferred-batch discard. It does not include frame setup or UI.
+An unexpected raw call exits 88; a failed return to live rendering exits 89;
+null-GX leaking into the VI overlay boundary exits 90. `[QS-AUDIT] PASS` reports
+replay frame count, zero measured replay GL and resumed live GL calls.
+
+Run `catchup-product-record.json`, then copy `precision-base/save/` to
+`{out}/title-fixture/` (optionally add a newer invalid `quicksave/2.qsv`), then run
+`catchup-product-loads.json`. Compare precision/in-game/title ticks 4801..6400
+against `precision-base`; compare long-load ticks 11..27100 against `long-base`.
+The foreground long load leaves time to inspect native-resolution loading and
+resumed play before exiting naturally.
+
+`catchup-product-scenes.json` records/loads a VS arena and runs three loads in
+one process against a straight reference. Compare VS ticks 11..3200 and repeated
+loads ticks 11..2200. `catchup-product-areas.json` uses the private day-4 slot-1
+card fixture and the QA-only map selector to test ordinary story areas. Compare
+ticks 247..4200 and confirm stage paths and live enemy counts in the dumps.
+`catchup-product-cancel.json` requires the long fixture from the same executable;
+press Escape during replay, inspect the destination and close the window.
+These synthetic regressions do not replace real-play soak QA.
+
+The original product checks used three audited executable builds as the QA-only
+area hooks evolved. Each group recorded and loaded with its own exact executable;
+no compatibility bypass was used. Their hashes and event excerpts are in
+`catchup-product-results-macos.json`. Current hooks can reproduce all scenarios
+with a single fresh build. See `docs/quick-save-catchup-product-verification.md`.
+
+## Combat and effects
+
+`combat-effects.json` is an ordinary Impact Arena match. It does not use
+`PIKMIN_QS_SPAWN`, `PIKMIN_QS_TEKI`, or `PIKMIN_QS_BOMBS`. That synthetic
+enemy/bomb recording crashed in the straight run before a save existed, so it
+is not evidence about quick load.
+
+The match starts with the arena's squad and a sleeping bulborb. The script
+walks south through the base, then east through the south gate gap, whistles
+(`button 0200`), and throws (`button 0100`). It does not press the bomb
+button. The case pins the sim settings in `cfg`, including lock-on and charge
+off, so the run does not follow later edits to the private settings file. The
+straight case must exit 0 and write `quicksave/0.qsv` before the load case is
+evidence. Judge the load only after that save exists and a dump from before
+the save shows the captain reached an enemy. The load script contains only
+the post-save inputs; replay supplies the earlier ones.
+
+Compare ticks 11..2000, all columns, against `combat-base`. The save is
+requested at tick 1301, so the range includes live ticks after handoff. The
+walk lengths come from a measured 2.64 units per tick. Dumps add a `combat`
+line: enemy health, nearest enemy, bomb items, and throw/attack counts.
+Effect-shape lists stay uncounted because that list is protected.
+`[QS-AUDIT] PASS` on the load is the GPU suppression check. See
+`docs/quick-save-combat-effects.md`.

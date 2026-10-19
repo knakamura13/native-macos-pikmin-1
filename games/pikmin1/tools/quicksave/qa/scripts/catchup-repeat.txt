@@ -1,0 +1,4 @@
+800 settingok Quick_Save_now
+1000 settingok Quick_Load_now
+1300 settingok Quick_Load_now
+1600 settingok Quick_Load_now

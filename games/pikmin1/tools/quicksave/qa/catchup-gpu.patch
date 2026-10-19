@@ -1,0 +1,39 @@
+--- a/games/pikmin1/src/plugPikiColin/plugPiki.cpp
++++ b/games/pikmin1/src/plugPikiColin/plugPiki.cpp
+@@ -336,6 +336,22 @@
+ 		// exitStage, then softReset) leaves nothing to present: the stage
+ 		// managers are gone until the next idle builds the new section.
+ 		if (!pc_netplay_present_skip_presentation() && !gsys->mSoftResetPending) {
++			// QA-only experiment: preserve both CPU passes, suppress world GL.
++			static const bool testNullGpu = [] {
++				const char* value = std::getenv("PIKMIN_QS_TEST_NULL_GPU");
++				return value && value[0] == '1' && value[1] == '\0';
++			}();
++			static unsigned long long suppressedFrames = 0;
++			static unsigned long long suppressedGlCalls = 0;
++			const bool suppressGpu = testNullGpu && pc_netplay_det_catchup();
++			if (!suppressGpu && suppressedFrames != 0) {
++				printf("[QS-GPU] catch-up ended frames=%llu null_gl=%llu restored=%d\n",
++				       suppressedFrames, suppressedGlCalls, !pc_netplay_present_null_active());
++				fflush(stdout);
++				suppressedFrames = suppressedGlCalls = 0;
++			}
++			const auto glBefore = pc_netplay_present_null_gl_calls();
++			if (suppressGpu) pc_netplay_present_set_null_gx(1);
+ 			pc_render_begin_presentation(1.0);
+ 			gsys->mDGXGfx->resetPresentBuffer();
+ 			pc_netplay_present_begin_presentation(*gsys->mDGXGfx);
+@@ -356,6 +372,13 @@
+ 			pc_netplay_present_restore_all_shapes();
+ 			pc_netplay_present_end_presentation(*gsys->mDGXGfx);
+ 			pc_netplay_camlead_end_presentation(*gsys->mDGXGfx);
++			if (suppressGpu) {
++				// Never submit deferred world geometry after restoring GL.
++				pc_gfx_flush_batch();
++				suppressedGlCalls += pc_netplay_present_null_gl_calls() - glBefore;
++				++suppressedFrames;
++				pc_netplay_present_set_null_gx(0);
++			}
+ 			// Back to authoritative for doneRender, messages and the hash.
+ 			pc_render_end_presentation();
+ 		}

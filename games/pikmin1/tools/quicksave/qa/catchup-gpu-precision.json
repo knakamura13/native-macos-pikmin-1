@@ -1,0 +1,49 @@
+[
+  {
+    "name": "precision-base",
+    "mode": "coop",
+    "ticks": 6400,
+    "env": {
+      "PIKMIN_QS_SPROUTS": "4:30:12",
+      "PIKMIN_QS_SUNSET": "4:300",
+      "PIKMIN_QS_DIRECT_SLOT": "1",
+      "PIKMIN_QS_PLUCK": "5:360:420:480:540:600:660",
+      "PIKMIN_QS_MENU_A": "1",
+      "PIKMIN_QS_DSCRIPT": "{scripts}/g-day5.txt",
+      "PIKMIN_QS_SAVE_DAY": "5:1000",
+      "PIKMIN_QS_DUMP_OFFS": "99,400,700,1000,1001,1600",
+      "PIKMIN_QS_DUMP_FILE": "{out}/precision-base/dump.txt"
+    }
+  },
+  {
+    "name": "precision-control",
+    "mode": "coop",
+    "ticks": 6400,
+    "args": [
+      "--quick-load",
+      "{out}/precision-base/save/quicksave/1.qsv"
+    ],
+    "env": {
+      "PIKMIN_QS_PLUCK": "5:360:420:480:540:600:660",
+      "PIKMIN_QS_DSCRIPT": "{scripts}/g-day5-after1000.txt",
+      "PIKMIN_QS_DUMP_OFFS": "99,400,700,1000,1001,1600",
+      "PIKMIN_QS_DUMP_FILE": "{out}/precision-control/dump.txt"
+    }
+  },
+  {
+    "name": "precision-null-gpu",
+    "mode": "coop",
+    "ticks": 6400,
+    "args": [
+      "--quick-load",
+      "{out}/precision-base/save/quicksave/1.qsv"
+    ],
+    "env": {
+      "PIKMIN_QS_PLUCK": "5:360:420:480:540:600:660",
+      "PIKMIN_QS_DSCRIPT": "{scripts}/g-day5-after1000.txt",
+      "PIKMIN_QS_DUMP_OFFS": "99,400,700,1000,1001,1600",
+      "PIKMIN_QS_DUMP_FILE": "{out}/precision-null-gpu/dump.txt",
+      "PIKMIN_QS_TEST_NULL_GPU": "1"
+    }
+  }
+]

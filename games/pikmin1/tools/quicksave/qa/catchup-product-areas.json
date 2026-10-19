@@ -1,0 +1,70 @@
+[
+  {
+    "name": "forest-hope-base",
+    "mode": "coop",
+    "ticks": 4200,
+    "timeout": 180,
+    "env": {
+      "PIKMIN_QS_AUDIT_GPU": "1",
+      "PIKMIN_QS_TEST_STAGE": "1",
+      "PIKMIN_QS_MENU_A": "1",
+      "PIKMIN_QS_DSCRIPT": "{scripts}/catchup-day4.txt",
+      "PIKMIN_QS_DUMP_OFFS": "1000,1600,2200,2800,3200",
+      "PIKMIN_QS_DUMP_FILE": "{out}/forest-hope-base/dump.txt",
+      "PIKMIN_QS_DIRECT_SLOT": "1",
+      "PIKMIN_QS_SAVE_DAY": "4:1600,4:2200,4:2800"
+    }
+  },
+  {
+    "name": "forest-hope-load",
+    "mode": "coop",
+    "ticks": 4200,
+    "timeout": 180,
+    "env": {
+      "PIKMIN_QS_AUDIT_GPU": "1",
+      "PIKMIN_QS_TEST_STAGE": "1",
+      "PIKMIN_QS_MENU_A": "1",
+      "PIKMIN_QS_DSCRIPT": "{scripts}/catchup-day4-after2800.txt",
+      "PIKMIN_QS_DUMP_OFFS": "1000,1600,2200,2800,3200",
+      "PIKMIN_QS_DUMP_FILE": "{out}/forest-hope-load/dump.txt"
+    },
+    "args": [
+      "--quick-load",
+      "{out}/forest-hope-base/save/quicksave/1.qsv"
+    ]
+  },
+  {
+    "name": "forest-navel-base",
+    "mode": "coop",
+    "ticks": 4200,
+    "timeout": 180,
+    "env": {
+      "PIKMIN_QS_AUDIT_GPU": "1",
+      "PIKMIN_QS_TEST_STAGE": "2",
+      "PIKMIN_QS_MENU_A": "1",
+      "PIKMIN_QS_DSCRIPT": "{scripts}/catchup-day4.txt",
+      "PIKMIN_QS_DUMP_OFFS": "1000,1600,2200,2800,3200",
+      "PIKMIN_QS_DUMP_FILE": "{out}/forest-navel-base/dump.txt",
+      "PIKMIN_QS_DIRECT_SLOT": "1",
+      "PIKMIN_QS_SAVE_DAY": "4:1600,4:2200,4:2800"
+    }
+  },
+  {
+    "name": "forest-navel-load",
+    "mode": "coop",
+    "ticks": 4200,
+    "timeout": 180,
+    "env": {
+      "PIKMIN_QS_AUDIT_GPU": "1",
+      "PIKMIN_QS_TEST_STAGE": "2",
+      "PIKMIN_QS_MENU_A": "1",
+      "PIKMIN_QS_DSCRIPT": "{scripts}/catchup-day4-after2800.txt",
+      "PIKMIN_QS_DUMP_OFFS": "1000,1600,2200,2800,3200",
+      "PIKMIN_QS_DUMP_FILE": "{out}/forest-navel-load/dump.txt"
+    },
+    "args": [
+      "--quick-load",
+      "{out}/forest-navel-base/save/quicksave/1.qsv"
+    ]
+  }
+]

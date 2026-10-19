@@ -2,3 +2,5 @@
 test-hooks.patch -whitespace linguist-generated
 # Synthetic per-tick input streams are generated fixtures.
 scripts/*.txt linguist-generated
+catchup-gpu.patch -whitespace linguist-generated
+catchup-audit.patch -whitespace linguist-generated

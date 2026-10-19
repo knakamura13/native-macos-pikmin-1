@@ -6625,7 +6625,7 @@ void pc_settings_draw_achievement_toast(void) {
 }
 
 // Quick Save (pc_quicksave.h). While a quick load runs: a plain load screen
-// over the replay (which the catch-up renders at a lower resolution), with
+// over the replay (whose world graphics are suppressed), with
 // the progress, the time so far and an estimate of the time left. Otherwise
 // the last save or load result for a few seconds, unless a menu (which shows
 // it as its notice) is open.
@@ -6672,7 +6672,7 @@ void pc_settings_draw_quick_load(void) {
         return;
     }
 
-    // Opaque: the replay behind runs fast and at a lower resolution.
+    // Opaque: catch-up runs without submitting the world's graphics.
     fill(0, 0, screenW, screenH, Colour(6, 9, 20, 255));
     const Colour kText(225, 240, 255, 255), kDim(150, 170, 200, 255), kGold(255, 200, 60, 255);
     const char* title = "Loading quick save";

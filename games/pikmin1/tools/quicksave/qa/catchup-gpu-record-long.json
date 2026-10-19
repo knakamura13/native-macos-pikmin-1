@@ -1,0 +1,12 @@
+[
+  {
+    "name": "long-base",
+    "mode": "coop",
+    "ticks": 27100,
+    "env": {
+      "PIKMIN_QS_SPAWN": "400:30",
+      "PIKMIN_QS_SCRIPT": "{scripts}/coop1-long.txt",
+      "PIKMIN_QS_SAVE_AT": "27001"
+    }
+  }
+]
