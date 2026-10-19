@@ -59,6 +59,11 @@ option(PIKMIN_GLES "Build with OpenGL ES 3.0 renderer" ${PIKMIN_GLES_DEFAULT})
 # Controles táctiles (la misma capa que Pikmin 1: pc_port/touch).
 option(PIKMIN_TOUCH "Build the touch control layer" ${PIKMIN_GLES_DEFAULT})
 option(NECTAR_ONLINE "Build the experimental direct online co-op layer" OFF)
+# Sólo enlaza nectar_net: todavía no hay sesión ni UI. Mejor fallar que dar
+# un build que parece online y no lo es.
+if(NECTAR_ONLINE)
+    message(FATAL_ERROR "Pikmin 2 online adapter not implemented (NECTAR_ONLINE=ON). Reconfigure with -DNECTAR_ONLINE=OFF.")
+endif()
 
 # ─── Flags de compilación: código decompilado ───
 # Fuerza nuestro header de adaptación ANTES de cualquier include del juego.
@@ -72,6 +77,13 @@ set(CLANG_LEGACY_RELAXATIONS
     $<$<CXX_COMPILER_ID:Clang>:-fms-extensions>
     $<$<CXX_COMPILER_ID:Clang>:-fdelayed-template-parsing>
     $<$<CXX_COMPILER_ID:Clang>:-Wno-microsoft>
+    # trig.h redefine sinf/cosf/sincosf/acosf con la tabla de GameCube. clang
+    # los trata como los de libm y llama a la versión exacta: la nave giraba
+    # ~0,1° distinto y en Android los capitanes salían fuera de las cabinas.
+    $<$<CXX_COMPILER_ID:Clang>:-fno-builtin-sinf>
+    $<$<CXX_COMPILER_ID:Clang>:-fno-builtin-cosf>
+    $<$<CXX_COMPILER_ID:Clang>:-fno-builtin-sincosf>
+    $<$<CXX_COMPILER_ID:Clang>:-fno-builtin-acosf>
 )
 set(LEGACY_COMPILE_OPTIONS
     -include "${ADAPTER_DIR}/pikmin2_pc_types.h"
@@ -334,6 +346,7 @@ if(PIKMIN2_ENABLE_PORT_LAYER)
         ${PC_PORT_DIR}/dolphin_stubs/p2_cpp_link.cpp
         ${PC_PORT_DIR}/audio/pc_aram.cpp
         ${PC_PORT_DIR}/audio/pc_dsp_host.cpp
+        ${PC_PORT_DIR}/audio/pc_audio_drops.cpp
         ${PC_PORT_DIR}/audio/p2_audio_host.cpp
         $<$<BOOL:${PIKMIN_TOUCH}>:${PC_PORT_DIR}/touch/pc_touch.cpp>
         ${PC_PORT_DIR}/audio/jaudio_sink.cpp
@@ -406,7 +419,11 @@ if(PIKMIN2_ENABLE_PORT_LAYER)
             add_link_options(-static)
         elseif(NOT APPLE) # macOS: libc++ viene con el sistema; basta SDL2 estática
             # --exclude-libs: el libstdc++/SDL2 estáticos no se exportan (ver P1).
-            add_link_options(-static-libstdc++ -static-libgcc -Wl,--exclude-libs,ALL)
+            # libgcc va dinámica: OSCancelThread usa pthread_cancel, que
+            # desenrolla con el libgcc_s del sistema; con una copia estática
+            # el personality de C++ usaba la otra y abortaba (issue #123, al
+            # entrar en Story se cancela el hilo del e-Reader).
+            add_link_options(-static-libstdc++ -Wl,--exclude-libs,ALL)
         endif()
     endif()
     if(P2_SDL_LIBS)

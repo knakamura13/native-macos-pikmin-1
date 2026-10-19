@@ -12,6 +12,7 @@
  */
 
 #include "settings/pc_settings.h"
+#include "netplay/pc_online_switch.h"
 #include "settings/pc_settings_rows.h"
 #include "settings/pc_glass_menu.h"
 #include "GlobalGameOptions.h"
@@ -92,7 +93,7 @@ struct PcConfig {
     float renderScale = 2.0f / 3.0f;                 // internal 3D resolution multiplier
     int aspectRatioMode = 0;                         // 0=auto, 1=4:3, 2=16:10, 3=16:9, 4=21:9
 
-    // FPS mode (0=30fps, 1=60fps, 2=120fps experimental)
+    // FPS mode (0=30fps, 1=60fps, 2=120fps experimental, 3=monitor refresh rate)
     int fpsMode = 0;
 
     // Control mode (0=Classic, 1=Mouse Cursor)
@@ -1355,7 +1356,7 @@ void loadConfig() {
         else if (key == "fpsMode") {
             sConfig.fpsMode = atoi(val.c_str());
             if (sConfig.fpsMode < 0) sConfig.fpsMode = 0;
-            if (sConfig.fpsMode > 2) sConfig.fpsMode = 2;
+            if (sConfig.fpsMode > 3) sConfig.fpsMode = 3;
         }
         else if (key == "chainActions") {
             sConfig.chainActions = atoi(val.c_str()) ? 1 : 0;
@@ -2261,7 +2262,8 @@ void pollMenuInput() {
         }
         bool toggle = keyWentDown(SDL_SCANCODE_LEFT) || keyWentDown(SDL_SCANCODE_RIGHT) || keyWentDown(SDL_SCANCODE_A)
                    || keyWentDown(SDL_SCANCODE_D);
-        if (ctl && (padNavLeft(ctl) || padNavRight(ctl))) toggle = true;
+        // The touch stick reaches the menu as digital directions too.
+        if ((ctl || sTouchFrameButtons) && (padNavLeft(ctl) || padNavRight(ctl))) toggle = true;
         const int rowCount = 6;
         if (up) { sHdModelsSelection = (sHdModelsSelection + rowCount - 1) % rowCount; return; }
         if (down) { sHdModelsSelection = (sHdModelsSelection + 1) % rowCount; return; }
@@ -2647,6 +2649,7 @@ void graphicsRowChange(int row, bool left, bool right, bool ok) {
     } else if (row == 13) {
         if (left) sPending.shadows = (sPending.shadows + 3) % 4;
         else if (right) sPending.shadows = (sPending.shadows + 1) % 4;
+
     } else if (row == 0) {
         if (left || right) sPending.antialiasing = sPending.antialiasing ? 0 : 1;
     } else if (row == 1) {
@@ -2975,7 +2978,11 @@ void mainRowValue(int row, char* out, size_t n) {
 
     const char* fpsModeNames[3] = { "30 FPS (stable)", "60 FPS (experimental)", "120 FPS (experimental)" };
     char fpsModeBuf[32];
-    snprintf(fpsModeBuf, sizeof(fpsModeBuf), "%s", fpsModeNames[sPending.fpsMode >= 0 && sPending.fpsMode < 3 ? sPending.fpsMode : 0]);
+    if (sPending.fpsMode == 3) {
+        snprintf(fpsModeBuf, sizeof(fpsModeBuf), "Monitor (%.0f Hz)", pc_window_get_refresh_rate());
+    } else {
+        snprintf(fpsModeBuf, sizeof(fpsModeBuf), "%s", fpsModeNames[sPending.fpsMode >= 0 && sPending.fpsMode < 3 ? sPending.fpsMode : 0]);
+    }
 
     char valueBuf[ROW_DISPLAY_COUNT][128];
     snprintf(valueBuf[0], sizeof(valueBuf[0]), "%s",
@@ -3096,9 +3103,9 @@ void mainRowChange(int row, bool left, bool right, bool ok) {
         break;
     case ROW_FPS_MODE:
         if (left) {
-            sPending.fpsMode = (sPending.fpsMode - 1 + 3) % 3;
+            sPending.fpsMode = (sPending.fpsMode - 1 + 4) % 4;
         } else if (right) {
-            sPending.fpsMode = (sPending.fpsMode + 1) % 3;
+            sPending.fpsMode = (sPending.fpsMode + 1) % 4;
         }
         break;
 #if defined(VERSION_GPIP01)
@@ -3663,8 +3670,22 @@ void drawF1Page(DGXGraphics* gfx) {
         char value[128];
         pc_settings_row_value(sOpenGroup, sGroupSel, value, sizeof(value));
         const bool on = pc_settings_row_enabled(sOpenGroup, sGroupSel);
-        f1Plate(gfx, rx - 2, y, rw + 4, kF1OptH - 2, on ? 2 : 1);
-        f1Text(rx + (rw - f1TextW(value, 10)) / 2, y + 3, value, on ? kF1SelDark : kF1Off, 10, 15);
+        if (sOpenGroup == PC_SET_GROUP_ACHIEVEMENTS) {
+            // Progreso global de logros. La placa amarilla funciona como el
+            // relleno y deja visible de un vistazo la proporción conseguida.
+            const int unlocked = pc_achievements_unlocked_count();
+            const int total = (int)PC_ACH_COUNT;
+            const int barW = rw + 4;
+            f1Plate(gfx, rx - 2, y, barW, kF1OptH - 2, 1);
+            const int fillW = total > 0 ? barW * unlocked / total : 0;
+            if (fillW > 0) f1Plate(gfx, rx - 2, y, fillW, kF1OptH - 2, 2);
+            char progress[32];
+            snprintf(progress, sizeof(progress), "%d/%d", unlocked, total);
+            f1Text(rx + (rw - f1TextW(progress, 10)) / 2, y + 3, progress, kF1Section, 10, 15);
+        } else {
+            f1Plate(gfx, rx - 2, y, rw + 4, kF1OptH - 2, on ? 2 : 1);
+            f1Text(rx + (rw - f1TextW(value, 10)) / 2, y + 3, value, on ? kF1SelDark : kF1Off, 10, 15);
+        }
         y += kF1OptH;
         // Logros: su icono, a color si está conseguido y oscurecido si no.
         if (sOpenGroup == PC_SET_GROUP_ACHIEVEMENTS) {
@@ -3720,6 +3741,27 @@ void pc_settings_touch_tap(float x, float y) {
     sTouchTapPending = true;
 }
 
+// El launcher deja Load/Textures/.activate al descargar un pack: se
+// activa ese pack (su carpeta) y se borra el aviso. Al arrancar el juego y
+// en las órdenes del launcher (--settings-dump...).
+static void applyLauncherPackActivation() {
+    const std::filesystem::path activate = std::filesystem::path("Load") / "Textures" / ".activate";
+    std::string name;
+    {
+        std::ifstream in(activate);
+        if (in) std::getline(in, name);
+    }
+    while (!name.empty() && (name.back() == '\r' || name.back() == ' ')) name.pop_back();
+    if (!name.empty()) {
+        sConfig.texturePack = name;
+        sConfig.texturePackEnabled = 1;
+        sPending = sConfig;
+        saveConfig();
+    }
+    std::error_code activateEc;
+    std::filesystem::remove(activate, activateEc);
+}
+
 void pc_settings_init(void) {
     loadConfig();
     sPending = sConfig;
@@ -3746,6 +3788,7 @@ void pc_settings_init(void) {
     pc_gfx_set_aspect_ratio_mode(sPending.aspectRatioMode);
     applyControls(sConfig);
     applyGraphics(sConfig);
+    applyLauncherPackActivation();
     // PLAN_TEXTURAS_HD fase 2: si hay un pack activo, solicitar su
     // indexación antes de que pc_texpack_init() construya el mapa en
     // pc_gfx_init(). pc_texpack_select_pack() se llama aquí para que el
@@ -6461,7 +6504,7 @@ void pc_settings_draw_achievement_toast(void) {
     char head[48], title[96];
     if (id >= 0) {
         const PcAchievementInfo& info = pc_achievement_info(id);
-        snprintf(head, sizeof(head), "Achievement unlocked  (%d pts)", info.points);
+        snprintf(head, sizeof(head), "Achievement unlocked");
         snprintf(title, sizeof(title), "%s", info.title);
     } else {
         snprintf(head, sizeof(head), "Achievements");
@@ -7210,8 +7253,8 @@ void pc_settings_netplay_session_begin(const char* adoptConfigText) {
             sNetplayDiskConfig = sConfig;
             sNetplayAdopted    = true;
         }
-        printf("[PC Settings] netplay session: %d FPS mode -> 30 FPS for the session (the netplay tick is 30 Hz)\n",
-               sConfig.fpsMode == 1 ? 60 : 120);
+        printf("[PC Settings] netplay session: FPS mode %d -> 30 FPS for the session (the netplay tick is 30 Hz)\n",
+               sConfig.fpsMode);
         sConfig.fpsMode  = 0;
         sPending.fpsMode = 0;
     }
@@ -7544,8 +7587,10 @@ const GroupRow kDataRows[] = {
     { SRC_DATA, 0, "Open Save Folder", "Opens the folder with your saves (card0, card1). Copy it to back up your progress or move it to another computer." },
 #endif
     { SRC_DATA, 2, "Reset all settings to defaults", "Puts every setting back to its default. Saves are not touched." },
+#if PC_ONLINE_ENABLED // online features are off project-wide (pc_online_switch.h)
     { SRC_DATA, 3, "Online co-op: leave / rejoin", "As an online guest: stop playing and watch the host's captain while keeping your place. Choose it again, or press Start, to ask to rejoin; the host lets you back in outside menus and cutscenes." },
     { SRC_DATA, 4, "Online over the Internet", "On: when you create or join an online room, the game asks a free public server (Google or Cloudflare STUN) for this connection's Internet address, so a friend on another network can connect. Only that address is exchanged; the game itself goes directly between the two players. Some networks still block it (often mobile data on both sides). Off: no outside server is contacted, and only players on the same network or a VPN can connect." },
+#endif
 };
 
 template <size_t N> constexpr int countOf(const GroupRow (&)[N]) { return (int)N; }
@@ -7687,10 +7732,10 @@ bool hardLocked(const GroupRow& r) {
 // Online co-op lives in the netplay session (netplay builds only): weak
 // references, so builds without it link and simply never enable the row.
 }
-__attribute__((weak)) bool pc_netplay_online_is_guest(void);
-__attribute__((weak)) bool pc_netplay_online_spectating(void);
-__attribute__((weak)) void pc_netplay_online_request_leave(void);
-__attribute__((weak)) void pc_netplay_online_request_rejoin(void);
+bool pc_netplay_online_is_guest(void);
+bool pc_netplay_online_spectating(void);
+void pc_netplay_online_request_leave(void);
+void pc_netplay_online_request_rejoin(void);
 namespace {
 bool online_guest() { return pc_netplay_online_is_guest != nullptr && pc_netplay_online_is_guest(); }
 bool online_spectating() { return pc_netplay_online_spectating != nullptr && pc_netplay_online_spectating(); }
@@ -7806,9 +7851,8 @@ const char* pc_settings_row_help(int group, int row) {
         static char help[320];
         const PcAchievementInfo& info = pc_achievement_info(r->idx);
         const char* blocked = pc_achievements_blocked_reason();
-        snprintf(help, sizeof(help), "%s\n\n%s  %d pts.  Total: %d / %d  (%d / %d pts)%s%s", info.description,
-                 pc_achievement_unlocked(r->idx) ? "Unlocked." : "Locked.", info.points, pc_achievements_unlocked_count(),
-                 (int)PC_ACH_COUNT, pc_achievements_points(), pc_achievements_total_points(), blocked ? "\n\n" : "",
+        snprintf(help, sizeof(help), "%s\n\n%s%s%s", info.description,
+                 pc_achievement_unlocked(r->idx) ? "Unlocked." : "Locked.", blocked ? "\n\n" : "",
                  blocked ? blocked : "");
         return help;
     }
@@ -7895,7 +7939,7 @@ void pc_settings_row_value(int group, int row, char* out, unsigned long n) {
             else if (r->idx == 4) snprintf(out, n, "%s", sPending.onlineStun ? "On" : "Off");
             else snprintf(out, n, "%s", online_guest() ? (online_spectating() ? "A: rejoin" : "A: leave") : "-");
             break;
-        case SRC_ACH: snprintf(out, n, "%d pts", pc_achievement_info(r->idx).points); break;
+        case SRC_ACH: break;
         case SRC_KEYS:
         case SRC_PADS: snprintf(out, n, "Open  >"); break;
         case SRC_RECENTER: {
@@ -8242,6 +8286,7 @@ int pc_settings_cli(int argc, char** argv) {
     SDL_InitSubSystem(SDL_INIT_VIDEO);
     sHeadless = true;
     loadConfig();
+    applyLauncherPackActivation();
     sPending = sConfig;
     rebuildResolutionList();
     int idx = sHadConfigFile ? resolutionIndexFor(sPending.windowWidth, sPending.windowHeight) : -1;

@@ -24,6 +24,8 @@
 #include "SoundMgr.h"
 #include "gameflow.h"
 #include "timing/pc_tick_profiler.h"
+#include "timing/pc_frame_scheduler.h"
+#include "pc_window.h"
 #include <chrono>
 
 #include "settings/pc_settings.h"
@@ -52,6 +54,7 @@
 #include "Kontroller.h"
 #if defined(PIKI_PC_PORT)
 #include "pc_coop.h"
+#include "pc_window.h"
 #include "timing/pc_render_phase.h"
 #include "netplay/pc_netplay_camlead.h"
 #include "netplay/pc_netplay_det.h"
@@ -540,6 +543,8 @@ struct DayOverModeState : public ModeState {
 	{
 		flowCont.mIsDayEndSeqStarted = TRUE;
 #if defined(PIKI_PC_PORT)
+		// Day-end screens keep a free pointer, so capture ends here.
+		pc_window_set_gameplay_active(false);
 		// Speedrun: un split por día, con la zona que se acaba de jugar.
 		if (flowCont.mCurrentStage) {
 			pc_speedrun_on_day_end(flowCont.mCurrentStage->mStageID, gameflow.mWorldClock.mCurrentDay);
@@ -3431,9 +3436,12 @@ NewPikiGameSection::NewPikiGameSection()
 	int frameClampValue = 2;  // Default to 30 fps (clamp=2)
 	if (fpsModeValue == 1) {
 		frameClampValue = 1;  // 60 fps
-	} else if (fpsModeValue == 2) {
-		frameClampValue = 0;  // 120 Hz ticks; 0 is a port-only value, the game never sets it
+	} else if (fpsModeValue == 2 || fpsModeValue == 3) {
+		frameClampValue = 0;  // high-rate ticks; 0 is a port-only value, the game never sets it
 	}
+	// fpsMode=3 ticks at the display's refresh rate instead of a fixed 120 Hz.
+	pc_frame_set_high_rate(fpsModeValue == 3 ? pc_window_get_refresh_rate() : 120.0);
+	pc_frame_set_vsync_lock(fpsModeValue == 3);
 	gsys->setFrameClamp(frameClampValue);
 
 #if defined(WIN32) || defined(DEVELOP)

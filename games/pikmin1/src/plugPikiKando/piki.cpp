@@ -24,6 +24,7 @@
 #include "WeedsItem.h"
 #include "WorkObject.h"
 #include "settings/pc_settings.h"
+#include "timing/pc_anim_timing.h"
 #include "pc_coop.h"
 #include "bugprint.h"
 #include "gameflow.h"
@@ -1801,7 +1802,7 @@ bool Piki::mayIstick()
 static const f32 kPcShoreMargin     = 40.0f; ///< distancia a la orilla al sacarlo del agua
 static const int kPcShoreHoldFrames = 20;   ///< frames en seco antes de soltar el ancla
 
-bool Piki::pcStepOutOfWater()
+bool Piki::pcStepOutOfWater(int state)
 {
 	if (!pc_settings_get_blues_only_water()) {
 		return false;
@@ -1815,7 +1816,8 @@ bool Piki::pcStepOutOfWater()
 	// demás -- andar, venir al silbato (LookAt), seguir en formación -- es el
 	// Pikmin moviéndose por su cuenta, y ahí es donde el mod actúa. Antes solo
 	// cubría PIKISTATE_Normal, así que al silbarlos se ahogaban igual.
-	switch (getState()) {
+	// `state` permite pasar el de antes de un rebote (ver bounceCallback).
+	switch (state >= 0 ? state : getState()) {
 	case PIKISTATE_Flying:
 	case PIKISTATE_Flown:
 	case PIKISTATE_Flick:
@@ -1896,6 +1898,12 @@ void Piki::stickToCallback(Creature*)
  */
 void Piki::bounceCallback()
 {
+#if defined(PIKI_PC_PORT)
+	// MsgBounce saca al lanzado del estado Flying antes de mirar el agua: sin
+	// este estado previo el rescate lo trataba como si hubiera entrado andando
+	// y lo teletransportaba lejos, perdido del grupo (issue #125).
+	const int stateBeforeBounce = getState();
+#endif
 	MsgBounce msg(Vector3f(0.0f, 1.0f, 0.0f));
 	sendMsg(&msg);
 
@@ -1922,7 +1930,7 @@ void Piki::bounceCallback()
 	}
 
 #if defined(PIKI_PC_PORT)
-	if (isDrownSurface && pcStepOutOfWater()) {
+	if (isDrownSurface && pcStepOutOfWater(stateBeforeBounce)) {
 		return;
 	}
 #endif
@@ -2667,9 +2675,17 @@ void Piki::updateWalkAnimation()
 			enableMotionBlend();
 		}
 
+#if defined(PIKI_PC_PORT)
+		// Speed over the last 1/30 s and the motion cooldown in 30 Hz ticks, as
+		// for Olimar (pc_anim_timing.h): the original measures at 30 Hz.
+		f32 speed               = pc_anim_walk_speed(this, mLastAnimPosition.x, mLastAnimPosition.z, mSRT.t.x, mSRT.t.z, gsys->getFrameTime());
+		const int pcMotionCooldown = 4 * pc_anim_ticks_per_30hz(gsys->getFrameTime());
+#else
 		Vector3f sep = mSRT.t - mLastAnimPosition;
 		sep.y        = 0.0f;
 		f32 speed    = sep.length() / gsys->getFrameTime();
+		const int pcMotionCooldown = 4;
+#endif
 
 		int lowerMotionID = mPikiAnimMgr.getLowerAnimator().getCurrentMotionIndex();
 		if (lowerMotionID != PIKIANIM_Wait && lowerMotionID != PIKIANIM_Walk && lowerMotionID != PIKIANIM_Asibumi
@@ -2718,11 +2734,11 @@ void Piki::updateWalkAnimation()
 
 		if (newMotionID != lowerMotionID) {
 			if (lowerMotionID == PIKIANIM_Wait && newMotionID != PIKIANIM_Asibumi) {
-				_480 = 4;
+				_480 = pcMotionCooldown;
 			}
 
 			if (lowerMotionID != PIKIANIM_Asibumi && newMotionID == PIKIANIM_Wait) {
-				_480 = 4;
+				_480 = pcMotionCooldown;
 			}
 
 			if (newMotionID != _484) {
@@ -2732,7 +2748,7 @@ void Piki::updateWalkAnimation()
 				_480++;
 			}
 
-			if (_480 < 4) {
+			if (_480 < pcMotionCooldown) {
 				return;
 			}
 		}

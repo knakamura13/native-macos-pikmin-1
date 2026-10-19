@@ -33,6 +33,7 @@ podman build -q -t "${image}" -f "${root}/games/pikmin1/packaging/linux/Containe
 
 printf '[2/4] Compilando el launcher, Pikmin 1 y Pikmin 2 en el contenedor...\n'
 podman run --rm --userns=keep-id -v "${root}":/src -e OPEN_NECTAR_VERSION="${launcher_version}" \
+    -e NECTAR_RELEASE_ONLINE="${NECTAR_RELEASE_ONLINE:-0}" \
     "${image}" bash /src/scripts/release/container-build-linux.sh
 
 launcher="${build_dir}/p1-usa/bin/nectar-launcher"
@@ -43,7 +44,7 @@ p2usa="${build_dir}/p2-usa/pikmin2_pc"
 mapmaker="${build_dir}/p1-usa/bin/nectar-mapmaker"
 
 # Solo glibc, libGL y libX11: cualquier otra dependencia es un error de empaquetado.
-allowed='^(libc|libm|libdl|libpthread|librt|ld-linux-x86-64)\.so|^libGL\.so\.1$|^libX11\.so\.6$'
+allowed='^(libc|libm|libdl|libpthread|librt|libgcc_s|ld-linux-x86-64)\.so|^libGL\.so\.1$|^libX11\.so\.6$'
 for exe in "${launcher}" "${usa}" "${pal}" "${p2}" "${p2usa}" "${mapmaker}"; do
     [[ -f "${exe}" ]] || { printf 'No se generó %s\n' "${exe}" >&2; exit 1; }
     while read -r lib; do

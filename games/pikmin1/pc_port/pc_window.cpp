@@ -3,6 +3,7 @@
 #endif
 #include "pc_window.h"
 #include "pc_menu_click.h"
+#include "timing/pc_frame_scheduler.h"
 #include "pc_speedrun.h"
 #include "pc_gyro.h"
 #include "pc_icon.h"
@@ -61,7 +62,7 @@ static int  sKeyboardOwner = 0; // jugador que recibe teclado (0 salvo asignaciÃ
 
 // Netplay session: strong-defined by pc_netplay_session.cpp in netplay builds
 // only, null otherwise.
-__attribute__((weak)) bool pc_netplay_session_active(void);
+bool pc_netplay_session_active(void);
 #if PIKI_NETPLAY_BUILD
 // Netplay input ownership (--netplay-input). A `keyboard` peer samples only
 // keys and mouse; a `gamepad` peer samples only its pad (keys and mouse are
@@ -231,6 +232,9 @@ static std::chrono::steady_clock::time_point sNextPresentDeadline;
 // Settings-menu video state (PC only).
 static int sDisplayMode = PC_WINDOW_FULLSCREEN_WINDOWED;
 static bool sVsyncEnabled = true;   // presentation pacing on/off
+// Actual interval requested from the GL driver. This is separate from the
+// GameCube-style logical interval (0=monitor/high rate, 1=60, 2=30).
+static int sDriverSwapInterval = 0;
 static char sLastVideoError[256] = { 0 };
 
 // Keyboard remapping state (PC only).
@@ -270,9 +274,6 @@ static int sCStickInvert = 0;
 
 // Mouse input state for cursor (C-stick) control
 static bool sMouseRelativeMode = false;
-// A menu that takes the pointer releases capture so the pointer can hit a
-// button, then puts it back when that menu is gone.
-static bool sRestoreMouseAfterMenu = false;
 static int sMouseCenterX = 0;
 // Centre of the window as it is now (fullscreen included), not the stored
 // windowed size.
@@ -290,6 +291,21 @@ static int sControlMode = PC_CONTROL_CLASSIC;
 static int effectiveControlMode() { return pc_speedrun_active() ? PC_CONTROL_CLASSIC : sControlMode; }
 static float sMouseSensitivity = 2.0f;
 static bool sSettingsMenuOpen = false;
+// Pointer capture needs a running level (GameCoreSection sets this), so the
+// title and file screens keep a free pointer even in Mouse Cursor mode. A menu
+// that takes pointer clicks (pause, Options) frees it while it shows.
+static bool sGameplayActive = false;
+static bool captureAllowed() {
+    return sGameplayActive && !sSettingsMenuOpen && !pc_menu_click_pointer_menu_active()
+           && effectiveControlMode() == PC_CONTROL_MOUSE_CURSOR;
+}
+// Every relative-mode change goes through here so the gate always applies.
+// The system cursor hides only while the game owns the pointer.
+static void applyMouseCapture() {
+    const bool capture = sMouseRelativeMode && captureAllowed();
+    SDL_SetRelativeMouseMode(capture ? SDL_TRUE : SDL_FALSE);
+    SDL_ShowCursor(capture ? SDL_DISABLE : SDL_ENABLE);
+}
 
 // Virtual cursor (mouse-controlled cursor, separate from movement stick)
 static s8 sVirtualCursorX = 0;
@@ -919,6 +935,7 @@ bool pc_window_init(const char* title, int width, int height) {
     // driver VSync with that limiter caused some compositor/Mesa paths to wait
     // two or three refreshes (the world map spent ~51 ms in swap alone).
     SDL_GL_SetSwapInterval(0);
+    sDriverSwapInterval = 0;
     
     // Enable relative mouse mode for cursor control
     // We'll toggle this with a key press (e.g., Tab) or when the game starts
@@ -1081,30 +1098,19 @@ static bool pc_window_read_gamepad(SDL_GameController* ctl, u16& button, s8& sti
         || abs(rx) > noticeZone || abs(ry) > noticeZone;
 }
 
-static void pc_sync_menu_pointer(void) {
-    const bool menu = pc_menu_click_pointer_menu_active();
-    if (menu) {
-        if (sMouseRelativeMode || SDL_GetRelativeMouseMode() == SDL_TRUE) {
-            if (!sRestoreMouseAfterMenu) {
-                sRestoreMouseAfterMenu = effectiveControlMode() == PC_CONTROL_MOUSE_CURSOR;
-            }
-            sMouseRelativeMode = false;
-            SDL_SetRelativeMouseMode(SDL_FALSE);
-            SDL_ShowCursor(SDL_ENABLE);
-        }
-        return;
+// A pointer menu opening or closing changes captureAllowed() without any
+// event, so re-apply the gate when its answer changes.
+static void pc_apply_capture_on_change(void) {
+    static bool sLastAllowed = false;
+    const bool allowed = captureAllowed();
+    if (allowed == sLastAllowed) return;
+    sLastAllowed = allowed;
+    applyMouseCapture();
+    if (allowed && sMouseRelativeMode) {
+        int dummyX = 0;
+        int dummyY = 0;
+        SDL_GetRelativeMouseState(&dummyX, &dummyY);
     }
-    if (!sRestoreMouseAfterMenu || sSettingsMenuOpen || effectiveControlMode() != PC_CONTROL_MOUSE_CURSOR) {
-        sRestoreMouseAfterMenu = false;
-        return;
-    }
-    sRestoreMouseAfterMenu = false;
-    sMouseRelativeMode = true;
-    SDL_SetRelativeMouseMode(SDL_TRUE);
-    SDL_ShowCursor(SDL_DISABLE);
-    int dummyX = 0;
-    int dummyY = 0;
-    SDL_GetRelativeMouseState(&dummyX, &dummyY);
 }
 
 void pc_window_poll_events(PADStatus* pad) {
@@ -1189,13 +1195,11 @@ void pc_window_poll_events(PADStatus* pad) {
                 }
                 // Issue #52: Escape (or the OS) can drop the mouse out of
                 // relative mode, which froze the cursor until the option was
-                // toggled. A click in the window takes it back. A menu that takes
-                // the pointer keeps it free so the click can hit a button.
-                if (!sSettingsMenuOpen && !pc_menu_click_pointer_menu_active()
-                    && effectiveControlMode() == PC_CONTROL_MOUSE_CURSOR && !sMouseRelativeMode
+                // toggled. A click in the window takes it back.
+                if (captureAllowed() && !sMouseRelativeMode
                     && event.button.which != SDL_TOUCH_MOUSEID) {
                     sMouseRelativeMode = true;
-                    SDL_SetRelativeMouseMode(SDL_TRUE);
+                    applyMouseCapture();
                     int dummyX, dummyY;
                     SDL_GetRelativeMouseState(&dummyX, &dummyY);
                     sMouseCursorDeltaX = 0.0f;
@@ -1228,7 +1232,7 @@ void pc_window_poll_events(PADStatus* pad) {
                 // Some platforms release the relative-mode grab while the
                 // window is unfocused; put it back on return (issue #52).
                 if (event.window.event == SDL_WINDOWEVENT_FOCUS_GAINED && !sSettingsMenuOpen) {
-                    SDL_SetRelativeMouseMode(sMouseRelativeMode ? SDL_TRUE : SDL_FALSE);
+                    applyMouseCapture();
                 }
                 break;
             case SDL_TEXTINPUT:
@@ -1255,9 +1259,9 @@ void pc_window_poll_events(PADStatus* pad) {
                 }
                 // Toggle relative mouse mode with Tab key
                 if (event.key.keysym.scancode == SDL_SCANCODE_TAB
-                    && effectiveControlMode() == PC_CONTROL_MOUSE_CURSOR && !sSettingsMenuOpen) {
+                    && captureAllowed()) {
                     sMouseRelativeMode = !sMouseRelativeMode;
-                    SDL_SetRelativeMouseMode(sMouseRelativeMode ? SDL_TRUE : SDL_FALSE);
+                    applyMouseCapture();
                     // Clear mouse deltas on relative mode toggle
                     sMouseCursorDeltaX = 0.0f;
                     sMouseCursorDeltaY = 0.0f;
@@ -1273,9 +1277,9 @@ void pc_window_poll_events(PADStatus* pad) {
                     printf("[PC Port] Mouse relative mode: %s\n", sMouseRelativeMode ? "ON" : "OFF");
                 }
                 // Escape key exits relative mode (for menus)
-                if (event.key.keysym.scancode == SDL_SCANCODE_ESCAPE && sMouseRelativeMode) {
+                if (event.key.keysym.scancode == SDL_SCANCODE_ESCAPE && captureAllowed()) {
                     sMouseRelativeMode = false;
-                    SDL_SetRelativeMouseMode(SDL_FALSE);
+                    applyMouseCapture();
                     // Clear mouse deltas on escape
                     sMouseCursorDeltaX = 0.0f;
                     sMouseCursorDeltaY = 0.0f;
@@ -1311,7 +1315,7 @@ void pc_window_poll_events(PADStatus* pad) {
                 pc_menu_click_clear_pointer();
             }
         }
-        pc_sync_menu_pointer();
+        pc_apply_capture_on_change();
     }
 
     if (!pad) return;
@@ -1479,12 +1483,13 @@ void pc_window_poll_events(PADStatus* pad) {
     if (effectiveControlMode() != PC_CONTROL_CLASSIC) {
         int mouseX, mouseY;
         Uint32 mouseState = 0;
-        bool isRelative = sMouseRelativeMode;
+        // A free pointer (off-level, settings menu) moves the system cursor, not the game's.
+        bool isRelative = sMouseRelativeMode && captureAllowed();
 
         // Issue #52: if SDL let go of relative mode behind our back (long
         // idle in a menu, screen lock), the cursor stopped until the option
         // was toggled. Re-assert it while the window has focus.
-        if (isRelative && !SDL_GetRelativeMouseMode() && (SDL_GetWindowFlags(sWindow) & SDL_WINDOW_INPUT_FOCUS)) {
+        if (isRelative && captureAllowed() && !SDL_GetRelativeMouseMode() && (SDL_GetWindowFlags(sWindow) & SDL_WINDOW_INPUT_FOCUS)) {
             SDL_SetRelativeMouseMode(SDL_TRUE);
             int dummyX, dummyY;
             SDL_GetRelativeMouseState(&dummyX, &dummyY);
@@ -1625,14 +1630,17 @@ void pc_window_swap_buffers(void) {
         // unthrottled replay bypasses it too, and a netplay session owns the
         // single 30 Hz schedule (two stacked pacers would lose slots).
         const bool netplayOwnsPacing = pc_netplay_session_active != nullptr && pc_netplay_session_active();
-        if (sVsyncEnabled && !pc_netplay_unthrottled() && !netplayOwnsPacing) {
+        // Monitor mode's vsync lock: the swap itself paces one tick per refresh;
+        // a software deadline on top would only make it miss refreshes.
+        const bool vsyncLocked = sLogicalRetraceInterval == 0 && pc_frame_vsync_lock();
+        if (sVsyncEnabled && !pc_netplay_unthrottled() && !netplayOwnsPacing && !vsyncLocked) {
             // The interval is the game's setFrameClamp: retraces per logical
             // frame against a 60 Hz base, so 1 is 60 Hz and 2 is 30 Hz. The
-            // port adds 0 for 120 Hz, which has no 60 Hz divisor. Mirror
+            // port adds 0 for 120 Hz (or the monitor's rate), which has no 60 Hz divisor. Mirror
             // PcFrameScheduler::deltaForClamp, or the 120 FPS mode simulates
             // at 120 and then presents at 60.
             const auto targetDuration = std::chrono::duration<double>(
-                sLogicalRetraceInterval == 0 ? (1.0 / 120.0)
+                sLogicalRetraceInterval == 0 ? (1.0 / pc_frame_high_rate())
                                              : (sLogicalRetraceInterval / 60.0));
             const auto period = std::chrono::duration_cast<std::chrono::steady_clock::duration>(targetDuration);
             auto now = std::chrono::steady_clock::now();
@@ -1661,10 +1669,24 @@ void pc_window_set_swap_interval(int interval) {
     // 0 is meaningful here: it is the port's 120 Hz mode. Only negatives are
     // nonsense.
     if (interval < 0) interval = 1;
-    if (sLogicalRetraceInterval == interval) return;
-    // Use one pacing mechanism only. SDL_GL_SwapWindow must not add a second,
-    // driver-controlled wait on top of the emulated 60 Hz VI interval.
-    SDL_GL_SetSwapInterval(0);
+    // The monitor-rate mode is the one case where the display itself is the
+    // clock: swap interval 1 gives us phase-aligned frames instead of a timer
+    // which merely averages the same number of frames per second. Fixed 30/60
+    // modes keep the driver wait off and use the existing VI/software pacing.
+    const int driverInterval = (interval == 0 && pc_frame_vsync_lock() && sVsyncEnabled) ? 1 : 0;
+    if (sLogicalRetraceInterval == interval && sDriverSwapInterval == driverInterval) return;
+    if (SDL_GL_SetSwapInterval(driverInterval) == 0) {
+        sDriverSwapInterval = driverInterval;
+    } else {
+        // Some compositors/drivers reject swap control. Leave the real state
+        // at zero; the lock watchdog will disable monitor-vsync mode and the
+        // software deadline below will take over.
+        sDriverSwapInterval = 0;
+        if (driverInterval != 0) {
+            printf("[PC Port] Driver VSync unavailable: %s; using software monitor pacing\n", SDL_GetError());
+            pc_frame_set_vsync_lock(false);
+        }
+    }
     sLogicalRetraceInterval = interval;
     sNextPresentDeadline = std::chrono::steady_clock::time_point {};
 }
@@ -1768,21 +1790,33 @@ void pc_window_set_window_size(int w, int h) {
     // shorter than the window makes the OS shorten it, and SDL then reports the
     // shorter size, which would look like a change on every settings apply.
     const bool sizeChanged = w != sRequestedWidth || h != sRequestedHeight;
+    // Read the display before resizing: on Windows and X11, SDL picks it from
+    // the window's center, which the resize moves.
+    const int display = sizeChanged ? SDL_GetWindowDisplayIndex(sWindow) : -1;
     SDL_SetWindowSize(sWindow, w, h);
     sRequestedWidth = w;
     sRequestedHeight = h;
-    if (sizeChanged) {
+    if (sizeChanged && display >= 0) {
         // SDL keeps the top-left corner when a window grows, so a window created
         // centered at 1280x720 ends up off-center and past the right edge at a
         // larger size. Re-center it on its own display, inside the usable area
-        // (below the menu bar, above the Dock). SDL_WINDOWPOS_CENTERED would move
-        // it to the primary display instead.
-        SDL_Rect usable {};
-        const int display = SDL_GetWindowDisplayIndex(sWindow);
-        if (display >= 0 && SDL_GetDisplayUsableBounds(display, &usable) == 0) {
+        // (the display minus taskbars, docks and menu bars). SDL_WINDOWPOS_CENTERED
+        // would move it to the primary display instead.
+        // X11 can report an empty usable area; use the whole display then.
+        SDL_Rect area {};
+        const bool haveUsable = SDL_GetDisplayUsableBounds(display, &area) == 0 && area.w > 0 && area.h > 0;
+        if (haveUsable || SDL_GetDisplayBounds(display, &area) == 0) {
+            // SDL_SetWindowPosition places the client area, so center the whole
+            // frame and keep the title bar on the usable area. A window larger than
+            // the area keeps the frame's top-left corner on it. Backends without
+            // border sizes (macOS) count as zero.
+            int top = 0, left = 0, bottom = 0, right = 0;
+            if (SDL_GetWindowBordersSize(sWindow, &top, &left, &bottom, &right) != 0) {
+                top = left = bottom = right = 0;
+            }
             SDL_SetWindowPosition(sWindow,
-                usable.x + std::max(0, (usable.w - w) / 2),
-                usable.y + std::max(0, (usable.h - h) / 2));
+                area.x + left + std::max(0, (area.w - (w + left + right)) / 2),
+                area.y + top + std::max(0, (area.h - (h + top + bottom)) / 2));
         }
     }
     sWindowWidth = w;
@@ -1799,6 +1833,18 @@ double pc_window_get_refresh_rate(void) {
 
 void pc_window_set_vsync_enabled(bool enabled) {
     sVsyncEnabled = enabled;
+    // Re-evaluate the driver interval even if the logical clamp did not
+    // change. This also turns real VSync off immediately when the user does.
+    const int wanted = (sLogicalRetraceInterval == 0 && pc_frame_vsync_lock() && sVsyncEnabled) ? 1 : 0;
+    if (wanted != sDriverSwapInterval) {
+        if (SDL_GL_SetSwapInterval(wanted) == 0) {
+            sDriverSwapInterval = wanted;
+        } else if (wanted != 0) {
+            sDriverSwapInterval = 0;
+            pc_frame_set_vsync_lock(false);
+            printf("[PC Port] Driver VSync unavailable: %s; using software monitor pacing\n", SDL_GetError());
+        }
+    }
     sNextPresentDeadline = std::chrono::steady_clock::time_point {};
 }
 
@@ -1943,12 +1989,9 @@ void pc_window_set_control_mode(int mode) {
         sMouseCursorDeltaX = 0.0f;
         sMouseCursorDeltaY = 0.0f;
 
-        if (mode == PC_CONTROL_CLASSIC || sSettingsMenuOpen) {
-            sMouseRelativeMode = false;
-            SDL_SetRelativeMouseMode(SDL_FALSE);
-        } else {
-            sMouseRelativeMode = true;
-            SDL_SetRelativeMouseMode(SDL_TRUE);
+        sMouseRelativeMode = mode != PC_CONTROL_CLASSIC && !sSettingsMenuOpen;
+        applyMouseCapture();
+        if (sMouseRelativeMode) {
             // Consume any pending relative mouse motion on mode entry
             int dummyX, dummyY;
             SDL_GetRelativeMouseState(&dummyX, &dummyY);
@@ -1968,6 +2011,21 @@ float pc_window_get_mouse_sensitivity(void) {
     return sMouseSensitivity;
 }
 
+// GameCoreSection calls this on stage init and exit. Off-level, the pointer stays free.
+void pc_window_set_gameplay_active(bool active) {
+    sGameplayActive = active;
+    sMouseWheelSteps = 0;
+    sMouseCursorDeltaX = 0.0f;
+    sMouseCursorDeltaY = 0.0f;
+    if (captureAllowed()) sMouseRelativeMode = true;
+    applyMouseCapture();
+    if (sMouseRelativeMode && captureAllowed()) {
+        // Consume any pending relative mouse motion on capture start
+        int dummyX, dummyY;
+        SDL_GetRelativeMouseState(&dummyX, &dummyY);
+    }
+}
+
 void pc_window_set_settings_menu_open(bool open) {
     sSettingsMenuOpen = open;
     
@@ -1982,9 +2040,8 @@ void pc_window_set_settings_menu_open(bool open) {
         return;
     }
 
-    SDL_ShowCursor(SDL_DISABLE);
     sMouseRelativeMode = effectiveControlMode() == PC_CONTROL_MOUSE_CURSOR;
-    SDL_SetRelativeMouseMode(sMouseRelativeMode ? SDL_TRUE : SDL_FALSE);
+    applyMouseCapture();
     
     // Consume any pending relative mouse motion after menu closes
     if (sMouseRelativeMode) {
