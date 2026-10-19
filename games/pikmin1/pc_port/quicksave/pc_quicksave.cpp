@@ -533,7 +533,8 @@ bool readAndCheck(const std::string& path, qs::File& f, Mode& mode, std::string*
 		*why = "its card block has the wrong size";
 		return false;
 	}
-	if (mode.vs ? f.slot != 0 : (f.slot < 1 || f.slot > 3)) {
+	// 0: a VS match, or a story file not yet saved to the card (day 1 of a new file).
+	if (f.slot < 0 || f.slot > 3 || (mode.vs && f.slot != 0)) {
 		*why = "its file slot is out of range";
 		return false;
 	}
