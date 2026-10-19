@@ -3,6 +3,12 @@
 #include "touch/pc_touch.h"
 #include "pc_gfx.h"
 #endif
+#if defined(PIKI_PC_PORT)
+#include "pc_menu_click.h"
+#if !PIKI_PC_TOUCH
+#include "pc_gfx.h"
+#endif
+#endif
 #include "DebugLog.h"
 #include "P2D/TextBox.h"
 #include "SoundMgr.h"
@@ -21,6 +27,38 @@ DEFINE_ERROR(17)
  * @note UNUSED Size: 0000F4
  */
 DEFINE_PRINT("drawMenu")
+
+#if defined(PIKI_PC_PORT)
+namespace {
+
+bool pcMenuGraphPoint(bool click, float* x, float* y)
+{
+	float nx = 0.0f;
+	float ny = 0.0f;
+	const bool have = click ? pc_menu_click_pending(&nx, &ny) : pc_menu_click_read_pointer_normalized(&nx, &ny);
+	if (!have || !pc_gfx_menu_pointer_to_graph(nx, ny, x, y)) {
+		return false;
+	}
+	if (click) {
+		pc_menu_click_take(nullptr, nullptr);
+	}
+	return true;
+}
+
+void pcFillMenuRows(zen::DrawMenuItem* items, int count, PcMenuClickRect* rects, int* active)
+{
+	for (int i = 0; i < count; i++) {
+		const PUTRect& bounds = items[i].getTouchBounds();
+		rects[i].minX         = bounds.mMinX;
+		rects[i].minY         = bounds.mMinY;
+		rects[i].maxX         = bounds.mMaxX;
+		rects[i].maxY         = bounds.mMaxY;
+		active[i]             = items[i].getActiveSw() ? 1 : 0;
+	}
+}
+
+} // namespace
+#endif
 
 const PUTRect& zen::DrawMenuText::getTouchBounds()
 {
@@ -358,6 +396,9 @@ zen::DrawMenu::DrawMenu(immut char* bloFileName, bool useAlphaMgr, bool useTexAn
 	setCancelSE(SYSSE_CANCEL);
 	mIsSelectMenuCancel = false;
 	setCancelSelectMenuNo(-1);
+#if defined(PIKI_PC_PORT)
+	mPointerClicks = false;
+#endif
 	mParentPane = mScreen.search('pall', true);
 	mParentPane->setOffset(mParentPane->getWidth() >> 1, mParentPane->getHeight() >> 1);
 
@@ -625,6 +666,10 @@ bool zen::DrawMenu::update(Controller* controller)
 #if PIKI_PC_TOUCH
 	if (mState != STATUS_Inactive) pc_touch_claim_game_menu();
 #endif
+#if defined(PIKI_PC_PORT)
+	// Only a menu that opted in (the title's main menu) holds the pointer.
+	if (mPointerClicks && mState != STATUS_Inactive) pc_menu_click_claim_pointer_menu();
+#endif
 	if (mState != STATUS_Inactive) {
 		_104 += gsys->getFrameTime();
 		if (_104 > _108) {
@@ -669,6 +714,34 @@ bool zen::DrawMenu::update(Controller* controller)
 				}
 #endif
 				updateSelectMenuNo(controller);
+#if defined(PIKI_PC_PORT)
+				// Pointer motion moves the existing highlight. A click confirms
+				// the row under the pointer. A miss still consumes the click.
+				if (mPointerClicks && mMenuItems && mSelectCount > 0) {
+					constexpr int kMaxClickRows = 32;
+					const int n                 = mSelectCount < kMaxClickRows ? mSelectCount : kMaxClickRows;
+					PcMenuClickRect rects[kMaxClickRows];
+					int active[kMaxClickRows];
+					pcFillMenuRows(mMenuItems, n, rects, active);
+					float menuX = 0.0f;
+					float menuY = 0.0f;
+					if (pcMenuGraphPoint(false, &menuX, &menuY)) {
+						const PcMenuClickResult hover
+						    = pc_menu_click_hover(PC_MENU_CLICK_MAIN, menuX, menuY, rects, active, n, kPcMenuClickMargin);
+						if (hover.action == PC_MENU_CLICK_HIGHLIGHT) {
+							mCurrentSelect = hover.index;
+						}
+					}
+					if (!touchDecide && pcMenuGraphPoint(true, &menuX, &menuY)) {
+						const PcMenuClickResult hit
+						    = pc_menu_click_resolve(PC_MENU_CLICK_MAIN, menuX, menuY, rects, active, n, kPcMenuClickMargin);
+						if (hit.action == PC_MENU_CLICK_ACTIVATE) {
+							mCurrentSelect = hit.index;
+							touchDecide    = true;
+						}
+					}
+				}
+#endif
 				if (mCurrentSelect != oldSelect) {
 					SeSystem::playSysSe(SYSSE_MOVE1);
 					_11C              = 0.0f;

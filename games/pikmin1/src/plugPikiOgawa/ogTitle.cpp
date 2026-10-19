@@ -15,6 +15,7 @@
 #include "zen/ogSub.h"
 #if defined(PIKI_PC_PORT)
 #include "pc_coop.h"
+#include "pc_menu_click.h"
 #include "pc_speedrun.h"
 #include "randomizer/pc_randomizer.h"
 #include "settings/pc_settings.h"
@@ -87,6 +88,10 @@ zen::ogScrTitleMgr::ogScrTitleMgr()
 	const PcMenuExtend extWithChallenge = { 4, 27, -72, 'yoko', 40 };
 	mMenuNoChallenge   = new DrawMenu("screen/blo/m_select.blo", false, false, &extNoChallenge);
 	mMenuWithChallenge = new DrawMenu("screen/blo/m_selec2.blo", false, false, &extWithChallenge);
+	// Left clicks land on these rows only. Options and the other panels stay
+	// on the keyboard and the controller.
+	mMenuNoChallenge->setPointerClicks(true);
+	mMenuWithChallenge->setPointerClicks(true);
 	pcInsertCoopItem(mMenuNoChallenge);
 	pcInsertCoopItem(mMenuWithChallenge);
 	pcSetupAdvancedMenu();
@@ -346,6 +351,13 @@ zen::ogScrTitleMgr::TitleStatus zen::ogScrTitleMgr::update(Controller* input)
 	if (input->keyDown(KBBTN_ANY)) {
 		mNoInputTimer = 0.0f;
 	}
+#if defined(PIKI_PC_PORT)
+	// Pointer motion and clicks on the main menu count as input, so the idle
+	// return to Press Start waits. Options keeps the old timer.
+	if (mCurrentMenuID == MENU_MainMenu && pc_menu_click_take_activity()) {
+		mNoInputTimer = 0.0f;
+	}
+#endif
 
 	mNoInputTimer += gsys->getFrameTime();
 #if defined(PIKI_PC_PORT)
