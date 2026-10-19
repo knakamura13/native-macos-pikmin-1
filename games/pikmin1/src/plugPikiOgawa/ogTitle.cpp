@@ -88,10 +88,9 @@ zen::ogScrTitleMgr::ogScrTitleMgr()
 	const PcMenuExtend extWithChallenge = { 4, 27, -72, 'yoko', 40 };
 	mMenuNoChallenge   = new DrawMenu("screen/blo/m_select.blo", false, false, &extNoChallenge);
 	mMenuWithChallenge = new DrawMenu("screen/blo/m_selec2.blo", false, false, &extWithChallenge);
-	// Left clicks land on these rows only. Options and the other panels stay
-	// on the keyboard and the controller.
-	mMenuNoChallenge->setPointerClicks(true);
-	mMenuWithChallenge->setPointerClicks(true);
+	// Left clicks land on these rows. The panels below opt in the same way.
+	mMenuNoChallenge->setPointerClicks(PC_MENU_CLICK_MAIN);
+	mMenuWithChallenge->setPointerClicks(PC_MENU_CLICK_MAIN);
 	pcInsertCoopItem(mMenuNoChallenge);
 	pcInsertCoopItem(mMenuWithChallenge);
 	pcSetupAdvancedMenu();
@@ -112,6 +111,12 @@ zen::ogScrTitleMgr::ogScrTitleMgr()
 	mSoundMenu    = new DrawMenu("screen/blo/s_select.blo", false, false);
 	mRumbleMenu   = new DrawMenu("screen/blo/v_select.blo", false, false);
 	mLanguageMenu = new DrawMenu("screen/blo/ms_selec.blo", false, false);
+#if defined(PIKI_PC_PORT)
+	mOptionsMenu->setPointerClicks(PC_MENU_CLICK_OPTIONS);
+	mSoundMenu->setPointerClicks(PC_MENU_CLICK_SOUND);
+	mRumbleMenu->setPointerClicks(PC_MENU_CLICK_RUMBLE);
+	mLanguageMenu->setPointerClicks(PC_MENU_CLICK_LANGUAGE);
+#endif
 
 	mInput = new ZenController(nullptr);
 	mInput->setRepeatTime(0.2f);
@@ -269,7 +274,8 @@ void zen::ogScrTitleMgr::pcSetupAdvancedMenu()
 	// option.blo trae 4 huecos (el 1 oculto): se muestran los 4 y se clonan 4
 	// más, con el paso compactado y el cristal estirado (PcMenuExtend).
 	const PcMenuExtend ext = { 4, 30, -59, 'yoko', 0 };
-	mAdvancedMenu  = new DrawMenu("screen/blo/option.blo", false, false, &ext);
+	mAdvancedMenu = new DrawMenu("screen/blo/option.blo", false, false, &ext);
+	mAdvancedMenu->setPointerClicks(PC_MENU_CLICK_ADVANCED);
 	P2DScreen* scr = mAdvancedMenu->getScreenPtr();
 	// Fondo negro del .blo fuera, como hace el título con los demás menús.
 	if (P2DPane* back = scr->search('back', false)) static_cast<P2DPicture*>(back)->setAlpha(0);
@@ -352,9 +358,9 @@ zen::ogScrTitleMgr::TitleStatus zen::ogScrTitleMgr::update(Controller* input)
 		mNoInputTimer = 0.0f;
 	}
 #if defined(PIKI_PC_PORT)
-	// Pointer motion and clicks on the main menu count as input, so the idle
-	// return to Press Start waits. Options keeps the old timer.
-	if (mCurrentMenuID == MENU_MainMenu && pc_menu_click_take_activity()) {
+	// Pointer motion and clicks on these menus count as input, so the idle
+	// return to Press Start waits.
+	if (pc_menu_click_take_activity()) {
 		mNoInputTimer = 0.0f;
 	}
 #endif
@@ -765,15 +771,13 @@ zen::ogScrTitleMgr::TitleStatus zen::ogScrTitleMgr::update(Controller* input)
 		mRumbleMenu->update(input);
 		int flag3         = mRumbleMenu->getStatusFlag();
 		mCurrentSelection = mRumbleMenu->getSelectMenu();
-		if (input->keyClick(KBBTN_MSTICK_UP | KBBTN_MSTICK_DOWN)) {
-			if (mCurrentSelection == 0) {
-				// ON
-				mVibeMode = true;
-			} else {
-				// OFF
-				mVibeMode = false;
-			}
-
+		// The highlighted row is the setting. The stick and the pointer both
+		// move that highlight. A, or a click, confirms and leaves.
+		if (mCurrentSelection == 0 && !mVibeMode) {
+			mVibeMode = true;
+			setGamePrefs();
+		} else if (mCurrentSelection > 0 && mVibeMode) {
+			mVibeMode = false;
 			setGamePrefs();
 		}
 
@@ -809,12 +813,12 @@ zen::ogScrTitleMgr::TitleStatus zen::ogScrTitleMgr::update(Controller* input)
 		STACK_PAD_VAR(1);
 		setGamePrefs();
 #else
-		if (input->keyClick(KBBTN_MSTICK_UP | KBBTN_MSTICK_DOWN)) {
-			if (mCurrentSelection == 0) {
-				mChildMode = false;
-			} else {
-				mChildMode = true;
-			}
+		// The highlighted row is the setting, including when the pointer moved it.
+		if (mCurrentSelection == 0 && mChildMode) {
+			mChildMode = false;
+			setGamePrefs();
+		} else if (mCurrentSelection > 0 && !mChildMode) {
+			mChildMode = true;
 			setGamePrefs();
 		}
 

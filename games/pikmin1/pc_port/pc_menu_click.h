@@ -1,11 +1,21 @@
 #ifndef PC_MENU_CLICK_H
 #define PC_MENU_CLICK_H
 
-// Pointer hits for the Pikmin 1 title screen and the main menu only.
+// Pointer hits for Press Start and for DrawMenu row lists.
 //
-// Classic mode still ignores mouse buttons as game input. These two screens
-// take a click anyway. While one of them is showing, a mouse button is not
-// also A or B, so one click cannot start the menu and activate a row.
+// Classic mode still ignores mouse buttons as game input. These screens take
+// a click anyway. While one of them is showing, a mouse button is not also
+// A or B, so one click cannot open the next screen and activate a row.
+//
+// A row list is the he%02d text bounds DrawMenu already uses. Options, sound,
+// rumble, language, advanced, pause, the pause yes/no confirm, progressive,
+// and the world-map pause are that list. The highlight follows the pointer.
+// A click activates the row under it. Empty space does not.
+//
+// Stop after those. Challenge course rows slide in, and the world map's
+// course icons, its yes/no confirm, file cards, results, message boxes,
+// volume pips, glass lists, and page arrows do not publish rectangles this
+// path can name without a live window.
 //
 // Graph coordinates match P2DPane::getGlobalBounds() after the menu is drawn.
 // The window point is stored normalized. Mapping into the graph removes the
@@ -13,9 +23,18 @@
 // and a wide menu in a taller window land on the same panes.
 
 enum PcMenuClickScreen {
-	PC_MENU_CLICK_NONE  = 0,
-	PC_MENU_CLICK_TITLE = 1, // Press Start
-	PC_MENU_CLICK_MAIN  = 2, // the title's main menu rows
+	PC_MENU_CLICK_NONE        = 0,
+	PC_MENU_CLICK_TITLE       = 1, // Press Start
+	PC_MENU_CLICK_MAIN        = 2, // the title's main menu rows
+	PC_MENU_CLICK_OPTIONS     = 3,
+	PC_MENU_CLICK_SOUND       = 4,
+	PC_MENU_CLICK_RUMBLE      = 5,
+	PC_MENU_CLICK_LANGUAGE    = 6,
+	PC_MENU_CLICK_ADVANCED    = 7,
+	PC_MENU_CLICK_PAUSE       = 8,
+	PC_MENU_CLICK_PAUSE_YESNO = 9,
+	PC_MENU_CLICK_PROGRESSIVE = 10,
+	PC_MENU_CLICK_MAP_PAUSE   = 11,
 };
 
 enum PcMenuClickAction {

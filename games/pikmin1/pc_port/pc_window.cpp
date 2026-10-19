@@ -1339,8 +1339,8 @@ void pc_window_poll_events(PADStatus* pad) {
     const Uint8* state = SDL_GetKeyboardState(NULL);
     // Bindings may name a mouse button (issue #42); sample the mouse once here.
     Uint32 boundMouse = SDL_GetMouseState(NULL, NULL);
-    // While the title or main menu holds the pointer, a mouse button is that
-    // menu's click, not A or B. Keyboard and controller bindings stay.
+    // While a pointer menu holds the click, a mouse button is that menu's
+    // click, not A or B. Keyboard and controller bindings stay.
     if (pc_menu_click_pointer_menu_active()) boundMouse = 0;
     // La segunda tecla con un clic solo cuenta fuera de Classic, como los clics
     // fijos que sustituye (en Classic el ratón no juega).

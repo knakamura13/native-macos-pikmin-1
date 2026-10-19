@@ -1,11 +1,14 @@
 /**
  * @file pc_menu_click_test.cpp
- * @brief Title and main-menu pointer hits, without a window.
+ * @brief Pointer hits for Press Start and DrawMenu rows, without a window.
  *
  * The mapping cases are the present letterbox and the menu scale: a wide
  * window, a 4:3 menu inside that window, and a tall window with bars. Moving
  * across rows changes the highlight and does not activate. A click activates
- * once. Empty space, an inactive row, and any other screen do not.
+ * once. Empty space, an inactive row, and a screen that is not a row list do
+ * not. The row screens are the ones DrawMenu already measures with he%02d
+ * bounds. Challenge course rows, map icons, file cards, and the other
+ * overlays are not in that list.
  */
 
 #include "pc_menu_click.h"
@@ -109,6 +112,34 @@ void testMapCenters()
 	check(!pc_menu_click_map_to_graph(bad, 0.5f, 0.5f, &x, &y), "a zero window does not convert");
 }
 
+void expect(bool condition, const char* screen, const char* what)
+{
+	char buf[160];
+	std::snprintf(buf, sizeof(buf), "%s: %s", screen, what);
+	check(condition, buf);
+}
+
+void testRowScreen(int screen, const char* name, const PcMenuClickRect* rows, const int* active)
+{
+	const PcMenuClickResult hover0 = pc_menu_click_hover(screen, 320.0f, 110.0f, rows, active, 3, kPcMenuClickMargin);
+	const PcMenuClickResult hover2 = pc_menu_click_hover(screen, 320.0f, 200.0f, rows, active, 3, kPcMenuClickMargin);
+	expect(hover0.action == PC_MENU_CLICK_HIGHLIGHT && hover0.index == 0, name, "the pointer highlights the row it is on");
+	expect(hover2.action == PC_MENU_CLICK_HIGHLIGHT && hover2.index == 2, name, "moving the pointer highlights the new row");
+	expect(hover0.action != PC_MENU_CLICK_ACTIVATE && hover2.action != PC_MENU_CLICK_ACTIVATE, name, "a move does not activate");
+
+	const PcMenuClickResult miss = pc_menu_click_resolve(screen, 10.0f, 10.0f, rows, active, 3, kPcMenuClickMargin);
+	expect(miss.action == PC_MENU_CLICK_IGNORE && miss.index == -1, name, "empty space does not activate");
+
+	const PcMenuClickResult pressed = pc_menu_click_resolve(screen, 320.0f, 200.0f, rows, active, 3, kPcMenuClickMargin);
+	expect(pressed.action == PC_MENU_CLICK_ACTIVATE && pressed.index == 2, name, "a click activates the row under the pointer");
+
+	const int locked[3] = { 1, 0, 1 };
+	expect(pc_menu_click_hover(screen, 320.0f, 150.0f, rows, locked, 3, 0.0f).action == PC_MENU_CLICK_IGNORE, name,
+	       "an inactive row does not highlight");
+	expect(pc_menu_click_resolve(screen, 320.0f, 150.0f, rows, locked, 3, 0.0f).action == PC_MENU_CLICK_IGNORE, name,
+	       "an inactive row does not activate");
+}
+
 void testHits()
 {
 	const PcMenuClickRect rows[3] = {
@@ -117,26 +148,29 @@ void testHits()
 		{ 200, 180, 440, 220 },
 	};
 	const int active[3] = { 1, 1, 1 };
-	const PcMenuClickResult hover0 = pc_menu_click_hover(PC_MENU_CLICK_MAIN, 320.0f, 110.0f, rows, active, 3, kPcMenuClickMargin);
-	const PcMenuClickResult hover2 = pc_menu_click_hover(PC_MENU_CLICK_MAIN, 320.0f, 200.0f, rows, active, 3, kPcMenuClickMargin);
-	check(hover0.action == PC_MENU_CLICK_HIGHLIGHT && hover0.index == 0, "the pointer highlights the row it is on");
-	check(hover2.action == PC_MENU_CLICK_HIGHLIGHT && hover2.index == 2, "moving the pointer highlights the new row");
-	check(hover0.action != PC_MENU_CLICK_ACTIVATE && hover2.action != PC_MENU_CLICK_ACTIVATE, "a move does not activate");
+	const int rowScreens[] = {
+		PC_MENU_CLICK_MAIN,      PC_MENU_CLICK_OPTIONS, PC_MENU_CLICK_SOUND,     PC_MENU_CLICK_RUMBLE,
+		PC_MENU_CLICK_LANGUAGE,  PC_MENU_CLICK_ADVANCED, PC_MENU_CLICK_PAUSE,    PC_MENU_CLICK_PAUSE_YESNO,
+		PC_MENU_CLICK_PROGRESSIVE, PC_MENU_CLICK_MAP_PAUSE,
+	};
+	const char* rowNames[] = {
+		"main menu", "options", "sound", "rumble", "language", "advanced", "pause", "pause yes/no", "progressive", "world-map pause",
+	};
+	const int rowCount = int(sizeof(rowScreens) / sizeof(rowScreens[0]));
+	for (int i = 0; i < rowCount; i++) {
+		testRowScreen(rowScreens[i], rowNames[i], rows, active);
+	}
 
 	// Overlap of row 0 (centre 120) and row 1 (centre 150). 132 is nearer 120.
 	check(pc_menu_click_hit(320.0f, 132.0f, rows, active, 3, 0.0f) == 0, "the nearer row wins an overlap");
 	check(pc_menu_click_hit(320.0f, 148.0f, rows, active, 3, 0.0f) == 1, "the other side of the overlap picks the next row");
 
-	const PcMenuClickResult miss = pc_menu_click_resolve(PC_MENU_CLICK_MAIN, 10.0f, 10.0f, rows, active, 3, kPcMenuClickMargin);
-	check(miss.action == PC_MENU_CLICK_IGNORE && miss.index == -1, "empty space does not activate");
-
-	const PcMenuClickResult pressed
-	    = pc_menu_click_resolve(PC_MENU_CLICK_MAIN, 320.0f, 200.0f, rows, active, 3, kPcMenuClickMargin);
-	check(pressed.action == PC_MENU_CLICK_ACTIVATE && pressed.index == 2, "a click activates the row under the pointer");
-
 	const PcMenuClickResult start
 	    = pc_menu_click_resolve(PC_MENU_CLICK_TITLE, 320.0f, 200.0f, rows, active, 3, kPcMenuClickMargin);
 	check(start.action == PC_MENU_CLICK_PRESS_START && start.index == 2, "a title click presses start");
+	const PcMenuClickResult titleHover
+	    = pc_menu_click_hover(PC_MENU_CLICK_TITLE, 320.0f, 110.0f, rows, active, 3, kPcMenuClickMargin);
+	check(titleHover.action == PC_MENU_CLICK_HIGHLIGHT && titleHover.index == 0, "Press Start highlights before the click");
 
 	const int locked[3] = { 1, 0, 1 };
 	check(pc_menu_click_hit(320.0f, 150.0f, rows, locked, 3, 0.0f) == -1, "an inactive row does not hand the click to a neighbour");
@@ -144,6 +178,10 @@ void testHits()
 	const PcMenuClickResult other
 	    = pc_menu_click_resolve(PC_MENU_CLICK_NONE, 320.0f, 200.0f, rows, active, 3, kPcMenuClickMargin);
 	check(other.action == PC_MENU_CLICK_IGNORE, "another screen ignores the pointer");
+	// Past the row lists. These rectangles are not known without a live window.
+	const PcMenuClickResult unmeasured = pc_menu_click_resolve(PC_MENU_CLICK_MAP_PAUSE + 1, 320.0f, 200.0f, rows, active, 3, kPcMenuClickMargin);
+	check(unmeasured.action == PC_MENU_CLICK_IGNORE && unmeasured.index == -1,
+	      "a screen past the row lists does not activate");
 
 	const PcMenuClickRect root = { 0, 0, 640, 480 };
 	const PcMenuClickRect backdrop = { 0, 0, 640, 480 };
