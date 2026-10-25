@@ -104,6 +104,22 @@ static void resolvePlayerPads()
 	}
 }
 
+// Android puede enumerar un dispositivo virtual/auxiliar antes que el mando
+// físico. En modo automático, el mando que produce una pulsación pasa a P1;
+// una asignación explícita de cooperativo conserva siempre sus propietarios.
+static void pc_auto_promote_pad(SDL_JoystickID id)
+{
+	if (sPlayerDeviceExplicit || id < 0 || sOpenPads.empty() || sOpenPads[0].id == id)
+		return;
+	for (size_t i = 1; i < sOpenPads.size(); ++i) {
+		if (sOpenPads[i].id != id)
+			continue;
+		std::swap(sOpenPads[0], sOpenPads[i]);
+		resolvePlayerPads();
+		return;
+	}
+}
+
 bool pc_host_alloc_active();
 void pc_host_alloc_set(bool active);
 namespace {
@@ -761,6 +777,12 @@ bool pc_window_init(const char* title, int width, int height) {
     // can drop the vendor and try again.
     XSetErrorHandler([](Display*, XErrorEvent*) -> int { return 0; });
 #endif
+#if defined(_WIN32) && defined(SDL_HINT_WINDOWS_DPI_AWARENESS)
+    // Sin declarar DPI, Windows con escalado (125 %, 150 %...) da al juego
+    // una ventana sin bordes más pequeña y la estira: bordes y sombras
+    // pixelados hasta que un cambio de monitor recalculaba el DPI.
+    SDL_SetHint(SDL_HINT_WINDOWS_DPI_AWARENESS, "permonitorv2");
+#endif
 
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMECONTROLLER | SDL_INIT_EVENTS) < 0) {
         printf("[PC Port Error] SDL_Init failed: %s\n", SDL_GetError());
@@ -922,8 +944,11 @@ extern "C" float pc_window_free_camera_sub_y(void) { return sFreeCamSubY[0]; }
 static bool pc_window_read_gamepad(SDL_GameController* ctl, u16& button, s8& stickX, s8& stickY,
                                    s8& substickX, s8& substickY, u8& triggerL, u8& triggerR, bool& swarmHeld)
 {
-    auto boundButtonPressed = [ctl](int action) {
-        return pc_window_gamepad_bind_held(ctl, pc_window_get_gamepad_binding(action));
+    int bindings[PC_KEY_ACT_COUNT];
+    for (int action = 0; action < PC_KEY_ACT_COUNT; ++action)
+        bindings[action] = pc_window_get_gamepad_binding(action);
+    auto boundButtonPressed = [ctl, &bindings](int action) {
+        return pc_window_gamepad_bind_held(ctl, bindings[action]);
     };
     if (boundButtonPressed(PC_KEY_ACT_A)) button |= PAD_BUTTON_A;
     if (boundButtonPressed(PC_KEY_ACT_B)) button |= PAD_BUTTON_B;
@@ -949,11 +974,15 @@ static bool pc_window_read_gamepad(SDL_GameController* ctl, u16& button, s8& sti
     Sint16 axisL = SDL_GameControllerGetAxis(ctl, SDL_CONTROLLER_AXIS_TRIGGERLEFT);
     Sint16 axisR = SDL_GameControllerGetAxis(ctl, SDL_CONTROLLER_AXIS_TRIGGERRIGHT);
     const int axisDeadZone = sStickDeadZone * 256;
-    if (axisL > axisDeadZone) {
+    const bool leftRemapped = pc_gamepad_axis_is_mapped_elsewhere(
+        bindings, PC_KEY_ACT_COUNT, SDL_CONTROLLER_AXIS_TRIGGERLEFT, PC_KEY_ACT_L);
+    const bool rightRemapped = pc_gamepad_axis_is_mapped_elsewhere(
+        bindings, PC_KEY_ACT_COUNT, SDL_CONTROLLER_AXIS_TRIGGERRIGHT, PC_KEY_ACT_R);
+    if (!leftRemapped && axisL > axisDeadZone) {
         triggerL = (u8)(axisL / 128);
         if (axisL > 30000) button |= PAD_TRIGGER_L;
     }
-    if (axisR > axisDeadZone) {
+    if (!rightRemapped && axisR > axisDeadZone) {
         triggerR = (u8)(axisR / 128);
         if (axisR > 30000) button |= PAD_TRIGGER_R;
     }
@@ -1011,6 +1040,17 @@ static bool pc_window_read_gamepad(SDL_GameController* ctl, u16& button, s8& sti
         || abs(rx) > noticeZone || abs(ry) > noticeZone;
 }
 
+// Vigilante de cuelgues (pc_main.cpp): el tiempo dentro de SDL_PollEvent no
+// cuenta, Android bloquea ahí al pasar a segundo plano.
+extern "C" void pc_hang_set_in_poll(int inPoll);
+static int pc_window_poll_one(SDL_Event* event)
+{
+    pc_hang_set_in_poll(1);
+    const int got = SDL_PollEvent(event);
+    pc_hang_set_in_poll(0);
+    return got;
+}
+
 void pc_window_poll_events(PADStatus* pad) {
 #if PIKI_P2_HOST
     // Pikmin 2: el audio lo pauta la cola de SDL desde VIWaitForRetrace.
@@ -1021,7 +1061,7 @@ void pc_window_poll_events(PADStatus* pad) {
 #endif
 
     SDL_Event event;
-    while (SDL_PollEvent(&event)) {
+    while (pc_window_poll_one(&event)) {
         switch (event.type) {
             case SDL_QUIT:
                 sShouldClose = true;
@@ -1126,6 +1166,7 @@ void pc_window_poll_events(PADStatus* pad) {
                 pc_controller_close_instance(event.cdevice.which);
                 break;
             case SDL_CONTROLLERBUTTONDOWN:
+                pc_auto_promote_pad(event.cbutton.which);
                 sLastPressKind = PC_INPUT_DEV_GAMEPAD;
                 sLastPressId   = event.cbutton.which;
                 sLastPressSerial++;
@@ -1176,6 +1217,11 @@ void pc_window_poll_events(PADStatus* pad) {
                 }
 #endif
 #if PIKI_P2_HOST
+                // DEBUG: F4 alterna 30/60 FPS en caliente (comparar el ritmo de enemigos y HUD).
+                if (event.key.keysym.scancode == SDL_SCANCODE_F4 && !event.key.repeat) {
+                    const int mode = pc_settings_debug_toggle_fps_mode();
+                    printf("[PC DBG] F4: %s\n", mode ? "60 FPS" : "30 FPS (original)");
+                }
                 // DEBUG: F9 fuerza el fin del dia (lo consume GameSystem::update).
                 if (event.key.keysym.scancode == SDL_SCANCODE_F9 && !event.key.repeat) {
                     sDebugDayEndRequested = true;
@@ -1603,6 +1649,10 @@ void pc_window_shutdown(void) {
 
 bool pc_window_should_close(void) {
     return sShouldClose;
+}
+
+void pc_window_request_close(void) {
+    sShouldClose = true;
 }
 
 int pc_window_get_width(void) {

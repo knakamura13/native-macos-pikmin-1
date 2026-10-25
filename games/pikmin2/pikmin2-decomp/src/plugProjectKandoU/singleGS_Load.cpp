@@ -11,6 +11,16 @@
 namespace Game {
 namespace SingleGame {
 
+#ifdef PIKI_PC_PORT
+// En GameCube la carga del DVD dura unos segundos y en ese tiempo se ve el
+// titulo de la zona (o el subnivel) sobre negro, con su aura. Aqui la carga
+// es casi instantanea y el juego empezaba a desvanecer el titulo enseguida:
+// se espera al menos lo que tardaba la consola.
+static const f32 kPcMinLoadShowTime = 5.0f;
+static f32 sPcLoadShowTime          = 0.0f;
+extern "C" void pc_sched_set_loading_screen(int on); // p2_os_host.cpp
+#endif
+
 /**
  * @note Address: N/A
  * @note Size: 0xE4
@@ -89,6 +99,9 @@ void LoadState::exec(SingleGameSection* game)
 		}
 
 		GameStat::clear();
+#ifdef PIKI_PC_PORT
+		sPcLoadShowTime = 0.0f;
+#endif
 		_10           = 0;
 		mHasLoadBegun = false;
 		mHasDrawn     = false;
@@ -97,8 +110,20 @@ void LoadState::exec(SingleGameSection* game)
 		if (mHasDrawn && !mHasLoadBegun) {
 			sys->dvdLoadUseCallBack(&game->mDvdThread, game->mLoadGameCallback);
 			mHasLoadBegun = true;
+#ifdef PIKI_PC_PORT
+			// Mientras carga, el hilo de carga recibe casi todo el frame.
+			pc_sched_set_loading_screen(1);
+#endif
 		}
+#ifdef PIKI_PC_PORT
 		if (game->mDvdThread.mMode == DvdThreadCommand::CM_Completed) {
+			pc_sched_set_loading_screen(0);
+		}
+		sPcLoadShowTime += sys->mDeltaTime;
+		if (game->mDvdThread.mMode == DvdThreadCommand::CM_Completed && sPcLoadShowTime >= kPcMinLoadShowTime) {
+#else
+		if (game->mDvdThread.mMode == DvdThreadCommand::CM_Completed) {
+#endif
 			game->postSetupFloatMemory();
 			if (game->mInCave) {
 				transit(game, SGS_Cave, nullptr);
@@ -136,6 +161,9 @@ void LoadState::draw(SingleGameSection* game, Graphics& gfx)
  */
 void LoadState::cleanup(SingleGameSection*)
 {
+#ifdef PIKI_PC_PORT
+	pc_sched_set_loading_screen(0);
+#endif
 }
 
 } // namespace SingleGame

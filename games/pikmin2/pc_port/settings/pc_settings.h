@@ -50,6 +50,8 @@ bool pc_settings_has_pending_video(void);
 
 // Returns the current FPS mode (0=30 FPS, 1=60 FPS, 2=120 FPS experimental).
 int pc_settings_get_fps_mode(void);
+// DEBUG (F4): alterna 30/60 FPS en caliente sin guardar el ajuste; devuelve el modo nuevo.
+int pc_settings_debug_toggle_fps_mode(void);
 /// Sombras proyectadas (Graphics > Shadows): 0 off, 1-3 fuerza. Con >0 el
 /// juego no pinta sus manchas de sombra originales.
 int pc_settings_get_shadows(void);
@@ -90,7 +92,7 @@ int pc_settings_get_onion_step10(void);
 /// Los Pikmin silbados se unen al grupo al instante, sin la reacción de LookAt.
 int pc_settings_get_instant_whistle(void);
 int pc_settings_get_whistle_pluck(void);
-int pc_settings_get_hide_olimar_text(void);   ///< P2: textos de la Drake
+int pc_settings_get_hide_olimar_text(void);   ///< P2: textos de la nave
 /// Cheats. Todos vuelven al original con el modo Hard activo.
 int pc_settings_get_piki_invincible(void);
 int pc_settings_get_all_flowers(void);

@@ -158,6 +158,25 @@ static void resolvePlayerPads()
 	}
 }
 
+// En asignación automática, el orden en que Android enumera los joysticks no
+// siempre coincide con el mando que usa la persona (algunos teléfonos añaden
+// antes un dispositivo virtual/auxiliar). La primera pulsación real reclama
+// P1. Las asignaciones explícitas de cooperativo no se tocan.
+static void pc_auto_promote_pad(SDL_JoystickID id)
+{
+	if (sPlayerDeviceExplicit || id < 0 || sAutoPadId[0] == id)
+		return;
+	if (!pc_find_open_pad(id))
+		return;
+	if (sAutoPadId[1] == id) {
+		std::swap(sAutoPadId[0], sAutoPadId[1]);
+	} else {
+		sAutoPadId[1] = sAutoPadId[0];
+		sAutoPadId[0] = id;
+	}
+	resolvePlayerPads();
+}
+
 static bool pc_controller_open_slot(int index)
 {
 	if (!SDL_IsGameController(index) || pc_joystick_is_secondary(index))
@@ -243,7 +262,6 @@ static SDL_Scancode sKeyBindings[PC_KEY_ACT_COUNT];
 static SDL_Scancode sKeyBindings2[PC_KEY_ACT_COUNT];
 static bool sSwarmHeld = false; // PC_KEY_ACT_SWARM sampled by the last poll
 // D-pad Down of each player's pad, which is also the swarm button.
-static bool sPadDpadDownHeld[2] = { false, false };
 
 // Lock-On y Charge se consumen como flanco: el bucle sondea el mando muchas
 // veces entre ticks lógicos, así que la pulsación se guarda hasta que alguien
@@ -260,7 +278,6 @@ static bool sSwarmPending[2]  = { false, false };
 
 bool pc_window_swarm_held(void) { return sSwarmHeld; }
 
-bool pc_window_pad_dpad_down_held(int player) { return sPadDpadDownHeld[player & 1]; }
 static bool sKeyBindingsInitialized = false;
 
 // Gamepad remapping state.
@@ -373,7 +390,7 @@ const int kDefaultGamepadBindings[PC_KEY_ACT_COUNT] = {
     /* PC_KEY_ACT_CSTICK_DOWN */ -1,
     /* PC_KEY_ACT_CSTICK_LEFT */ -1,
     /* PC_KEY_ACT_CSTICK_RIGHT*/ -1,
-    /* PC_KEY_ACT_SWARM       */ -1, // Optional; D-pad Down is taken by the pad's own D-pad
+    /* PC_KEY_ACT_SWARM       */ -1, // Optional; D-pad Down keeps the original lie down
     /* PC_KEY_ACT_LOCKON      */ SDL_CONTROLLER_BUTTON_RIGHTSTICK,
     /* PC_KEY_ACT_FIRSTPERSON */ SDL_CONTROLLER_BUTTON_LEFTSTICK,
     /* PC_KEY_ACT_GYRO_RECENTER */ -1, // sin botón libre por defecto; se asigna en Controls
@@ -822,6 +839,12 @@ bool pc_window_init(const char* title, int width, int height) {
     // can drop the vendor and try again.
     XSetErrorHandler([](Display*, XErrorEvent*) -> int { return 0; });
 #endif
+#if defined(_WIN32) && defined(SDL_HINT_WINDOWS_DPI_AWARENESS)
+    // Sin declarar DPI, Windows con escalado (125 %, 150 %...) da al juego
+    // una ventana sin bordes más pequeña y la estira: bordes y sombras
+    // pixelados hasta que un cambio de monitor recalculaba el DPI.
+    SDL_SetHint(SDL_HINT_WINDOWS_DPI_AWARENESS, "permonitorv2");
+#endif
 
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMECONTROLLER | SDL_INIT_EVENTS) < 0) {
         printf("[PC Port Error] SDL_Init failed: %s\n", SDL_GetError());
@@ -982,10 +1005,13 @@ float pc_window_free_camera_sub_y(void) { return sFreeCamSubY[0]; }
 static bool pc_window_read_gamepad(SDL_GameController* ctl, u16& button, s8& stickX, s8& stickY,
                                    s8& substickX, s8& substickY, u8& triggerL, u8& triggerR, bool& swarmHeld, int player = 0)
 {
-    auto boundButtonPressed = [ctl, player](int action) {
+    int bindings[PC_KEY_ACT_COUNT];
+    for (int action = 0; action < PC_KEY_ACT_COUNT; ++action)
         // Coop: J2 tiene sus propios bindings de mando.
-        return pc_window_gamepad_bind_held(ctl, player == 1 ? pc_window_get_gamepad_binding_p2(action)
-                                                             : pc_window_get_gamepad_binding(action));
+        bindings[action] = player == 1 ? pc_window_get_gamepad_binding_p2(action)
+                                       : pc_window_get_gamepad_binding(action);
+    auto boundButtonPressed = [ctl, &bindings](int action) {
+        return pc_window_gamepad_bind_held(ctl, bindings[action]);
     };
     if (boundButtonPressed(PC_KEY_ACT_A)) button |= PAD_BUTTON_A;
     if (boundButtonPressed(PC_KEY_ACT_B)) button |= PAD_BUTTON_B;
@@ -1011,11 +1037,15 @@ static bool pc_window_read_gamepad(SDL_GameController* ctl, u16& button, s8& sti
     Sint16 axisL = SDL_GameControllerGetAxis(ctl, SDL_CONTROLLER_AXIS_TRIGGERLEFT);
     Sint16 axisR = SDL_GameControllerGetAxis(ctl, SDL_CONTROLLER_AXIS_TRIGGERRIGHT);
     const int axisDeadZone = sStickDeadZone * 256;
-    if (axisL > axisDeadZone) {
+    const bool leftRemapped = pc_gamepad_axis_is_mapped_elsewhere(
+        bindings, PC_KEY_ACT_COUNT, SDL_CONTROLLER_AXIS_TRIGGERLEFT, PC_KEY_ACT_L);
+    const bool rightRemapped = pc_gamepad_axis_is_mapped_elsewhere(
+        bindings, PC_KEY_ACT_COUNT, SDL_CONTROLLER_AXIS_TRIGGERRIGHT, PC_KEY_ACT_R);
+    if (!leftRemapped && axisL > axisDeadZone) {
         triggerL = (u8)(axisL / 128);
         if (axisL > 30000) button |= PAD_TRIGGER_L;
     }
-    if (axisR > axisDeadZone) {
+    if (!rightRemapped && axisR > axisDeadZone) {
         triggerR = (u8)(axisR / 128);
         if (axisR > 30000) button |= PAD_TRIGGER_R;
     }
@@ -1035,15 +1065,10 @@ static bool pc_window_read_gamepad(SDL_GameController* ctl, u16& button, s8& sti
     if (sCStickInvert & 2) ry = -ry;
     // Mod "Free Camera": the right stick orbits instead of pushing the squad,
     // the way Pikmin 3 rearranged it. The squad moves to the Swarm button.
-    // D-pad Down is the pad's swarm button with or without the mod (issue
-    // #76): the right stick alone makes the original C-stick column, never a
-    // group at the cursor.
+    // Swarming on the pad is its own Swarm binding (issue #138): D-pad Down
+    // keeps the original lie down, with or without the mod. The right stick
+    // alone makes the original C-stick column, never a group at the cursor.
     sFreeCamSubY[player & 1] = 0.0f;
-    sPadDpadDownHeld[player & 1] = SDL_GameControllerGetButton(ctl, SDL_CONTROLLER_BUTTON_DPAD_DOWN) != 0;
-    // Con A pulsado y la selección de Pikmin 2, la cruceta abajo solo cambia
-    // el color del Pikmin agarrado: no hace swarm.
-    const bool kindChange = (button & PAD_BUTTON_A) && pc_settings_get_p2_selection();
-    if (sPadDpadDownHeld[player & 1] && !kindChange) swarmHeld = true;
     if (pc_settings_get_free_camera()) {
         if (abs(ry) > axisDeadZone) sFreeCamSubY[player & 1] = pc_pad_axis_from_sdl(-ry) / 74.0f;
         if (abs(rx) > axisDeadZone) {
@@ -1156,7 +1181,9 @@ void pc_window_poll_events(PADStatus* pad) {
                     sMousePressedMask |= SDL_BUTTON(event.button.button);
                 // Menú F1 abierto: el clic izquierdo es un toque (misma lógica
                 // que la pantalla táctil: seleccionar fila / pulsar la ya elegida).
-                if (sSettingsMenuOpen && event.button.button == SDL_BUTTON_LEFT && event.button.which != SDL_TOUCH_MOUSEID) {
+                // (También en el mapa de zonas de las campañas: elegir zona con el ratón.)
+                if ((sSettingsMenuOpen || pc_campaign_map_active()) && event.button.button == SDL_BUTTON_LEFT
+                    && event.button.which != SDL_TOUCH_MOUSEID) {
                     int ww = 0, wh = 0;
                     SDL_GetWindowSize(sWindow, &ww, &wh);
                     if (ww > 0 && wh > 0) pc_settings_touch_tap(event.button.x / float(ww), event.button.y / float(wh));
@@ -1213,6 +1240,7 @@ void pc_window_poll_events(PADStatus* pad) {
                 pc_controller_close_instance(event.cdevice.which);
                 break;
             case SDL_CONTROLLERBUTTONDOWN:
+                pc_auto_promote_pad(event.cbutton.which);
                 sLastPressKind = PC_INPUT_DEV_GAMEPAD;
                 sLastPressId   = event.cbutton.which;
                 sLastPressSerial++;
@@ -1605,6 +1633,20 @@ int pc_window_take_wheel_steps(void) {
     return steps;
 }
 
+// Driver VSync (swap interval 1) wanted for the given logical interval.
+// Monitor mode always uses it as its clock. On Windows the fixed 30/60 modes
+// use it too: the software deadline alone only averages the rate and tears
+// (issue #144); DWM does not show the multi-refresh waits seen on Mesa.
+static int driver_swap_interval_for(int interval) {
+    if (!sVsyncEnabled) return 0;
+    if (interval == 0 && pc_frame_vsync_lock()) return 1;
+#if defined(_WIN32)
+    return 1;
+#else
+    return 0;
+#endif
+}
+
 void pc_window_set_swap_interval(int interval) {
     // 0 is meaningful here: it is the port's 120 Hz mode. Only negatives are
     // nonsense.
@@ -1612,8 +1654,8 @@ void pc_window_set_swap_interval(int interval) {
     // The monitor-rate mode is the one case where the display itself is the
     // clock: swap interval 1 gives us phase-aligned frames instead of a timer
     // which merely averages the same number of frames per second. Fixed 30/60
-    // modes keep the driver wait off and use the existing VI/software pacing.
-    const int driverInterval = (interval == 0 && pc_frame_vsync_lock() && sVsyncEnabled) ? 1 : 0;
+    // modes keep the VI/software pacing (plus the driver wait on Windows).
+    const int driverInterval = driver_swap_interval_for(interval);
     if (sLogicalRetraceInterval == interval && sDriverSwapInterval == driverInterval) return;
     if (SDL_GL_SetSwapInterval(driverInterval) == 0) {
         sDriverSwapInterval = driverInterval;
@@ -1654,6 +1696,10 @@ void pc_window_shutdown(void) {
 
 bool pc_window_should_close(void) {
     return sShouldClose;
+}
+
+void pc_window_request_close(void) {
+    sShouldClose = true;
 }
 
 int pc_window_get_width(void) {
@@ -1775,7 +1821,7 @@ void pc_window_set_vsync_enabled(bool enabled) {
     sVsyncEnabled = enabled;
     // Re-evaluate the driver interval even if the logical clamp did not
     // change. This also turns real VSync off immediately when the user does.
-    const int wanted = (sLogicalRetraceInterval == 0 && pc_frame_vsync_lock() && sVsyncEnabled) ? 1 : 0;
+    const int wanted = driver_swap_interval_for(sLogicalRetraceInterval);
     if (wanted != sDriverSwapInterval) {
         if (SDL_GL_SetSwapInterval(wanted) == 0) {
             sDriverSwapInterval = wanted;

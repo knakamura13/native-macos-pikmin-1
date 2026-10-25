@@ -10,9 +10,11 @@
 #include "prepared_image.h"
 #include "installer_ui.h"
 #include "launcher_gui.h"
+#include "crash_report.h"
 #include "launcher_platform.h"
 #include "release_update.h"
 #include "texture_pack_download.h"
+#include "nectar_assets/charpack.h"
 #if PIKMIN_LAUNCHER_NETPLAY
 #include "launcher_coop.h"
 #endif
@@ -47,10 +49,12 @@ namespace platform = pikmin::launcher::platform;
 constexpr const char* kGameExecutable     = "nectar.exe";
 constexpr const char* kLauncherExecutable = "nectar-launcher.exe";
 constexpr const char* kMapEditorExecutable = "nectar-mapmaker.exe";
+constexpr const char* kModelMakerExecutable = "nectar-modelmaker.exe";
 #else
 constexpr const char* kGameExecutable     = "nectar";
 constexpr const char* kLauncherExecutable = "nectar-launcher";
 constexpr const char* kMapEditorExecutable = "nectar-mapmaker";
+constexpr const char* kModelMakerExecutable = "nectar-modelmaker";
 #endif
 
 
@@ -109,9 +113,46 @@ fs::path askForInstallDirectoryConsole()
 
 bool assetsReady(const fs::path& dataRoot)
 {
-    return fs::is_regular_file(dataRoot / "assets/.pikmin-assets")
-        && fs::is_directory(dataRoot / "assets/dataDir")
-        && fs::is_regular_file(dataRoot / "assets/dataDir/parms/gamePrms.bin");
+    const fs::path assets = dataRoot / "assets";
+    if (!fs::is_regular_file(assets / ".pikmin-assets")
+        || !fs::is_directory(assets / "dataDir")
+        || !fs::is_regular_file(assets / "dataDir/parms/gamePrms.bin")) {
+        return false;
+    }
+
+    // El marcador por si solo no garantiza que una extraccion interrumpida o
+    // una copia manual conserve los paquetes que el juego abre al arrancar.
+    // Sin cualquiera de estos pares el ejecutable terminaba en ERROR dentro de
+    // parseArchiveDirectory (issue #151); el launcher debe ofrecer reparar la
+    // instalacion antes de iniciarlo.
+    static const char* requiredArchives[] = {
+        "tekis", "bosses", "tekipara", "tekikey", "ufopartsbin", "bridges",
+        "gates", "bomb", "rope", "water", "fl_water", "pelletsbin",
+        "pikihead", "effshapes", "weeds", "goal"
+    };
+    const fs::path archives = assets / "dataDir/archives";
+    for (const char* name : requiredArchives) {
+        if (!fs::is_regular_file(archives / (std::string(name) + ".arc"))
+            || !fs::is_regular_file(archives / (std::string(name) + ".dir"))) {
+            return false;
+        }
+    }
+
+    // USA usa blo_eng; Europa lleva cinco paquetes con doble guion bajo.
+    // Validarlos tambien evita que cambiar el idioma convierta una instalacion
+    // parcialmente copiada en el mismo abort de archivo ausente.
+    const bool pal = fs::is_directory(assets / "dataDir/screen/ger_tex");
+    static const char* palLanguages[] = { "blo__eng", "blo__fre", "blo__ger", "blo__spa", "blo__ita" };
+    const char* const* languages = pal ? palLanguages : nullptr;
+    const size_t languageCount   = pal ? sizeof(palLanguages) / sizeof(palLanguages[0]) : 0;
+    if (!pal) {
+        if (!fs::is_regular_file(archives / "blo_eng.arc") || !fs::is_regular_file(archives / "blo_eng.dir")) return false;
+    }
+    for (size_t i = 0; i < languageCount; i++) {
+        const std::string name = languages[i];
+        if (!fs::is_regular_file(archives / (name + ".arc")) || !fs::is_regular_file(archives / (name + ".dir"))) return false;
+    }
+    return true;
 }
 
 std::string lowerExtension(const fs::path& path)
@@ -833,9 +874,10 @@ bool installPikmin2Assets(const fs::path& image, const fs::path& gameDirectory, 
         failure = "Extraction failed: " + error;
         return false;
     }
-    if (!fs::is_directory(partialAssets / "user")) {
+    if (!fs::is_directory(partialAssets / "user") || !fs::is_regular_file(partialAssets / "AudioRes/Conductor.arc")
+        || !fs::is_directory(partialAssets / "AudioRes/Seqs")) {
         fs::remove_all(partialAssets, ec);
-        failure = "The image does not contain the expected Pikmin 2 files.";
+        failure = "The image is incomplete or modified (missing Pikmin 2 files). Use a full, unmodified dump (not NKit or trimmed).";
         return false;
     }
     {
@@ -951,6 +993,8 @@ bool installSharedParts(const fs::path& package, const fs::path& install, std::s
     if (fs::is_regular_file(palBuild) && !replaceExecutable(palBuild, install / palBuild.filename(), failure)) return false;
     const fs::path mapEditor = package / kMapEditorExecutable;
     if (fs::is_regular_file(mapEditor) && !replaceExecutable(mapEditor, install / kMapEditorExecutable, failure)) return false;
+    const fs::path modelMaker = package / kModelMakerExecutable;
+    if (fs::is_regular_file(modelMaker) && !replaceExecutable(modelMaker, install / kModelMakerExecutable, failure)) return false;
     const fs::path icon = package / "open_nectar.png";
     if (fs::is_regular_file(icon) && !sameFile(icon, install / icon.filename())) {
         fs::copy_file(icon, install / icon.filename(), fs::copy_options::overwrite_existing, ec);
@@ -1196,9 +1240,15 @@ int main(int argc, char** argv)
     fs::path converter;
     bool directoryWasSpecified = false;
     fs::path movedFrom;
+    bool crashReport = false; // lo lanza el juego al fallar: abrir y ofrecer el informe
+    fs::path crashFile;       // ruta del informe que pasa el juego (opcional)
     for (int i = 1; i < argc; ++i) {
         const std::string arg = argv[i];
-        if (arg == "--moved-from" && i + 1 < argc) movedFrom = argv[++i];
+        if (arg == "--crash-report") {
+            crashReport = true;
+            if (i + 1 < argc && std::strncmp(argv[i + 1], "--", 2) != 0) crashFile = argv[++i];
+        }
+        else if (arg == "--moved-from" && i + 1 < argc) movedFrom = argv[++i];
         else if (arg == "--rom" && i + 1 < argc) image = argv[++i];
         else if ((arg == "--install-dir" || arg == "--data-dir") && i + 1 < argc) {
             dataRoot = argv[++i];
@@ -1275,7 +1325,17 @@ int main(int argc, char** argv)
             if (ec) std::this_thread::sleep_for(std::chrono::milliseconds(300));
         }
     }
-    const bool openWindow = argc == 1 || (argc == 3 && !movedFrom.empty());
+    const bool openWindow = argc == 1 || (crashReport && argc == (crashFile.empty() ? 2 : 3))
+                         || (argc == 3 && !movedFrom.empty());
+    // El juego lo hereda: si falla, vuelve a abrir este launcher con
+    // --crash-report para mostrar el informe al momento.
+    if (const fs::path self = platform::executablePath(); !self.empty()) {
+#ifdef _WIN32
+        _wputenv_s(L"NECTAR_LAUNCHER", self.wstring().c_str());
+#else
+        setenv("NECTAR_LAUNCHER", self.c_str(), 1);
+#endif
+    }
     // El launcher descargado de GitHub, abierto otra vez tras instalar: se
     // abre el de la instalación, que es el que juega y actualiza. Antes se
     // copia a la instalación lo que trae este paquete: si es una versión
@@ -1341,11 +1401,28 @@ int main(int argc, char** argv)
                     break;
                 }
             }
+            for (const fs::path& dir : { pikmin1Directory, platform::executablePath().parent_path() }) {
+                if (!dir.empty() && fs::is_regular_file(dir / kModelMakerExecutable)) {
+                    hubState.modelMaker = (dir / kModelMakerExecutable).string();
+                    break;
+                }
+            }
         }
         auto window = std::make_unique<pikmin::launcher::HubWindow>();
         std::string hubError;
         if (window->open(hubState, hubError)) {
             pikmin::launcher::HubWindow* home = window.get();
+            // Informe de un crash (de ahora, si nos lanzó el juego, o de una
+            // sesión anterior): copiar y abrir GitHub antes de la portada.
+            pikmin::launcher::offerCrashReport(*home, {
+                // El que indica el juego al fallar va primero: no depende de
+                // dónde crea este launcher que está instalado.
+                { crashFile.filename() == "pikmin_crash.log" ? "Pikmin" : "Pikmin 2", crashFile.parent_path(),
+                  crashFile.filename().string(),
+                  crashFile.filename() == "pikmin_crash.log" ? "pikmin.log" : "pikmin2.log" },
+                { "Pikmin 2", pikmin2Directory, "pikmin2_crash.log", "pikmin2.log" },
+                { "Pikmin", pikmin1Directory, "pikmin_crash.log", "pikmin.log" },
+            });
             // Pantalla principal hasta que se pide instalar Pikmin 1 (o salir):
             // jugar, actualizar e instalar Pikmin 2 se resuelven aquí. También
             // la usa el modal de rutas de Pikmin 1 al cancelar.
@@ -1370,6 +1447,29 @@ int main(int argc, char** argv)
                     if (choice.action == pikmin::launcher::HubAction::MapEditor) {
                         // Se abre en la carpeta del juego: de ahí saca assets/ y el ejecutable.
                         if (!hubState.mapEditor.empty()) play(hubState.games[0].directory, hubState.mapEditor);
+                        continue;
+                    }
+                    if (choice.action == pikmin::launcher::HubAction::InstallCharacter) {
+                        // Un personaje del creador de modelos: a Load/Characters de
+                        // Pikmin 1; sale en el selector de capitán.
+                        const fs::path pack = platform::askForFile("Install a character", "Character", "*.nectarchar");
+                        if (!pack.empty()) {
+                            nectar::CharacterInfo info;
+                            std::string error;
+                            if (nectar::installCharacterPack(hubState.games[0].directory, pack.u8string(), info, error))
+                                platform::showMessage(info.isPikmin() ? "Pikmin model installed" : "Character installed",
+                                                      info.isPikmin()
+                                                          ? "\"" + info.name + "\" is installed. Pick it in Settings > HD Models > Pikmin models, or in the game's Options > Graphics."
+                                                          : "\"" + info.name + "\" is in the captain selector of Pikmin.",
+                                                      false);
+                            else
+                                platform::showMessage("Could not install the character", error, true);
+                        }
+                        continue;
+                    }
+                    if (choice.action == pikmin::launcher::HubAction::ModelMaker) {
+                        // Como el editor de mapas: en la carpeta del juego (assets/ y Load/Models).
+                        if (!hubState.modelMaker.empty()) play(hubState.games[0].directory, hubState.modelMaker);
                         continue;
                     }
                     if (choice.action == pikmin::launcher::HubAction::TexturePack) {
@@ -1550,8 +1650,8 @@ int main(int argc, char** argv)
             installedAssetsNow = true;
 
             // El idioma no se pregunta al instalar: el disco europeo trae los
-            // cinco y se instalan todos; el juego empieza en inglés y se cambia
-            // en el menú F1 (Display > Language).
+            // cinco y se instalan todos; se elige en las opciones del propio
+            // juego.
         }
 
         std::string failure;

@@ -108,6 +108,21 @@ set(LEGACY_COMPILE_OPTIONS
     -Werror=return-type
 )
 
+# Endurecimiento del código decompilado. El compilador de GameCube no
+# aprovechaba el comportamiento indefinido que GCC/Clang -O2 sí aprovechan:
+# variables sin inicializar (crash de Armor::StateFail, leía la dirección
+# 0x2fc), comprobaciones de this == nullptr, punteros reinterpretados entre
+# tipos y overflow con signo. Con estas opciones ese código se compila como
+# lo que el juego espera en vez de eliminarse o volverse basura.
+include(CheckCXXCompilerFlag)
+foreach(flag -fno-strict-aliasing -fno-delete-null-pointer-checks -fwrapv -ftrivial-auto-var-init=zero)
+    string(MAKE_C_IDENTIFIER "LEGACY_HAS${flag}" flagVar)
+    check_cxx_compiler_flag(${flag} ${flagVar})
+    if(${flagVar})
+        list(APPEND LEGACY_COMPILE_OPTIONS ${flag})
+    endif()
+endforeach()
+
 set(NATIVE_COMPILE_OPTIONS
     -include "${ADAPTER_DIR}/pikmin2_pc_types.h"
     -fsigned-char
@@ -140,6 +155,10 @@ if(PIKMIN_GAME_VERSION STREQUAL "VERSION_GPVE01")
 else()
     set(P2_OUTPUT_NAME "nectar2-pal")
 endif()
+
+# __FILE__ (asserts, informes de crash) sin la ruta absoluta de la máquina
+# que compila: queda "pikmin2-decomp/...".
+add_compile_options("-ffile-prefix-map=${CMAKE_CURRENT_SOURCE_DIR}/=")
 
 # ─── Definiciones de compilacion ───
 add_compile_definitions(
@@ -309,6 +328,28 @@ message(STATUS "  GD+THP  : ${GD_SOURCES} ${THP_SOURCES}")
 #  pikmin2_pc — entry nativo + stubs Dolphin + renderer GX→GL (Fase 4)
 ###############################################################################
 if(PIKMIN2_ENABLE_PORT_LAYER)
+    # Versión y commit en el informe de crash (pikmin2_crash.log): sin ellos
+    # no se sabe con qué ejecutable traducir las direcciones del backtrace.
+    set(NECTAR_RELEASE_VERSION "unknown")
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../../versions.json")
+        file(READ "${CMAKE_CURRENT_SOURCE_DIR}/../../versions.json" NECTAR_VERSIONS_JSON)
+        string(REGEX MATCH "\"release\"[ \t]*:[ \t]*\"([^\"]*)\"" _ "${NECTAR_VERSIONS_JSON}")
+        if(CMAKE_MATCH_1)
+            set(NECTAR_RELEASE_VERSION "${CMAKE_MATCH_1}")
+        endif()
+    endif()
+    set(NECTAR_GIT_COMMIT "unknown")
+    find_package(Git QUIET)
+    if(GIT_FOUND)
+        execute_process(COMMAND "${GIT_EXECUTABLE}" rev-parse --short HEAD
+                        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+                        OUTPUT_VARIABLE _nectar_commit OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+        if(_nectar_commit)
+            set(NECTAR_GIT_COMMIT "${_nectar_commit}")
+        endif()
+    endif()
+    set_source_files_properties(${PC_PORT_DIR}/pc_main.cpp PROPERTIES COMPILE_DEFINITIONS
+        "NECTAR_RELEASE_VERSION=\"${NECTAR_RELEASE_VERSION}\";NECTAR_GIT_COMMIT=\"${NECTAR_GIT_COMMIT}\"")
     set(PC_PORT_SOURCES
         ${PC_PORT_DIR}/pc_main.cpp
         ${PC_PORT_DIR}/pc_gpu_preference.cpp
@@ -498,6 +539,7 @@ if(PIKMIN2_ENABLE_PORT_LAYER)
             add_executable(${target} ${ARGN})
             target_compile_options(${target} PRIVATE ${NATIVE_COMPILE_OPTIONS} -Wno-unused-parameter)
             target_include_directories(${target} PRIVATE
+                ${CMAKE_CURRENT_SOURCE_DIR}/include
                 ${PC_PORT_DIR}
                 ${PC_PORT_DIR}/audio
                 ${PC_PORT_DIR}/gl
@@ -524,6 +566,12 @@ if(PIKMIN2_ENABLE_PORT_LAYER)
         pikmin2_add_host_test(p2_aram_test
             ${PC_PORT_DIR}/audio/pc_aram_test.cpp
             ${PC_PORT_DIR}/audio/pc_aram.cpp
+        )
+        pikmin2_add_host_test(p2_dsp_host_test
+            ${PC_PORT_DIR}/audio/pc_dsp_host_test.cpp
+            ${PC_PORT_DIR}/audio/pc_dsp_host.cpp
+            ${PC_PORT_DIR}/audio/pc_aram.cpp
+            ${PC_PORT_DIR}/audio/pc_audio_drops.cpp
         )
         pikmin2_add_host_test(p2_envelope_test
             ${PC_PORT_DIR}/audio/pc_envelope_test.cpp

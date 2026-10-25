@@ -22,6 +22,7 @@ extern "C" int pc_movie_active(void);
 #include <unordered_map>
 #include <unordered_set>
 #include <memory>
+#include <atomic>
 #include <mutex>
 #include <new>
 
@@ -1085,6 +1086,9 @@ bool pc_gfx_replay_captured_frame(void) {
 struct VertexArrayState {
     const u8* base = nullptr;
     u8 stride = 0;
+    // Fin de la memoria legible tras base: un índice fuera del array no puede
+    // leer más allá (en la GC devolvía basura; aquí sería SIGSEGV, issue #166).
+    const u8* limit = nullptr;
 };struct VertexFormatState {
     GXCompCnt count = GX_COMPCNT_NULL;
     GXCompType type = GX_F32;
@@ -1404,7 +1408,48 @@ constexpr size_t kTexVariantsPerObj = 16;
 constexpr u16 kTexVariantMaxSide = 256;
 // GXCopyTex: direccion de destino -> textura GL con la copia del framebuffer.
 struct PcEfbCopy { GLuint tex = 0; int w = 0, h = 0; unsigned hits = 0; };
+// La imagen de GXCopyTex vive solo en GL: el búfer de destino de la consola no
+// se escribe. Sus bytes no representan la vida de la captura y pueden cambiar
+// mientras el JUTTexture sigue siendo válido (como ocurre con el radar).
+// pc_gfx_note_heap_freed la elimina cuando el rango realmente se libera.
+// Rangos de heap liberados (freeAll, dispose, destroy) desde cualquier hilo:
+// el principal descarta las copias que vivían ahí antes de enlazar texturas.
+static std::mutex sEfbFreedMx;
+static std::pair<uintptr_t, uintptr_t> sEfbFreed[64];
+static int sEfbFreedCount = 0;
+static bool sEfbFreedOverflow = false;
+static std::atomic<bool> sEfbFreedPending { false };
+// Direcciones de las copias vivas (espejo de las claves de sEfbCopies, bajo
+// sEfbFreedMx): solo se encolan los rangos que contienen alguna. Antes se
+// encolaba todo y, con más de 64 liberaciones entre dos enlaces (freeGroup /
+// freeTail liberan bloque a bloque), el desbordamiento descartaba TODAS las
+// copias, también la del agua capturada en ese frame: parpadeo (#161).
+static PcGfxHostVector<uintptr_t> sEfbCopyKeys;
+static void efb_copy_key_add(uintptr_t key) {
+    std::lock_guard<std::mutex> lock(sEfbFreedMx);
+    for (uintptr_t k : sEfbCopyKeys) if (k == key) return;
+    sEfbCopyKeys.push_back(key);
+}
+static void efb_copy_key_remove(uintptr_t key) {
+    std::lock_guard<std::mutex> lock(sEfbFreedMx);
+    for (size_t i = 0; i < sEfbCopyKeys.size(); ++i) {
+        if (sEfbCopyKeys[i] == key) { sEfbCopyKeys[i] = sEfbCopyKeys.back(); sEfbCopyKeys.pop_back(); return; }
+    }
+}
+extern "C" void pc_gfx_note_heap_freed(const void* lo, const void* hi) {
+    if (!lo || hi <= lo) return;
+    std::lock_guard<std::mutex> lock(sEfbFreedMx);
+    bool holdsCopy = false;
+    for (uintptr_t k : sEfbCopyKeys) {
+        if (k >= uintptr_t(lo) && k < uintptr_t(hi)) { holdsCopy = true; break; }
+    }
+    if (!holdsCopy) return;
+    if (sEfbFreedCount < 64) sEfbFreed[sEfbFreedCount++] = { uintptr_t(lo), uintptr_t(hi) };
+    else sEfbFreedOverflow = true;
+    sEfbFreedPending.store(true, std::memory_order_release);
+}
 static PcGfxHostMap<uintptr_t, PcEfbCopy> sEfbCopies;
+static bool sRadarProbeDraw = false;
 static PcGfxHostMap<uintptr_t, PcTlut> sTlutObjects;
 static PcGfxHostMap<u32, PcTlut> sLoadedTluts;
 static PcGfxHostMap<uintptr_t, PcTextureSource> sTextureSources;
@@ -2559,12 +2604,14 @@ static const char* fShaderTail =
     "uniform ivec4 uTevSwapTable[4];\n"
     "uniform ivec2 uTevSwapSel[16];\n"
     "bool alphaCompare(float value, float reference, int func) {\n"
+    "    value = clamp(floor(value * 255.0 + 0.5), 0.0, 255.0);\n"
+    "    reference = floor(reference * 255.0 + 0.5);\n"
     "    if (func == 0) return false;\n"
     "    if (func == 1) return value < reference;\n"
-    "    if (func == 2) return abs(value - reference) < (0.5 / 255.0);\n"
+    "    if (func == 2) return abs(value - reference) < 0.5;\n"
     "    if (func == 3) return value <= reference;\n"
     "    if (func == 4) return value > reference;\n"
-    "    if (func == 5) return abs(value - reference) >= (0.5 / 255.0);\n"
+    "    if (func == 5) return abs(value - reference) >= 0.5;\n"
     "    if (func == 6) return value >= reference;\n"
     "    return true;\n"
     "}\n"
@@ -5925,6 +5972,11 @@ void pc_gfx_set_z_mode(GXBool compareEnable, GXCompare func, GXBool updateEnable
         && lastCompare == compareEnable && lastFunc == func && lastUpdate == updateEnable) return;
     seenSerial = sGlPipelineGuardSerial;
     valid = true; lastCompare = compareEnable; lastFunc = func; lastUpdate = updateEnable;
+    // GX code may omit GXEnd: on hardware a state change lands after the
+    // vertices already in the FIFO. The pause map's depth mask (drawRectZ /
+    // drawVecZ) draws its quads with ALWAYS and switches to LESS right after;
+    // drawing them under the new mode hid the map behind the scene's depth.
+    close_complete_immediate();
     pc_gfx_note_gl_state_change();
     if (compareEnable) {
         glEnable(GL_DEPTH_TEST);
@@ -6051,6 +6103,7 @@ void pc_gfx_set_cull_mode(GXCullMode mode) {
 
 void pc_gfx_set_color_update(GXBool updateEnable) {
     if (sColorUpdate == updateEnable) return;
+    close_complete_immediate(); // same as pc_gfx_set_z_mode: FIFO order
     sColorUpdate = updateEnable;
     pc_gfx_note_gl_state_change();
     glColorMask(sColorUpdate, sColorUpdate, sColorUpdate, sAlphaUpdate);
@@ -6058,6 +6111,7 @@ void pc_gfx_set_color_update(GXBool updateEnable) {
 
 void pc_gfx_set_alpha_update(GXBool updateEnable) {
     if (sAlphaUpdate == updateEnable) return;
+    close_complete_immediate(); // same as pc_gfx_set_z_mode: FIFO order
     sAlphaUpdate = updateEnable;
     pc_gfx_note_gl_state_change();
     glColorMask(sColorUpdate, sColorUpdate, sColorUpdate, sAlphaUpdate);
@@ -6684,6 +6738,19 @@ void pc_gfx_init_tex_obj_rgba(GXTexObj* obj, void* rgba, u16 width, u16 height, 
     sBoundTextures[0] = 0;
 }
 
+extern "C" size_t pc_host_readable_bytes(const void* p, size_t want);
+extern "C" const void* pc_host_readable_end(const void* p);
+
+// Copia `bytes` de memoria del juego sin leer más allá de la arena; lo que
+// falte (el GPU de la GC habría leído basura) queda a cero. Issue #166.
+template <typename Vec>
+static void assign_guest_bytes(Vec& dst, const void* src, size_t bytes) {
+    const u8* p = static_cast<const u8*>(src);
+    const size_t readable = pc_host_readable_bytes(p, bytes);
+    dst.assign(p, p + readable);
+    dst.resize(bytes, 0);
+}
+
 void pc_gfx_init_tex_obj(GXTexObj* obj, void* imagePtr, u16 width, u16 height, GXTexFmt format,
                          GXTexWrapMode wrapS, GXTexWrapMode wrapT, GXBool mipmap) {
     if (!obj || !imagePtr || width == 0 || height == 0) return;
@@ -6693,8 +6760,7 @@ void pc_gfx_init_tex_obj(GXTexObj* obj, void* imagePtr, u16 width, u16 height, G
     const uintptr_t key = reinterpret_cast<uintptr_t>(obj);
     std::lock_guard<std::mutex> lock(sTextureRegistryMutex);
     PcTextureSource& sourceRecord = sTextureSources[key];
-    sourceRecord.image.assign(static_cast<const u8*>(imagePtr),
-                              static_cast<const u8*>(imagePtr) + sourceBytes);
+    assign_guest_bytes(sourceRecord.image, imagePtr, sourceBytes);
     sourceRecord.width = width;
     sourceRecord.height = height;
     sourceRecord.format = static_cast<u32>(format);
@@ -6963,7 +7029,12 @@ void pc_gfx_init_tlut_obj(GXTlutObj* obj, void* lut, GXTlutFmt format, u16 numEn
     if (!obj || !lut || numEntries == 0) return;
     PcTlut decoded;
     decoded.rgba.resize(static_cast<size_t>(numEntries) * 4);
+    std::vector<u8> padded;
     const u8* source = static_cast<const u8*>(lut);
+    if (pc_host_readable_bytes(source, size_t(numEntries) * 2) < size_t(numEntries) * 2) {
+        assign_guest_bytes(padded, source, size_t(numEntries) * 2);
+        source = padded.data();
+    }
     auto expand5 = [](u16 value) -> u8 { return (value << 3) | (value >> 2); };
     auto expand6 = [](u16 value) -> u8 { return (value << 2) | (value >> 4); };
     for (u16 i = 0; i < numEntries; ++i) {
@@ -7107,8 +7178,7 @@ void pc_gfx_init_tex_obj_ci(GXTexObj* obj, void* imagePtr, u16 width, u16 height
     if (sourceBytes == 0) return;
     std::lock_guard<std::mutex> lock(sTextureRegistryMutex);
     PcTextureSource& ci = sTextureSources[key];
-    ci.image.assign(static_cast<const u8*>(imagePtr),
-                    static_cast<const u8*>(imagePtr) + sourceBytes);
+    assign_guest_bytes(ci.image, imagePtr, sourceBytes);
     ci.width = width;
     ci.height = height;
     ci.format = static_cast<u32>(format);
@@ -7142,6 +7212,41 @@ void pc_gfx_load_tex_obj(GXTexObj* obj, GXTexMapID id) {
     uintptr_t key = (uintptr_t)obj;
     PcTextureSource sourceSnapshot;
     bool needsUpload = false;
+    if (sEfbFreedPending.load(std::memory_order_acquire)) {
+        std::pair<uintptr_t, uintptr_t> freed[64];
+        int count;
+        bool all;
+        {
+            std::lock_guard<std::mutex> lock(sEfbFreedMx);
+            count = sEfbFreedCount;
+            all   = sEfbFreedOverflow;
+            for (int i = 0; i < count; i++) freed[i] = sEfbFreed[i];
+            sEfbFreedCount    = 0;
+            sEfbFreedOverflow = false;
+            sEfbFreedPending.store(false, std::memory_order_relaxed);
+        }
+        for (auto c = sEfbCopies.begin(); c != sEfbCopies.end();) {
+            bool gone = all;
+            for (int i = 0; i < count && !gone; i++) gone = c->first >= freed[i].first && c->first < freed[i].second;
+            if (gone) {
+                if (c->second.tex) {
+                    pc_gfx_flush_batch();
+                    for (int unit = 0; unit < 8; ++unit) {
+                        if (sBoundTextures[unit] == c->second.tex) sBoundTextures[unit] = 0;
+                        if (sActiveGLTextures[unit] == c->second.tex) {
+                            sActiveGLTextures[unit]  = 0;
+                            sHasActiveTextures[unit] = false;
+                        }
+                    }
+                    glDeleteTextures(1, &c->second.tex);
+                }
+                efb_copy_key_remove(c->first);
+                c = sEfbCopies.erase(c);
+            } else {
+                ++c;
+            }
+        }
+    }
     {
         std::lock_guard<std::mutex> lock(sTextureRegistryMutex);
         auto source = sTextureSources.find(key);
@@ -7358,7 +7463,8 @@ void pc_gfx_set_vtx_attr_fmt(GXVtxFmt fmt, GXAttr attr, GXCompCnt cnt, GXCompTyp
 }
 void pc_gfx_set_array(GXAttr attr, void* basePtr, u8 stride) {
     if (attr >= 0 && attr < GX_VA_MAX_ATTR) {
-        sVtxArrays[attr] = { static_cast<const u8*>(basePtr), stride };
+        sVtxArrays[attr] = { static_cast<const u8*>(basePtr), stride,
+                             static_cast<const u8*>(pc_host_readable_end(basePtr)) };
         sArraySetFrame[attr]  = sFrameSerial;
         sArraySetSerial[attr] = ++sArraySetCounter;
     }
@@ -8297,6 +8403,18 @@ static u8       sLastPosStride = 0;
 // handed us a buffer that was already garbage" and "the parser drifted part
 // way through a valid list". Reports the first few with context, then stops.
 static u8 attr_inline_size(GXAttr attr, const VertexFormatState& fmt);
+
+// Elemento `index` de un array de vértices, o ceros si se sale de la memoria
+// legible. La comprobación barata (64 >= mayor atributo, NBT F32 = 36 bytes)
+// deja el bucle caliente casi intacto.
+static const u8 sZeroAttr[64] = {};
+static inline const u8* vtx_array_element(const VertexArrayState& array, u16 index, GXAttr attr,
+                                          const VertexFormatState& fmt) {
+    const u8* element = array.base + size_t(index) * array.stride;
+    if (element + sizeof(sZeroAttr) <= array.limit) return element;
+    if (array.limit && element >= array.base && element + attr_inline_size(attr, fmt) <= array.limit) return element;
+    return sZeroAttr;
+}
 static int sDesyncReports = 0;
 static void report_desync(const char* what, const void* list, size_t offset, u32 nbytes) {
     if (sDesyncReports >= 8) return;
@@ -8711,7 +8829,18 @@ static void vbo_ring_frame_begin() {
 
 // Draws whatever has accumulated. Safe to call at any time: a no-op when no
 // batch is open, which is what makes it cheap to place at every flush point.
+#if PIKI_P2_HOST
+extern "C" void pc_sched_preempt_point(void);
+#endif
+
 void pc_gfx_flush_batch(void) {
+#if PIKI_P2_HOST
+    // En consola el audio y la carga interrumpían al principal en cualquier
+    // momento; aquí solo cambia de hilo donde el juego llama al SO. Dibujar un
+    // frame apenas lo hace, así que cada lote es un punto de cesión: si un
+    // hilo de más prioridad (audio, disco) espera turno, corre ya.
+    pc_sched_preempt_point();
+#endif
     if (!sBatchOpen || sBatchVerts.empty()) {
         sBatchOpen  = false;
         sBatchPrims = 0;
@@ -8780,7 +8909,8 @@ void pc_gfx_flush_batch(void) {
     // PIKMIN_PROBE_DIFF=1: read the viewport back before and after each batch
     // and report how many pixels the draw changed, and where. Diagnostic
     // only. malloc, not new: operator new is routed to the game's heaps.
-    static const bool probeDiff = getenv("PIKMIN_PROBE_DIFF") != nullptr;
+    static const bool probeDiffEnv = getenv("PIKMIN_PROBE_DIFF") != nullptr;
+    const bool probeDiff = probeDiffEnv || sRadarProbeDraw;
     static unsigned char* diffBefore = nullptr;
     static unsigned char* diffAfter = nullptr;
     static size_t diffCap = 0;
@@ -8820,6 +8950,7 @@ void pc_gfx_flush_batch(void) {
             glBindTexture(GL_TEXTURE_2D, (GLuint)prevTex);
             glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, &w0);
             glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, &h0);
+#if !PIKI_USE_GLES
             const size_t n = size_t(w0) * h0 * 4;
             unsigned char* px = (unsigned char*)malloc(n);
             glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, px);
@@ -8827,6 +8958,10 @@ void pc_gfx_flush_batch(void) {
             for (size_t i = 0; i < n; i += 4) { if (px[i + 3] > 8) ++opaque; lum += px[i]; }
             fprintf(stderr, "[PC ProbeDiff]   tex0 gl=%u %dx%d opaque=%zu/%zu meanR=%zu uv0=(%.2f,%.2f)\n", sActiveGLTextures[0], w0, h0, opaque, n / 4, n ? lum / (n / 4) : 0, fv.tex[0][0], fv.tex[0][1]);
             free(px);
+#else
+            fprintf(stderr, "[PC ProbeDiff]   tex0 gl=%u %dx%d uv0=(%.2f,%.2f)\n",
+                    sActiveGLTextures[0], w0, h0, fv.tex[0][0], fv.tex[0][1]);
+#endif
             glBindTexture(GL_TEXTURE_2D, prevTex);
         }
     }
@@ -9495,6 +9630,12 @@ static void apply_draw_state(bool profilingSubmit, double stateT0) {
             usedTextureMaps[static_cast<int>(st.texMap)] = true;
         }
     }
+    // Los mapas de las etapas indirectas tambien: sin enlazar, el shader leia
+    // la textura que quedase en esa unidad y el desplazamiento se disparaba
+    // (el halo y la reverberacion del titulo de zona quedaban fuera).
+    for (u8 n = 0; n < sNumIndStages && n < 4; ++n) {
+        if (sIndStages[n].texMap < 8) usedTextureMaps[sIndStages[n].texMap] = true;
+    }
     int lastActiveMap = 0;
     const double texT0 = profilingSubmit ? submit_clock_ms() : 0.0;
     static u32 bindLogCount = 0;
@@ -9516,6 +9657,39 @@ static void apply_draw_state(bool profilingSubmit, double stateT0) {
     }
     if (lastActiveMap != 0) glActiveTexture_ptr(GL_TEXTURE0);
     if (profilingSubmit) sSubmitTexBindMs += submit_clock_ms() - texT0;
+#if !PIKI_USE_GLES
+    // TEMP depuracion (PIKMIN_IND_DEBUG=1): estado de los dibujos con indirecta.
+    static const bool indDbg = getenv("PIKMIN_IND_DEBUG") != nullptr;
+    static int indDbgLines = 0;
+    if (indDbg && sNumIndStages > 0 && indDbgLines < 400) {
+        indDbgLines++;
+        printf("[IND] stages=%d ind=%d", int(sNumTevStages), int(sNumIndStages));
+        for (u8 n = 0; n < sNumIndStages && n < 4; ++n)
+            printf(" | ind%d map=%d coord=%d scl=%d,%d", n, sIndStages[n].texMap, sIndStages[n].texCoord,
+                   sIndStages[n].scaleS, sIndStages[n].scaleT);
+        for (u8 st = 0; st < sNumTevStages && st < GX_MAXTEVSTAGE; ++st) {
+            const TevIndState& ti = sTevInd[st];
+            printf(" | tev%d map=%d tc=%d tex=%d indSt=%d fmt=%d bias=%d mtx=%d wrap=%d,%d add=%d", st,
+                   int(sTevStages[st].texMap), int(sTevStages[st].texCoord), int(sTevStages[st].textureEnabled),
+                   ti.indStage, ti.fmt, ti.bias, ti.mtx, ti.wrapS, ti.wrapT, ti.addPrev);
+        }
+        for (int m = 0; m < 3; ++m)
+            printf(" | M%d=[%.3f %.3f %.3f / %.3f %.3f %.3f] e%d", m, sIndMtx[m][0][0], sIndMtx[m][0][1], sIndMtx[m][0][2],
+                   sIndMtx[m][1][0], sIndMtx[m][1][1], sIndMtx[m][1][2], sIndMtxScale[m]);
+        for (int map = 0; map < 4; ++map) {
+            GLint w = 0, h = 0;
+            if (sBoundTextures[map]) {
+                glActiveTexture_ptr(GL_TEXTURE0 + map);
+                glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, &w);
+                glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, &h);
+            }
+            printf(" | u%d=%u %dx%d", map, (unsigned)sBoundTextures[map], int(w), int(h));
+        }
+        glActiveTexture_ptr(GL_TEXTURE0);
+        printf("\n");
+        fflush(stdout);
+    }
+#endif
 
     // Upload lighting
     if (sLoc.nrmMtx >= 0) {
@@ -9967,7 +10141,7 @@ static void pc_gfx_end_impl(void) {
             char name[256];
             GLsizei length;
             GLint size;
-            GLenum type;
+            GLenum type = 0;
             if (glGetActiveUniform_ptr) {
                 glGetActiveUniform_ptr(sShaderProgram, i, sizeof(name), &length, &size, &type, name);
             } else {
@@ -10150,7 +10324,7 @@ static void fifo_imm_apply_attr(GXAttr attr, const u8* data)
         }
         const VertexArrayState& array = sVtxArrays[attr];
         if (!array.base || array.stride == 0) return;
-        element = array.base + size_t(index) * array.stride;
+        element = vtx_array_element(array, index, GXAttr(attr), sVtxFormats[sImmVtxFmt][attr]);
     }
 
     if (attr == GX_VA_POS) {
@@ -10900,8 +11074,10 @@ static void handle_indexed_xf_load(u8 command, u32 header) {
     // mModelDrawMtx and friends), so they are host floats, unlike the
     // big-endian file data behind the vertex arrays.
     const u8* src = array.base + size_t(index) * array.stride;
-    u32 words[16];
-    memcpy(words, src, (size < 16 ? size : 16) * sizeof(u32));
+    u32 words[16] = {};
+    const size_t want = (size < 16 ? size : 16) * sizeof(u32);
+    if (src >= array.base && array.limit && src < array.limit)
+        memcpy(words, src, want < size_t(array.limit - src) ? want : size_t(array.limit - src));
     handle_xf_regs(addr, size < 16 ? size : 16, words);
 }
 
@@ -10967,7 +11143,7 @@ static void fifo_cmd_byte(u8 val) {
         handle_bp_reg(be32(p));
     } else if (cmd == GX_CMD_CALL_DL) {
         void* list = pc_host_from_gc_phys(be32(p));
-        if (list) pc_gfx_call_display_list(list, be32(p + 4));
+        if (list) pc_gfx_call_display_list(list, u32(pc_host_readable_bytes(list, be32(p + 4))));
     } else {
         handle_indexed_xf_load(cmd, be32(p));
     }
@@ -11253,7 +11429,8 @@ static void pc_gfx_call_display_list_impl(const void* list, u32 nbytes) {
             flushPendingStrip();
             u32 addr, size;
             if (!read_be_u32(cursor, end, addr) || !read_be_u32(cursor, end, size)) break;
-            if (void* nested = pc_host_from_gc_phys(addr)) pc_gfx_call_display_list(nested, size);
+            if (void* nested = pc_host_from_gc_phys(addr))
+                pc_gfx_call_display_list(nested, u32(pc_host_readable_bytes(nested, size)));
             continue;
         }
         if (command == GX_CMD_INVL_VC) continue;
@@ -11392,8 +11569,8 @@ static void pc_gfx_call_display_list_impl(const void* list, u32 nbytes) {
                     }
                     const VertexArrayState& array = sVtxArrays[attr];
                     if (!array.base || array.stride == 0) continue;
-                    element = array.base + size_t(index) * array.stride;
-                    if (building) meshNoteRange(element, array.stride);
+                    element = vtx_array_element(array, index, GXAttr(attr), sVtxFormats[format][attr]);
+                    if (building && element != sZeroAttr) meshNoteRange(element, array.stride);
                     // Only the wild-vertex report below reads these, and this
                     // is the innermost loop in the whole renderer: three stores
                     // per vertex, hundreds of thousands of vertices a frame.
@@ -11706,10 +11883,21 @@ void pc_gfx_copy_tex(void* dest, GXBool clear) {
     if (!dest || !sNativeFramebufferReady || !glBlitFramebuffer_ptr || !glGenFramebuffers_ptr) return;
     const int w = sTexCopyDstW, h = sTexCopyDstH;
     if (w <= 0 || h <= 0) return;
+    // GX commands are ordered in the FIFO even when game code omits GXEnd.
+    // RandMapDraw does exactly that for every cave room; with only one room
+    // revealed its final quad was still in the immediate stream when the
+    // radar texture was copied, so the pause map contained only the cleared
+    // background. Finish that complete primitive before flushing/capturing.
+    const bool hadImmediate = sInPrimitive;
+    const size_t immediateVerts = sVertexStream.size();
+    close_complete_immediate();
+    sRadarProbeDraw = sTexCopyFmt == GX_CTF_R4;
     pc_gfx_flush_batch();
+    sRadarProbeDraw = false;
     pc_gfx_note_gl_state_change();
 
     PcEfbCopy& copy = sEfbCopies[reinterpret_cast<uintptr_t>(dest)];
+    if (!copy.tex) efb_copy_key_add(reinterpret_cast<uintptr_t>(dest));
     if (!copy.tex || copy.w != w || copy.h != h) {
         if (!copy.tex) glGenTextures(1, &copy.tex);
         glBindTexture(GL_TEXTURE_2D, copy.tex);
@@ -11734,19 +11922,47 @@ void pc_gfx_copy_tex(void* dest, GXBool clear) {
     glBindTexture(GL_TEXTURE_2D, 0);
     sBoundTextures[0] = 0;
 
+    // GXCopyTex reads the EFB that the preceding GX commands targeted. Most
+    // frames use sNativeFramebuffer, but isolated passes such as the cave
+    // radar can run while a different draw framebuffer is current. Reading
+    // the hard-coded native FBO copied an untouched black rectangle even
+    // though the room quad had just been drawn successfully.
+    GLint sourceDrawFbo = 0, previousReadFbo = 0;
+    glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &sourceDrawFbo);
+    glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &previousReadFbo);
     static GLuint copyFbo = 0;
     if (!copyFbo) glGenFramebuffers_ptr(1, &copyFbo);
     glBindFramebuffer_ptr(GL_DRAW_FRAMEBUFFER, copyFbo);
     glFramebufferTexture2D_ptr(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, copy.tex, 0);
-    glBindFramebuffer_ptr(GL_READ_FRAMEBUFFER, sNativeFramebuffer);
+    glBindFramebuffer_ptr(GL_READ_FRAMEBUFFER, GLuint(sourceDrawFbo));
 
     GLint sx, sy; GLsizei sw, sh;
     map_gx_rect(float(sTexCopySrc[0]), float(sTexCopySrc[1]), float(sTexCopySrc[2]), float(sTexCopySrc[3]), sx, sy, sw, sh);
     const GLboolean scissorWasEnabled = glIsEnabled(GL_SCISSOR_TEST);
     glDisable(GL_SCISSOR_TEST);
+    if (sTexCopyFmt == GX_CTF_R4) {
+        PcGfxHostVector<u8> pixels(size_t(sw) * size_t(sh) * 4);
+        glReadPixels(sx, sy, sw, sh, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
+        unsigned minRgb = 255, maxRgb = 0;
+        uint64_t sumRgb = 0, nonBlack = 0;
+        for (size_t i = 0; i + 3 < pixels.size(); i += 4) {
+            const unsigned rgb = unsigned(pixels[i]) + unsigned(pixels[i + 1]) + unsigned(pixels[i + 2]);
+            minRgb = std::min(minRgb, rgb / 3);
+            maxRgb = std::max(maxRgb, rgb / 3);
+            sumRgb += rgb;
+            nonBlack += rgb != 0;
+        }
+        const size_t count = size_t(sw) * size_t(sh);
+        SDL_Log("[RADARDBG] copy dest=%p dst=%dx%d src=(%u,%u,%u,%u)->(%d,%d,%d,%d) fbo=%d immediate=%d/%zu rgb=%u..%u avg=%.2f nonblack=%llu/%zu glerr=0x%x",
+                dest, w, h, sTexCopySrc[0], sTexCopySrc[1], sTexCopySrc[2], sTexCopySrc[3], sx, sy, sw, sh,
+                sourceDrawFbo, int(hadImmediate), immediateVerts, minRgb, maxRgb,
+                count ? double(sumRgb) / double(count * 3) : 0.0,
+                (unsigned long long)nonBlack, count, unsigned(glGetError()));
+    }
     // Fila 0 de una textura GX es la de arriba; en GL el framebuffer empieza abajo.
     glBlitFramebuffer_ptr(sx, sy, sx + sw, sy + sh, 0, h, w, 0, GL_COLOR_BUFFER_BIT, GL_LINEAR);
-    glBindFramebuffer_ptr(GL_FRAMEBUFFER, sNativeFramebuffer);
+    glBindFramebuffer_ptr(GL_DRAW_FRAMEBUFFER, GLuint(sourceDrawFbo));
+    glBindFramebuffer_ptr(GL_READ_FRAMEBUFFER, GLuint(previousReadFbo));
 
     if (clear) {
         glEnable(GL_SCISSOR_TEST);

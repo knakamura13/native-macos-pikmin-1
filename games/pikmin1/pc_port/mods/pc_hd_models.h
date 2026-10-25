@@ -28,6 +28,7 @@ enum PcHdModelId {
 	PC_HD_MODEL_PIKI_WHITE,   // sobre el esqueleto de un Pikmin
 	PC_HD_MODEL_PIKI_PURPLE,
 	PC_HD_MODEL_BULBMIN,
+	PC_HD_MODEL_OLIMAR_CUSTOM, // Load/Models/Custom/olimar.nhm (nectar-modelmaker)
 	PC_HD_MODEL_COUNT,
 };
 
@@ -38,6 +39,15 @@ enum PcHdModelId {
 // states the engine expresses by painting its grey textures lighter
 // (idle pastel pikis, the damage flash).
 bool pc_hd_model_draw_skinned(Graphics& gfx, BaseShape* shape, PcHdModelId id, GXColor tint, u8 whiten = 0);
+
+// Same, for a custom character's pack (Load/Characters/<id>/model.nhm, see
+// pc_characters.cpp) on Olimar's skeleton. Loaded on first use and kept.
+bool pc_hd_model_draw_custom(Graphics& gfx, BaseShape* shape, const char* path, GXColor tint, u8 whiten = 0);
+
+// Camera-space matrix of `joint` with a custom pack's own joint positions
+// (the stem tip, joint 6, is where the game draws a Pikmin's leaf). false
+// when the pack is missing or keeps the engine's joints.
+bool pc_hd_model_custom_joint(BaseShape* shape, const char* path, int joint, Matrix4f& out);
 
 // Draws a rigid HD mesh placed with `mtx` (camera-relative, as returned by
 // BaseShape::getAnimMatrix). Returns true only when it replaced the draw.
