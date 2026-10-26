@@ -22,6 +22,7 @@
 #include "pc_file_dialog.h"
 #include "settings/pc_settings_p2d.h"
 #include "pc_menu_repeat.h"
+#include "pc_menu_click.h"
 #ifdef __ANDROID__
 #include "android/pc_texpack_android.h"
 #include "android/pc_save_android.h"
@@ -6256,6 +6257,44 @@ bool vsEndScreenShown()
     return pc_vs_active() && pc_vs_match_over() && sVsOverSince && SDL_GetTicks() - sVsOverSince >= kVsEndScreenDelayMs;
 }
 
+int pcVsRulesPointer()
+{
+    if (!sVsRulesOpen) return 0;
+    pc_menu_click_claim_pointer_menu();
+    DGXGraphics* gfx = (gsys && gsys->mDGXGfx) ? static_cast<DGXGraphics*>(gsys->mDGXGfx) : nullptr;
+    if (!gfx) return 0;
+    const int screenW       = pc_gfx_menu_wide() ? pc_gfx_menu_virt_width() : gfx->mScreenWidth;
+    const int screenH       = gfx->mScreenHeight;
+    const int panelW        = std::min(800, screenW - 24);
+    const int panelH        = 452;
+    const int panelX        = screenW / 2 - panelW / 2;
+    const int panelY        = screenH / 2 - panelH / 2;
+    const int colW          = (panelW - 72) / 2;
+    const int rx            = panelX + 24 + colW + 24;
+    const int rowsY         = panelY + 88;
+    constexpr int kRowH     = 34;
+    PcMenuClickRect rects[kVsMenuRows];
+    for (int row = 0; row < kVsMenuRows; row++) {
+        const int ry = rowsY + row * kRowH;
+        rects[row]   = { rx, ry, rx + colW, ry + kRowH };
+    }
+    float x = 0.0f, y = 0.0f;
+    if (pc_menu_click_read_pointer_graph(screenW, screenH, &x, &y)) {
+        const PcMenuClickResult hover
+            = pc_menu_click_hover(PC_MENU_CLICK_MAIN, x, y, rects, nullptr, kVsMenuRows, kPcMenuClickMargin);
+        if (hover.index >= 0 && hover.index < kVsMenuRows) sVsRulesRow = hover.index;
+    }
+    if (pc_menu_click_take_graph(screenW, screenH, &x, &y)) {
+        const PcMenuClickResult hit
+            = pc_menu_click_resolve(PC_MENU_CLICK_MAIN, x, y, rects, nullptr, kVsMenuRows, kPcMenuClickMargin);
+        if (hit.action == PC_MENU_CLICK_ACTIVATE) {
+            sVsRulesRow = hit.index;
+            return 1;
+        }
+    }
+    return 0;
+}
+
 void pcVsRulesInput()
 {
     if (!sVsRulesOpen) return;
@@ -6265,6 +6304,7 @@ void pcVsRulesInput()
     bool right  = keyWentDown(SDL_SCANCODE_RIGHT) || keyWentDown(SDL_SCANCODE_D);
     bool accept = menuOkKey();
     bool cancel = menuCancelKey();
+    cancel |= pc_menu_click_take_back();
     up |= (sTouchFrameButtons & PAD_BUTTON_UP) != 0;
     down |= (sTouchFrameButtons & PAD_BUTTON_DOWN) != 0;
     left |= (sTouchFrameButtons & PAD_BUTTON_LEFT) != 0;
@@ -6281,6 +6321,7 @@ void pcVsRulesInput()
         if (promptPadA(ctl)) accept = true;
         if (promptPadB(ctl)) cancel = true;
     }
+    if (pcVsRulesPointer() == 1) right = true;
     if (up) sVsRulesRow = (sVsRulesRow + kVsMenuRows - 1) % kVsMenuRows;
     if (down) sVsRulesRow = (sVsRulesRow + 1) % kVsMenuRows;
     if ((left || right) && sVsRulesRow == 0) {

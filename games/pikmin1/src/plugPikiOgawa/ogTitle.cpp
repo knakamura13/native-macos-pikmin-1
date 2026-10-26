@@ -88,12 +88,18 @@ zen::ogScrTitleMgr::ogScrTitleMgr()
 	const PcMenuExtend extOptions = { 2, 36, -40, 'yoko', 40, true };
 	mOptionsMenu  = new DrawMenu("screen/blo/option.blo", false, false, &extOptions);
 	pcInsertAdvancedItem(mOptionsMenu);
+	mOptionsMenu->setPointerClicks(true);
 #else
 	mOptionsMenu  = new DrawMenu("screen/blo/option.blo", false, false);
 #endif
 	mSoundMenu    = new DrawMenu("screen/blo/s_select.blo", false, false);
 	mRumbleMenu   = new DrawMenu("screen/blo/v_select.blo", false, false);
 	mLanguageMenu = new DrawMenu("screen/blo/ms_selec.blo", false, false);
+#if defined(PIKI_PC_PORT)
+	mSoundMenu->setPointerClicks(true);
+	mRumbleMenu->setPointerClicks(true);
+	mLanguageMenu->setPointerClicks(true);
+#endif
 
 	mInput = new ZenController(nullptr);
 	mInput->setRepeatTime(0.2f);
@@ -221,6 +227,11 @@ void zen::ogScrTitleMgr::pcSetupMainMenus()
 	mPcExtraMenu[1]  = new DrawMenu("screen/blo/m_selec2.blo", false, false, &extExtra);
 	char* extra1[4] = { pcRowText(mPcExtraMenu[1], 2), sSpeedrunLabel, sRandomizerLabel, sCustomLabel };
 	pcLabelRows(mPcExtraMenu[1], extra1, 4);
+
+	mMenuNoChallenge->setPointerClicks(true);
+	mPcPlayMenu->setPointerClicks(true);
+	mPcExtraMenu[0]->setPointerClicks(true);
+	mPcExtraMenu[1]->setPointerClicks(true);
 }
 
 // Lo que hace cada opción, con los números de siempre: 0 Start, 1 Speedrun,
@@ -372,6 +383,7 @@ void zen::ogScrTitleMgr::pcSetupAdvancedMenu()
 		pcRelabelTextPanes(scr, original, sTitle);
 	}
 	mAdvancedMenu->setMenuItemActiveSw(1, true);
+	mAdvancedMenu->setPointerClicks(true);
 }
 #endif
 

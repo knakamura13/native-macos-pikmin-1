@@ -87,6 +87,7 @@ bool pc_window_swarm_held(void);
 bool pc_window_swarm_held_p2(void);
 /// D-pad Down on that player's pad: the pad's swarm button, so it must not
 /// also trigger the original D-pad Down action (Olimar lying down).
+bool pc_window_pad_dpad_down_held(int player);
 /// Eje vertical del stick derecho con Free Camera activo (zoom del radar).
 float pc_window_free_camera_sub_y(void);
 /// Flanco de subida del Lock-On de ese jugador (0/1): true una vez por
@@ -207,6 +208,8 @@ int pc_window_get_control_mode(void);
 void pc_window_set_mouse_sensitivity(float sensitivity);
 float pc_window_get_mouse_sensitivity(void);
 void pc_window_set_settings_menu_open(bool open);
+void pc_window_set_gameplay_active(bool active);  // pointer is captured only while a level runs
+void pc_window_set_menu_overlay(bool open);       // a pause or in-game menu releases the pointer
 
 // Virtual cursor (mouse-controlled cursor input)
 extern "C" s8 pc_window_get_virtual_cursor_x(void);

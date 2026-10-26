@@ -39,7 +39,7 @@
 
 // Netplay keep-alive (pc_netplay_loadguard.h): strong-defined by
 // pc_netplay_session.cpp in netplay builds only, null otherwise.
-void pc_netplay_load_keepalive(int site);
+__attribute__((weak)) void pc_netplay_load_keepalive(int site);
 
 #include "pc_opengl.h"
 #ifdef __ANDROID__
@@ -1085,13 +1085,7 @@ static bool sMeshDecodeCacheEnabled = true;
 static GLuint sMeshArena = 0;
 static GLuint sMeshVAO = 0;
 static GLuint sStreamVAO = 0;
-// Mapas del editor de hasta 300.000 triángulos (76 B x 3 por triángulo) más
-// todo lo demás; lo que no cabe se dibuja igual, sin caché.
-#if defined(__ANDROID__)
-static size_t sMeshArenaCapacity = size_t(64) << 20;
-#else
-static size_t sMeshArenaCapacity = size_t(128) << 20;
-#endif
+static size_t sMeshArenaCapacity = size_t(48) << 20;
 static size_t sMeshArenaUsed = 0;
 static bool   sMeshArenaReady = false;
 static GLsync sMeshArenaResetFence = nullptr;
@@ -1563,17 +1557,11 @@ static void map_gx_rect(float x, float y, float width, float height,
                         GLint& glX, GLint& glY, GLsizei& glWidth, GLsizei& glHeight) {
     float scaleX, scaleY, offsetX, offsetY;
     gx_rect_params(scaleX, scaleY, offsetX, offsetY);
-    // Round both edges and take the difference: rounding origin and size
-    // separately left 1 px gaps at fractional scales (2.5 at 1200 px, #144).
+    glX = (GLint)lroundf(offsetX + x * scaleX);
     const float virtH = sHudWide ? float(hud_virtual_height()) : 480.0f;
-    const long x0 = lroundf(offsetX + x * scaleX);
-    const long x1 = lroundf(offsetX + (x + width) * scaleX);
-    const long y0 = lroundf(offsetY + (virtH - y - height) * scaleY);
-    const long y1 = lroundf(offsetY + (virtH - y) * scaleY);
-    glX = (GLint)x0;
-    glY = (GLint)y0;
-    glWidth = (GLsizei)std::max(0L, x1 - x0);
-    glHeight = (GLsizei)std::max(0L, y1 - y0);
+    glY = (GLint)lroundf(offsetY + (virtH - y - height) * scaleY);
+    glWidth = (GLsizei)std::max(0L, lroundf(width * scaleX));
+    glHeight = (GLsizei)std::max(0L, lroundf(height * scaleY));
 }
 
 static void fill_ui_43_bars() {
@@ -4759,12 +4747,11 @@ void pc_gfx_set_current_mtx(u32 id) {
 static GLint sLastViewportX = 0, sLastViewportY = 0;
 static GLsizei sLastViewportW = 0, sLastViewportH = 0;
 
-bool pc_gfx_project_current(float x, float y, float z, float* winX, float* winY)
+static bool project_with_model(const float* model, float x, float y, float z, float* winX, float* winY)
 {
-    // Igual que un vértice del juego: matriz de posición actual, proyección,
+    // Igual que un vértice del juego: matriz de posición dada, proyección,
     // viewport GX sobre el render target, y de ahí al área de salida de la
     // ventana (blit del present).
-    const float* model = sPosMatrix[sCurrentPosMtxId];
     const float mx = model[0] * x + model[4] * y + model[8] * z + model[12];
     const float my = model[1] * x + model[5] * y + model[9] * z + model[13];
     const float mz = model[2] * x + model[6] * y + model[10] * z + model[14];
@@ -4783,6 +4770,22 @@ bool pc_gfx_project_current(float x, float y, float z, float* winX, float* winY)
     if (winX) *winX = wx;
     if (winY) *winY = float(sDrawableHeight) - wyUp; // ventana: origen arriba
     return true;
+}
+
+bool pc_gfx_project_current(float x, float y, float z, float* winX, float* winY)
+{
+    return project_with_model(sPosMatrix[sCurrentPosMtxId], x, y, z, winX, winY);
+}
+
+bool pc_gfx_project_with_mtx(const float (*mtx)[4], float x, float y, float z, float* winX, float* winY)
+{
+    // Same layout as pc_gfx_load_pos_mtx.
+    float model[16];
+    model[0] = mtx[0][0]; model[1] = mtx[1][0]; model[2] = mtx[2][0]; model[3] = 0.0f;
+    model[4] = mtx[0][1]; model[5] = mtx[1][1]; model[6] = mtx[2][1]; model[7] = 0.0f;
+    model[8] = mtx[0][2]; model[9] = mtx[1][2]; model[10] = mtx[2][2]; model[11] = 0.0f;
+    model[12] = mtx[0][3]; model[13] = mtx[1][3]; model[14] = mtx[2][3]; model[15] = 1.0f;
+    return project_with_model(model, x, y, z, winX, winY);
 }
 
 void pc_gfx_set_viewport(f32 xOrig, f32 yOrig, f32 wd, f32 ht, f32 nearZ, f32 farZ) {
@@ -7325,19 +7328,13 @@ static GLenum batch_mode_for(GXPrimitive prim) {
     }
 }
 
-// Mapeo sin sincronizar por defecto en GLES (el caso móvil) y en macOS, donde
-// glBufferSubData sobre el GL de Metal costaba ~8,75 ms de CPU por frame
-// (medido en un M3 Max); en el resto de escritorio se conserva
-// glBufferSubData, que es la ruta medida a 60 FPS. PIKMIN_VBO_MAP=0/1 fuerza
-// una u otra para comparar.
+// Mapeo sin sincronizar por defecto en GLES (el caso móvil); en escritorio se
+// conserva glBufferSubData, que es la ruta medida a 60 FPS. PIKMIN_VBO_MAP=0/1
+// fuerza una u otra para comparar.
 static bool vbo_upload_by_mapping() {
     static const bool enabled = [] {
         if (const char* v = std::getenv("PIKMIN_VBO_MAP")) return v[0] == '1';
-#if defined(__APPLE__)
-        return true;
-#else
         return PIKI_USE_GLES != 0;
-#endif
     }();
     return enabled;
 }
@@ -8189,7 +8186,7 @@ void pc_gfx_end(void) {
             char name[256];
             GLsizei length;
             GLint size;
-            GLenum type = 0;
+            GLenum type;
             if (glGetActiveUniform_ptr) {
                 glGetActiveUniform_ptr(sShaderProgram, i, sizeof(name), &length, &size, &type, name);
             } else {
