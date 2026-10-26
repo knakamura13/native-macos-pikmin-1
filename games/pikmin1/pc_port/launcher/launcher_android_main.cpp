@@ -14,6 +14,7 @@
 #include "fd_stream.h"
 #include "gamecube_image.h"
 #include "launcher_gui.h"
+#include "crash_report.h"
 #include "texture_pack_download.h"
 
 #include <SDL2/SDL.h>
@@ -213,10 +214,12 @@ bool installFromFd(int fd, HubGame game, const fs::path& dir, HubWindow& hub, Ga
         return false;
     }
     const bool contentOk = game == HubGame::Pikmin1 ? fs::is_regular_file(partialAssets / "dataDir/parms/gamePrms.bin")
-                                                    : fs::is_directory(partialAssets / "user");
+                                                    : fs::is_directory(partialAssets / "user")
+                                                          && fs::is_regular_file(partialAssets / "AudioRes/Conductor.arc")
+                                                          && fs::is_directory(partialAssets / "AudioRes/Seqs");
     if (!contentOk) {
         fs::remove_all(partialAssets, ec);
-        failure = "The image does not contain the expected game files.";
+        failure = "The image is incomplete or modified (missing game files). Use a full, unmodified ISO dump (not NKit or trimmed).";
         return false;
     }
     {
@@ -259,6 +262,12 @@ int main(int argc, char** argv)
         logLine("could not open the window: " + error);
         return 1;
     }
+    // Crash de la sesión anterior (el juego corre en su propio proceso y deja
+    // el informe en su carpeta): copiar y abrir GitHub antes de la portada.
+    offerCrashReport(hub, {
+        { "Pikmin 2", pikmin2Dir, "pikmin2_crash.log", "pikmin2.log" },
+        { "Pikmin", pikmin1Dir, "pikmin_crash.log", "pikmin.log" },
+    });
 
     for (;;) {
         const HubResult choice = hub.runHome();

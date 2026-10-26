@@ -77,6 +77,21 @@ set(LEGACY_COMPILE_OPTIONS
     -Wno-comment
 )
 
+# Endurecimiento del código decompilado. El compilador de GameCube no
+# aprovechaba el comportamiento indefinido que GCC/Clang -O2 sí aprovechan:
+# variables sin inicializar (crash de Armor::StateFail, leía la dirección
+# 0x2fc), comprobaciones de this == nullptr, punteros reinterpretados entre
+# tipos y overflow con signo. Con estas opciones ese código se compila como
+# lo que el juego espera en vez de eliminarse o volverse basura.
+include(CheckCXXCompilerFlag)
+foreach(flag -fno-strict-aliasing -fno-delete-null-pointer-checks -fwrapv -ftrivial-auto-var-init=zero)
+    string(MAKE_C_IDENTIFIER "LEGACY_HAS${flag}" flagVar)
+    check_cxx_compiler_flag(${flag} ${flagVar})
+    if(${flagVar})
+        list(APPEND LEGACY_COMPILE_OPTIONS ${flag})
+    endif()
+endforeach()
+
 # Native code (pc_port, tests, launcher) should compile with strict warnings.
 # We keep -fpermissive because native code includes legacy Dolphin headers.
 set(NATIVE_COMPILE_OPTIONS
@@ -139,6 +154,7 @@ endif()
 option(PIKMIN_BUILD_LAUNCHER "Build the standalone first-run launcher" ${PIKMIN_DESKTOP_DEFAULT})
 option(PIKMIN_BUILD_TESTS "Build the host-run test executables" ${PIKMIN_DESKTOP_DEFAULT})
 option(NECTAR_BUILD_MAPMAKER "Build the VS map editor (tools/mapmaker)" ${PIKMIN_DESKTOP_DEFAULT})
+option(NECTAR_BUILD_MODELMAKER "Build the model maker (tools/modelmaker)" ${PIKMIN_DESKTOP_DEFAULT})
 option(NECTAR_ONLINE "Build the experimental direct online co-op layer" OFF)
 
 if(PIKMIN_BUILD_TESTS)
@@ -153,6 +169,10 @@ endif()
 set(PIKMIN_GAME_VERSION "VERSION_GPIE01_01" CACHE STRING
     "Game release to build: VERSION_GPIE01_01 (USA Rev 1), VERSION_GPIE01_00, \
 VERSION_GPIP01_00 (PAL), VERSION_GPIJ01_01, VERSION_GPIJ01_02")
+
+# __FILE__ (asserts, informes de crash) sin la ruta absoluta de la máquina
+# que compila.
+add_compile_options("-ffile-prefix-map=${CMAKE_CURRENT_SOURCE_DIR}/=")
 
 add_compile_definitions(
     PIKI_PC_PORT=1
@@ -260,8 +280,31 @@ if (NOT WIN32 AND NOT ANDROID)
     find_package(OpenGL REQUIRED)
 endif()
 
+# Versión y commit en el informe de crash (pikmin_crash.log), como en Pikmin 2.
+set(NECTAR_RELEASE_VERSION "unknown")
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../../versions.json")
+    file(READ "${CMAKE_CURRENT_SOURCE_DIR}/../../versions.json" NECTAR_VERSIONS_JSON)
+    string(REGEX MATCH "\"release\"[ \t]*:[ \t]*\"([^\"]*)\"" _ "${NECTAR_VERSIONS_JSON}")
+    if(CMAKE_MATCH_1)
+        set(NECTAR_RELEASE_VERSION "${CMAKE_MATCH_1}")
+    endif()
+endif()
+set(NECTAR_GIT_COMMIT "unknown")
+find_package(Git QUIET)
+if(GIT_FOUND)
+    execute_process(COMMAND "${GIT_EXECUTABLE}" rev-parse --short HEAD
+                    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+                    OUTPUT_VARIABLE _nectar_commit OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+    if(_nectar_commit)
+        set(NECTAR_GIT_COMMIT "${_nectar_commit}")
+    endif()
+endif()
+set_source_files_properties(pc_port/pc_crash.cpp PROPERTIES COMPILE_DEFINITIONS
+    "NECTAR_RELEASE_VERSION=\"${NECTAR_RELEASE_VERSION}\";NECTAR_GIT_COMMIT=\"${NECTAR_GIT_COMMIT}\"")
+
 set(PC_PORT_SOURCES
     pc_port/pc_main.cpp
+    pc_port/pc_crash.cpp
     pc_port/pc_window.cpp
     pc_port/pc_keycaps.cpp
     pc_port/pc_gyro.cpp
@@ -291,13 +334,23 @@ set(PC_PORT_SOURCES
     pc_port/mods/pc_hd_model_convert.cpp
     pc_port/mods/pc_vs_arena.cpp
     pc_port/mods/pc_vs_map.cpp
+    pc_port/mods/pc_map_catalog.cpp
+    pc_port/mods/pc_mission.cpp
+    pc_port/mods/pc_campaign.cpp
+    pc_port/mods/pc_characters.cpp
+    pc_port/mods/pc_pikmin_models.cpp
     # Mapas VS: formato y compilador compartidos con el editor de mapas.
     ${NECTAR_LIBS_DIR}/nectar_mapcore/src/map_json.cpp
     ${NECTAR_LIBS_DIR}/nectar_mapcore/src/i18n.cpp
     ${NECTAR_LIBS_DIR}/nectar_mapcore/src/compile.cpp
+    ${NECTAR_LIBS_DIR}/nectar_mapcore/src/campaign.cpp
+    ${NECTAR_LIBS_DIR}/nectar_mapcore/src/pack.cpp
     ${NECTAR_LIBS_DIR}/nectar_assets/src/mod.cpp
     ${NECTAR_LIBS_DIR}/nectar_assets/src/gen.cpp
     ${NECTAR_LIBS_DIR}/nectar_assets/src/image.cpp
+    ${NECTAR_LIBS_DIR}/nectar_assets/src/mesh_mod.cpp
+    # Personajes propios (Load/Characters), compartido con el launcher y el creador.
+    ${NECTAR_LIBS_DIR}/nectar_assets/src/charpack.cpp
     ${PC_PORT_DIR}/launcher/bti_decode.cpp
     pc_port/pc_vs.cpp
     pc_port/pc_achievements.cpp
@@ -374,6 +427,7 @@ set_source_files_properties(
     ${NECTAR_LIBS_DIR}/nectar_assets/src/mod.cpp
     ${NECTAR_LIBS_DIR}/nectar_assets/src/gen.cpp
     ${NECTAR_LIBS_DIR}/nectar_assets/src/image.cpp
+    ${NECTAR_LIBS_DIR}/nectar_assets/src/mesh_mod.cpp
     PROPERTIES INCLUDE_DIRECTORIES
     "${NECTAR_LIBS_DIR}/nectar_assets/src;${NECTAR_LIBS_DIR}/nectar_assets/third_party;${PC_PORT_DIR}/launcher")
 
@@ -900,6 +954,7 @@ if(ANDROID AND NOT TARGET nectar_launcher)
     add_library(nectar_launcher SHARED
         pc_port/launcher/launcher_android_main.cpp
         pc_port/launcher/launcher_gui.cpp
+        pc_port/launcher/crash_report.cpp
         pc_port/launcher/bti_decode.cpp
         pc_port/launcher/settings_model.cpp
         pc_port/launcher/release_update.cpp
@@ -915,7 +970,7 @@ if(ANDROID AND NOT TARGET nectar_launcher)
         "${LAUNCHER_EMBED_DIR}"
         ${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb
         ${SDL2_INCLUDE_DIRS})
-    set(OPEN_NECTAR_VERSION "1.0.3" CACHE STRING "Open Nectar version of this build (GitHub release tag)")
+    set(OPEN_NECTAR_VERSION "1.0.8" CACHE STRING "Open Nectar version of this build (GitHub release tag)")
     target_compile_definitions(nectar_launcher PRIVATE OPEN_NECTAR_VERSION="${OPEN_NECTAR_VERSION}")
     target_compile_options(nectar_launcher PRIVATE ${NATIVE_COMPILE_OPTIONS})
     target_link_libraries(nectar_launcher PRIVATE launcher_imgui_android pikmin_disc_image ${SDL2_LIBRARIES} GLESv3 EGL log android)
@@ -968,11 +1023,13 @@ if(PIKMIN_BUILD_LAUNCHER)
     add_executable(pikmin_launcher
         pc_port/launcher/launcher_main.cpp
         pc_port/launcher/launcher_gui.cpp
+        pc_port/launcher/crash_report.cpp
         pc_port/launcher/bti_decode.cpp
         pc_port/launcher/settings_model.cpp
         pc_port/launcher/release_update.cpp
         pc_port/launcher/texture_pack_download.cpp
         pc_port/launcher/installer_ui.cpp
+        ${NECTAR_LIBS_DIR}/nectar_assets/src/charpack.cpp
         pc_port/pc_icon.cpp
         ${LAUNCHER_PLATFORM_SOURCE}
         "${LAUNCHER_EMBED_DIR}/logo_open_nectar.h"
@@ -984,9 +1041,13 @@ if(PIKMIN_BUILD_LAUNCHER)
         "${LAUNCHER_EMBED_DIR}"
         ${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb)
     target_link_libraries(pikmin_launcher PRIVATE launcher_imgui)
+    # Instalar personajes (.nectarchar) con charpack, como el juego y el creador.
+    target_include_directories(pikmin_launcher PRIVATE ${NECTAR_LIBS_DIR}/nectar_assets/include)
+    set_source_files_properties(${NECTAR_LIBS_DIR}/nectar_assets/src/charpack.cpp PROPERTIES
+        INCLUDE_DIRECTORIES "${CMAKE_CURRENT_SOURCE_DIR}/third_party/nlohmann/include;${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb")
     # Versión que el launcher compara con el último release de GitHub para
     # avisar y actualizarse. Súbela en cada release (la etiqueta de GitHub).
-    set(OPEN_NECTAR_VERSION "1.0.3" CACHE STRING "Open Nectar version of this build (GitHub release tag)")
+    set(OPEN_NECTAR_VERSION "1.0.8" CACHE STRING "Open Nectar version of this build (GitHub release tag)")
     target_compile_definitions(pikmin_launcher PRIVATE OPEN_NECTAR_VERSION="${OPEN_NECTAR_VERSION}")
     if (WIN32)
         target_sources(pikmin_launcher PRIVATE packaging/windows/nectar.rc)
@@ -1062,6 +1123,11 @@ if(PIKMIN_BUILD_TESTS AND PIKMIN_BUILD_LAUNCHER)
 endif()
 
 if(PIKMIN_BUILD_TESTS)
+    add_executable(pc_bundle_compat_test pc_port/pc_bundle_compat_test.cpp)
+    target_include_directories(pc_bundle_compat_test PRIVATE pc_port)
+    target_compile_options(pc_bundle_compat_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME pc_bundle_compat_test COMMAND pc_bundle_compat_test)
+
     add_executable(pc_generator_cache_validation_test
         pc_port/save/pc_generator_cache_validation_test.cpp)
     target_include_directories(pc_generator_cache_validation_test PRIVATE pc_port/save)
@@ -1381,4 +1447,10 @@ endif()
 # donde busca el ejecutable para "Probar". Usa la ImGui del launcher.
 if (NECTAR_BUILD_MAPMAKER AND NOT ANDROID)
     add_subdirectory("${NECTAR_LIBS_DIR}/../tools/mapmaker" "${CMAKE_CURRENT_BINARY_DIR}/mapmaker")
+endif()
+
+# Creador de modelos (tools/modelmaker): Olimar propio a partir de un glTF,
+# VRM u OBJ. Comparte con el editor de mapas la ImGui, OpenGL y nectar_assets.
+if (NECTAR_BUILD_MODELMAKER AND NOT ANDROID)
+    add_subdirectory("${NECTAR_LIBS_DIR}/../tools/modelmaker" "${CMAKE_CURRENT_BINARY_DIR}/modelmaker")
 endif()

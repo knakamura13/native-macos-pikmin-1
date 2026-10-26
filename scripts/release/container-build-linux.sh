@@ -29,6 +29,7 @@ if [[ ! -f "${out}/sdl2/lib/libSDL2.a" ]]; then
     cmake -S "${out}/SDL2-${sdl_version}" -B "${out}/sdl2-build" -G Ninja \
         -DCMAKE_BUILD_TYPE=Release \
         -DSDL_SHARED=OFF -DSDL_STATIC=ON -DSDL_STATIC_PIC=ON -DSDL_TEST=OFF \
+        -DSDL_HIDAPI=ON -DSDL_HIDAPI_JOYSTICK=ON -DSDL_HIDAPI_LIBUSB=ON \
         -DCMAKE_INSTALL_PREFIX="${out}/sdl2"
     cmake --build "${out}/sdl2-build" -j"${jobs}"
     cmake --install "${out}/sdl2-build"
@@ -64,7 +65,7 @@ fi
 printf '%s\n' '[contenedor] Pikmin 1 USA y el launcher...'
 cmake -S "${src}/games/pikmin1" -B "${out}/p1-usa" "${common[@]}" "${online[@]}" \
     -DPIKMIN_NATIVE_OPTIMIZE=OFF -DPIKMIN_ENABLE_IPO=ON -DOPEN_NECTAR_VERSION="${version}"
-cmake --build "${out}/p1-usa" --target pikmin_pc pikmin_launcher nectar_mapmaker -j"${jobs}"
+cmake --build "${out}/p1-usa" --target pikmin_pc pikmin_launcher nectar_mapmaker nectar_modelmaker -j"${jobs}"
 
 printf '%s\n' '[contenedor] Pikmin 1 PAL...'
 cmake -S "${src}/games/pikmin1" -B "${out}/p1-pal" "${common[@]}" "${online[@]}" \

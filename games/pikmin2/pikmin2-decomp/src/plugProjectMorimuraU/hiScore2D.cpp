@@ -1,6 +1,6 @@
 #include "Morimura/HiScore.h"
 #ifdef PIKI_PC_PORT
-extern "C" void pc_gfx_p2_extend_edge_color(float gxY0, float gxY1, float stripW);
+extern "C" void pc_gfx_p2_black_sides(void);
 #endif
 #include "Game/Data.h"
 #include "JSystem/JKernel/JKRArchive.h"
@@ -511,13 +511,13 @@ bool THiScore::doUpdate()
 	}
 
 	if (!mIndexGroup->mStateID) {
-		mAlphaTimer += 0.04f;
+		mAlphaTimer += 0.04f * PC_ORIG_DT_SCALE(); // FPS Mode: paso por frame original
 		if (mAlphaTimer > 1.0f) {
 			mAlphaTimer        = 1.0f;
 			mIndPaneXDirection = 0.0f;
 		}
 	} else {
-		mAlphaTimer *= 0.75f;
+		mAlphaTimer *= PC_DAMP(0.75f); // FPS Mode: amortiguacion por frame
 		if (mAlphaTimer < 0.1f) {
 			mAlphaTimer = 0.0f;
 		}
@@ -658,7 +658,7 @@ void THiScore::doDraw(Graphics& gfx)
 #ifdef PIKI_PC_PORT
 	// Pantallas anchas: el fondo (mapa con vineta) solo existe en el 4:3; los
 	// laterales continuan el color del borde, fila a fila.
-	pc_gfx_p2_extend_edge_color(0.0f, 448.0f, 6.0f);
+	pc_gfx_p2_black_sides();
 #endif
 	JUtility::TColor color;
 	color = JUtility::TColor(0, 0, 0, 255 - mFadeAlpha);
@@ -981,7 +981,7 @@ void THiScore::changeTextTevBlock(int id)
 
 	if (mIndexGroup->mStateID == TIndexGroup::IDGroup_Idle && val < mCursorSelectionYOffset && val > mSelectionYOffset) {
 		changeTevBlock(mTevBlock[0], textbox->getMaterial()->getTevBlock());
-		mColorChangeTimer += 0.1f;
+		mColorChangeTimer += 0.1f * PC_ORIG_DT_SCALE(); // FPS Mode: paso por frame original
 		if (mColorChangeTimer > TAU) {
 			mColorChangeTimer -= TAU;
 		}

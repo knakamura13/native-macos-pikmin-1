@@ -13,6 +13,14 @@
 #include "PSSystem/PSSystemIF.h"
 #include "efx2d/T2DChangesmoke.h"
 #include "Controller.h"
+#include "System.h" // PC_ORIG_DT_SCALE / PC_DAMP
+#if PIKI_PC_TOUCH
+extern "C" void pc_touch_claim_game_menu(void);
+extern "C" bool pc_touch_take_game_menu_tap(float* x, float* y);
+extern "C" bool pc_touch_pane_hit(const void* pane, float nx, float ny, float margin);
+// Zona tocada en el mapa: getTarget la devuelve en vez de leer la cruceta.
+static int sPcTouchTarget = -1;
+#endif
 
 static void _Print(char* format, ...)
 {
@@ -552,47 +560,47 @@ void WorldMap::update(Game::WorldMap::UpdateArg& arg)
 		mScreenKitagawa->search(getSerialTagName(MC8("Plight0"), i))->animationTransform();
 	}
 
-	mAnimTimers[2] += 1.0f;
+	mAnimTimers[2] += 1.0f * PC_ORIG_DT_SCALE(); // FPS Mode: paso por frame original
 	if (mAnimTimers[2] >= mKitaAnim3->getFrameMax()) {
 		mAnimTimers[2] = 0.0f;
 	}
 
-	mAnimTimers[3] += 1.0f;
+	mAnimTimers[3] += 1.0f * PC_ORIG_DT_SCALE(); // FPS Mode: paso por frame original
 	if (mAnimTimers[3] >= mKitaAnim4->getFrameMax()) {
 		mAnimTimers[3] = 0.0f;
 	}
 
-	mAnimTimers[4] += 1.0f;
+	mAnimTimers[4] += 1.0f * PC_ORIG_DT_SCALE(); // FPS Mode: paso por frame original
 	if (mAnimTimers[4] >= mKitaAnim5->getFrameMax()) {
 		mAnimTimers[4] = 0.0f;
 	}
 
-	mAnimTimers[5] += 1.0f;
+	mAnimTimers[5] += 1.0f * PC_ORIG_DT_SCALE(); // FPS Mode: paso por frame original
 	if (mAnimTimers[5] >= mRocketAnim1->getFrameMax()) {
 		mAnimTimers[5] = 0.0f;
 	}
 
-	mAnimTimers[6] += 1.0f;
+	mAnimTimers[6] += 1.0f * PC_ORIG_DT_SCALE(); // FPS Mode: paso por frame original
 	if (mAnimTimers[6] >= mRocketAnim2->getFrameMax()) {
 		mAnimTimers[6] = 0.0f;
 	}
 
-	mAnimTimers[7] += 0.5f;
+	mAnimTimers[7] += 0.5f * PC_ORIG_DT_SCALE(); // FPS Mode: paso por frame original
 	if (mAnimTimers[7] >= mInfoAnim1->getFrameMax()) {
 		mAnimTimers[7] = 0.0f;
 	}
 
-	mAnimTimers[8] += 0.5f;
+	mAnimTimers[8] += 0.5f * PC_ORIG_DT_SCALE(); // FPS Mode: paso por frame original
 	if (mAnimTimers[8] >= mInfoAnim2->getFrameMax()) {
 		mAnimTimers[8] = 0.0f;
 	}
 
-	mAnimTimers[9] += 0.5f;
+	mAnimTimers[9] += 0.5f * PC_ORIG_DT_SCALE(); // FPS Mode: paso por frame original
 	if (mAnimTimers[9] >= mInfoAnim3->getFrameMax()) {
 		mAnimTimers[9] = 0.0f;
 	}
 
-	mAnimTimers[1] += 1.0f;
+	mAnimTimers[1] += 1.0f * PC_ORIG_DT_SCALE(); // FPS Mode: paso por frame original
 	if (mAnimTimers[1] >= mKitaAnim2->getFrameMax()) {
 		mAnimTimers[1] = 0.0f;
 	}
@@ -609,7 +617,7 @@ void WorldMap::update(Game::WorldMap::UpdateArg& arg)
 
 	switch (mCurrentState) {
 	case WMAP_NewMapOpened: {
-		mAnimTimers[0] += 1.5f;
+		mAnimTimers[0] += 1.5f * PC_ORIG_DT_SCALE(); // FPS Mode: paso por frame original
 		if (mAnimTimers[0] >= mCameraZoomMinFrame && !newMapOpen()) {
 			// COURSE_Tutorial is always open, so start from next course
 			for (int i = COURSE_Forest; i < COURSE_COUNT; i++) {
@@ -1353,6 +1361,35 @@ bool WorldMap::changeState()
 {
 	bool isStateChange = false;
 
+#if PIKI_PC_TOUCH
+	// Tactil, como el mapa de Pikmin 1: tocar la zona seleccionada es A, otra
+	// zona abierta lleva alli el cohete y L/R abren Piklopedia/Tesoros. Los
+	// paneles se consultan cada frame para que el toque los siga.
+	bool pcTapA = false, pcTapL = false, pcTapR = false;
+	{
+		pc_touch_claim_game_menu();
+		float nx = 0.0f, ny = 0.0f;
+		const bool tapped = pc_touch_take_game_menu_tap(&nx, &ny);
+		for (int i = 0; i < mOpenCourses && i < 4; i++) {
+			J2DPane* point = mScreenKitagawa->search(getSerialTagName(MC8("Npoint0"), i));
+			if (point && pc_touch_pane_hit(point, nx, ny, 0.04f) && tapped) {
+				if (i == mCurrentCourseIndex) pcTapA = true;
+				else sPcTouchTarget = i;
+			}
+		}
+		if (pc_touch_pane_hit(mScreenInfo->search(MC8("Nlbtn")), nx, ny, 0.02f) && tapped) pcTapL = true;
+		if (pc_touch_pane_hit(mScreenInfo->search(MC8("Nrbtn")), nx, ny, 0.02f) && tapped) pcTapR = true;
+	}
+	if (sPcTouchTarget >= 0) {
+		isStateChange   = true;
+		mLockoutCounter = msVal.mInputLockoutFrames;
+		mCurrentState   = WMAP_InputTarget;
+		return isStateChange;
+	}
+#else
+	const bool pcTapA = false, pcTapL = false, pcTapR = false;
+#endif
+
 	if (mInitArg.mController->isButtonDown(Controller::PRESS_START)) {
 		// Bring up "Return to Title Screen" popup
 
@@ -1367,7 +1404,7 @@ bool WorldMap::changeState()
 			setFlag(WMAPFLAG_IsBackdropActive | WMAPFLAG_IsBackdropBehindInfo);
 		}
 
-	} else if (mInitArg.mController->isButtonDown(Controller::PRESS_A)) {
+	} else if (mInitArg.mController->isButtonDown(Controller::PRESS_A) || pcTapA) {
 		// Bring up "Land in this area?" popup
 
 		::Screen::gGame2DMgr->mScreenMgr->reset();
@@ -1380,14 +1417,14 @@ bool WorldMap::changeState()
 			setFlag(WMAPFLAG_IsBackdropActive | WMAPFLAG_IsBackdropBehindInfo);
 		}
 
-	} else if (mInitArg.mController->isButtonDown(Controller::PRESS_L)) {
+	} else if (mInitArg.mController->isButtonDown(Controller::PRESS_L) || pcTapL) {
 		// Go to enemy piklopedia ("Piklopedia")
 
 		PSSystem::spSysIF->playSystemSe(PSSE_SY_PLAYER_CHANGE, 0);
 		isStateChange = true;
 		mCurrentState = WMAP_GoToZukanEnemy;
 
-	} else if (mInitArg.mController->isButtonDown(Controller::PRESS_R)) {
+	} else if (mInitArg.mController->isButtonDown(Controller::PRESS_R) || pcTapR) {
 		// Go to item piklopedia ("Treasures")
 
 		PSSystem::spSysIF->playSystemSe(PSSE_SY_PLAYER_CHANGE, 0);
@@ -1472,6 +1509,13 @@ bool WorldMap::newMapOpen()
  */
 int WorldMap::getTarget()
 {
+#if PIKI_PC_TOUCH
+	if (sPcTouchTarget >= 0) {
+		const int target = sPcTouchTarget;
+		sPcTouchTarget   = -1;
+		return target;
+	}
+#endif
 	int newMap = COURSE_NULL;
 	switch (mCurrentCourseIndex) {
 	case COURSE_Tutorial: // currently selected valley of repose

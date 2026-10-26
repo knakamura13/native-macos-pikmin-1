@@ -11,6 +11,7 @@
 #include "pc_gyro.h"
 #include "settings/pc_settings.h"
 #include "mods/pc_hd_models.h"
+#include "mods/pc_pikmin_models.h"
 #include "gl/pc_gfx.h"
 #include "timing/pc_anim_timing.h"
 #include "netplay/pc_netplay_camlead.h"
@@ -4135,14 +4136,23 @@ bool Navi::pcDrawAsPikmin(Graphics& gfx)
 		obj->mShape->mMaterialList->setColour(Piki::pikiColors[color]);
 		static const PcHdModelId kHdPiki[PikiColorCount] = { PC_HD_MODEL_PIKI_BLUE, PC_HD_MODEL_PIKI_RED, PC_HD_MODEL_PIKI_YELLOW };
 		const bool p2Drawn = p2Model >= 0 && pc_hd_model_draw_skinned(gfx, obj->mShape, (PcHdModelId)p2Model, pcTint());
-		if (!p2Drawn && !pc_hd_model_draw_skinned(gfx, obj->mShape, kHdPiki[color], pcTint())) {
+		// Capitán Pikmin de Pikmin 1: el modelo propio de su color, si hay.
+		const char* custom = p2Model < 0 ? pc_pikmin_model_path(color) : nullptr;
+		GXColor customTint = pcTint();
+		if (custom && pc_pikmin_model_tinted(color) && !pcHasTint())
+			customTint = { Piki::pikiColors[color].r, Piki::pikiColors[color].g, Piki::pikiColors[color].b, 255 };
+		const bool customDrawn = custom && pc_hd_model_draw_custom(gfx, obj->mShape, custom, customTint);
+		if (!p2Drawn && !customDrawn && !pc_hd_model_draw_skinned(gfx, obj->mShape, kHdPiki[color], pcTint())) {
 			obj->mShape->drawshape(gfx, *gfx.mCamera, nullptr);
 		}
 
 		// Hoja, siempre hoja (no capullo ni flor); también a los de Pikmin 2.
-		gfx.useMatrix(obj->mShape->getAnimMatrix(6), 0);
+		// Con un modelo propio, en la punta de su tallo.
+		Matrix4f customLeaf;
+		const Matrix4f& leafMtx = customDrawn && pc_hd_model_custom_joint(obj->mShape, custom, 6, customLeaf) ? customLeaf : obj->mShape->getAnimMatrix(6);
+		gfx.useMatrix(leafMtx, 0);
 		const GXColor white = { 255, 255, 255, 255 };
-		if (!pc_hd_model_draw_rigid(gfx, obj->mShape->getAnimMatrix(6), PC_HD_MODEL_HAPPA_LEAF, white) && pikiMgr->mLeafModel[Leaf]) {
+		if (!pc_hd_model_draw_rigid(gfx, leafMtx, PC_HD_MODEL_HAPPA_LEAF, white) && pikiMgr->mLeafModel[Leaf]) {
 			pikiMgr->mLeafModel[Leaf]->drawshape(gfx, *gfx.mCamera, nullptr);
 		}
 	}
@@ -4167,7 +4177,8 @@ void Navi::demoDraw(Graphics& gfx, immut Matrix4f* mtx)
 	const bool tinted    = pcHasTint();
 	const GXColor hdTint = pcTint();
 	if (tinted) pc_gfx_set_mat_color_tint(hdTint);
-	// Louie: primero el pack HD de Pikmin 3, si no el de Pikmin 2; Olimar HD o el original.
+	// Louie: primero el pack HD de Pikmin 3, si no el de Pikmin 2; Olimar: el
+	// propio del creador de modelos, el HD o el original.
 	// Mod "First Person": la cámara está dentro de la cabeza del capitán, así
 	// que dibujarlo llena la pantalla con su nuca. Solo se oculta el que
 	// controla el jugador; en cooperativo el otro se sigue viendo. Se salta
@@ -4182,8 +4193,12 @@ void Navi::demoDraw(Graphics& gfx, immut Matrix4f* mtx)
 		     || pc_hd_model_draw_skinned(gfx, mNaviShapeObject->mShape, PC_HD_MODEL_LOUIE, hdTint);
 	} else if (pcCaptain() == PC_CAPTAIN_PRESIDENT) {
 		drawn = pc_hd_model_draw_skinned(gfx, mNaviShapeObject->mShape, PC_HD_MODEL_PRESIDENT, hdTint);
+	} else if (pc_captain_is_custom(pcCaptain())) {
+		// Personaje propio (Load/Characters); si falla su pack, Olimar normal.
+		drawn = pc_hd_model_draw_custom(gfx, mNaviShapeObject->mShape, pc_captain_custom_model(pcCaptain()), hdTint);
 	} else {
-		drawn = pc_hd_model_draw_skinned(gfx, mNaviShapeObject->mShape, PC_HD_MODEL_OLIMAR, hdTint);
+		drawn = pc_hd_model_draw_skinned(gfx, mNaviShapeObject->mShape, PC_HD_MODEL_OLIMAR_CUSTOM, hdTint)
+		     || pc_hd_model_draw_skinned(gfx, mNaviShapeObject->mShape, PC_HD_MODEL_OLIMAR, hdTint);
 	}
 	if (!drawn)
 #endif

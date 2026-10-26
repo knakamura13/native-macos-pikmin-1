@@ -9,6 +9,23 @@
 #include "JSystem/JKernel/JKRArchive.h"
 #include "JSystem/JKernel/JKRHeap.h"
 #include "System.h"
+
+// Peticiones a la tarjeta. En consola los hilos son cooperativos: tras
+// checkError() (que despierta al hilo de la tarjeta) el segundo
+// OSTryLockMutex siempre ganaba. Aquí el hilo de la tarjeta corre en
+// paralelo, puede tomar el mutex entre las dos llamadas y la petición fallaba
+// (P2Assert en ebiSaveMgr.cpp:159 al guardar antes de entrar en una cueva).
+// Quien pide ya comprobó que la tarjeta está libre: se espera a que el hilo
+// suelte el mutex (lo hace al acabar cada comando).
+#ifdef PIKI_PC_PORT
+static inline BOOL pcCardRequestLock(OSMutex* mutex)
+{
+	OSLockMutex(mutex);
+	return TRUE;
+}
+#else
+#define pcCardRequestLock OSTryLockMutex
+#endif
 #ifdef PIKI_PC_PORT
 extern "C" int pc_p2_rules_save_bits(void);
 extern "C" void pc_p2_rules_adopt(int headerByte);
@@ -184,7 +201,7 @@ void Mgr::update()
 bool Mgr::format()
 {
 	bool result = false;
-	if (OSTryLockMutex(&mOsMutex)) {
+	if (pcCardRequestLock(&mOsMutex)) {
 		result = MemoryCardMgr::cardFormat(CARDSLOT_SlotA);
 		OSUnlockMutex(&mOsMutex);
 		OSSignalCond(&mCond);
@@ -217,7 +234,7 @@ bool Mgr::format()
 bool Mgr::checkBeforeSave()
 {
 	bool isCheck = false;
-	if (checkError() && OSTryLockMutex(&mOsMutex)) {
+	if (checkError() && pcCardRequestLock(&mOsMutex)) {
 		isCheck = true;
 		setCommand(COMMAND_CheckBeforeSave);
 		OSUnlockMutex(&mOsMutex);
@@ -233,7 +250,7 @@ bool Mgr::checkBeforeSave()
 bool Mgr::checkError()
 {
 	bool isError = false;
-	if (resetError() && OSTryLockMutex(&mOsMutex)) {
+	if (resetError() && pcCardRequestLock(&mOsMutex)) {
 		isError = true;
 		setCommand(COMMAND_CheckError);
 		OSUnlockMutex(&mOsMutex);
@@ -249,7 +266,7 @@ bool Mgr::checkError()
 bool Mgr::createNewFile()
 {
 	bool result = false;
-	if (resetError() && OSTryLockMutex(&mOsMutex)) {
+	if (resetError() && pcCardRequestLock(&mOsMutex)) {
 		result = true;
 		setCommand(COMMAND_CreateNewFile);
 		OSUnlockMutex(&mOsMutex);
@@ -265,7 +282,7 @@ bool Mgr::createNewFile()
 bool Mgr::saveGameOption()
 {
 	bool result = false;
-	if (checkError() && OSTryLockMutex(&mOsMutex)) {
+	if (checkError() && pcCardRequestLock(&mOsMutex)) {
 		result = true;
 		setCommand(COMMAND_SaveGameOption);
 		OSUnlockMutex(&mOsMutex);
@@ -285,7 +302,7 @@ bool Mgr::loadGameOption()
 #endif
 {
 	bool result = false;
-	if (checkError() && OSTryLockMutex(&mOsMutex)) {
+	if (checkError() && pcCardRequestLock(&mOsMutex)) {
 		result = true;
 #if defined(VERSION_PAL)
 		MgrCommandLoadGameOption command(6, loadLanguage);
@@ -315,7 +332,7 @@ bool Mgr::savePlayerNoCheckSerialNumber(int fileIndex)
 		}
 	}
 
-	if (checkError() && OSTryLockMutex(&mOsMutex)) {
+	if (checkError() && pcCardRequestLock(&mOsMutex)) {
 		result = true;
 		MgrCommandPlayerNo command(COMMAND_SavePlayerNoSerialNum, fileIndex);
 		setCommand(&command);
@@ -343,7 +360,7 @@ bool Mgr::savePlayer(int fileIndex)
 		index = COMMAND_SavePlayerNoSerialNum;
 	}
 
-	if (checkError() && OSTryLockMutex(&mOsMutex)) {
+	if (checkError() && pcCardRequestLock(&mOsMutex)) {
 		result = true;
 		MgrCommandPlayerNo command(index, fileIndex);
 		setCommand(&command);
@@ -367,7 +384,7 @@ bool Mgr::loadPlayer(int fileIndex)
 #else
 	P2ASSERTBOUNDSLINE(815, 0, fileIndex, 3);
 #endif
-	if (checkError() && OSTryLockMutex(&mOsMutex)) {
+	if (checkError() && pcCardRequestLock(&mOsMutex)) {
 		result = true;
 		MgrCommandPlayerNo command(COMMAND_LoadPlayer, fileIndex);
 		setCommand(&command);
@@ -391,7 +408,7 @@ bool Mgr::deletePlayer(int fileIndex)
 #else
 	P2ASSERTBOUNDSLINE(839, 0, fileIndex, 3);
 #endif
-	if (checkError() && OSTryLockMutex(&mOsMutex)) {
+	if (checkError() && pcCardRequestLock(&mOsMutex)) {
 		result = true;
 		MgrCommandPlayerNo command(COMMAND_DeletePlayer, fileIndex);
 		setCommand(&command);
@@ -422,7 +439,7 @@ bool Mgr::copyPlayer(int fileIndexFrom, int fileIndexTo)
 #else
 	P2ASSERTBOUNDSINCLUSIVELINE(863, 0, fileIndexTo, 2);
 #endif
-	if (checkError() && OSTryLockMutex(&mOsMutex)) {
+	if (checkError() && pcCardRequestLock(&mOsMutex)) {
 		result = true;
 		MgrCommandCopyPlayer command(COMMAND_CopyPlayer, fileIndexFrom, fileIndexTo);
 		setCommand(&command);
@@ -439,7 +456,7 @@ bool Mgr::copyPlayer(int fileIndexFrom, int fileIndexTo)
 bool Mgr::getPlayerHeader(PlayerFileInfo* playerInfo)
 {
 	bool result = false;
-	if (checkError() && OSTryLockMutex(&mOsMutex)) {
+	if (checkError() && pcCardRequestLock(&mOsMutex)) {
 		result = true;
 		MgrCommandGetPlayerHeader command(COMMAND_UpdatePlayerHeader, playerInfo);
 		setCommand(&command);
@@ -804,7 +821,7 @@ bool Mgr::writeBrokenData(MemoryCardMgr::ECardSlot slot)
 		}
 	}
 
-	delete (buffer);
+	delete[] buffer;
 
 	if (!isErrorOccured()) {
 		writeHeader(slot, cFileName);
@@ -894,7 +911,7 @@ bool Mgr::commandSaveGameOption(bool isForceSave, bool skipReadCheck)
 			hasWriteFailed = write(CARDSLOT_SlotA, cFileName, optionBuffer, OPTION_BLOCK_SIZE, GET_OPTION_OFFSET(selectedSlot));
 			saveSuccessful = hasWriteFailed;
 		}
-		delete (optionBuffer);
+		delete[] optionBuffer;
 	}
 	if (saveSuccessful) {
 		sys->clearOptionBlockSaveFlag();
@@ -1176,7 +1193,7 @@ bool Mgr::commandSavePlayerNoCheckSerialNo(s8 fileIndex, bool param_2)
 #endif
 		result = savePlayerProc(fileIndex, buffer, true);
 
-		delete (buffer);
+		delete[] buffer;
 
 		if (result) {
 			sys->mPlayData->setCardSerialNo(serial);
@@ -1330,7 +1347,7 @@ bool Mgr::commandLoadPlayer(s8 fileIndex)
 #endif
 			}
 
-			delete (buffer);
+			delete[] buffer;
 		}
 	}
 	return !isErrorOccured();
@@ -1492,7 +1509,7 @@ bool Mgr::commandCopyPlayer(s8 fileIndexFrom, s8 fileIndexTo)
 		info->mSaveSlotIndex = fileIndexTo;
 		result               = savePlayerProc(fileIndexTo, buffer, false);
 	}
-	delete (buffer);
+	delete[] buffer;
 
 	return result;
 }
@@ -1634,7 +1651,7 @@ bool Mgr::writeInvalidGameOption()
 		}
 	}
 
-	delete (buffer);
+	delete[] buffer;
 
 	return result;
 }
@@ -1682,7 +1699,7 @@ bool Mgr::writeInvalidPlayerInfo(int playerIndex, s8 fileIndex)
 	info->mSaveSlotIndex = fileIndex;
 
 	bool result = write(CARDSLOT_SlotA, cFileName, buffer, 0x2000, GET_PLAYER_OFFSET(playerIndex));
-	delete (buffer);
+	delete[] buffer;
 	return result;
 }
 
@@ -1718,7 +1735,7 @@ bool Mgr::checkPlayerNoPlayerInfo(int playerIndex, s8 fileIndex, PlayerInfoHeade
 				result = true;
 			}
 		}
-		delete (buffer);
+		delete[] buffer;
 	} else {
 		infoHeader->mMagic = -1;
 	}
@@ -1793,7 +1810,7 @@ bool Mgr::getIndexInvalidPlayerInfo(int* outPlayerIndex, s8* outFileIndex, s8 ta
 		}
 	}
 
-	delete (buffer);
+	delete[] buffer;
 
 	if (isValid && foundIndex == -1) {
 		int fileIndices[3]; // save file indices
@@ -1941,7 +1958,7 @@ bool Mgr::modifyPlayerInfo(s8 fileIndex, bool* outCheckWrite)
 		}
 
 		memset(buffer, 0xCD, PLAYER_BLOCK_SIZE);
-		delete (buffer);
+		delete[] buffer;
 
 		if (!result) {
 			break;
