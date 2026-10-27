@@ -291,8 +291,6 @@ static bool sSwarmPending[2]  = { false, false };
 
 bool pc_window_swarm_held(void) { return sSwarmHeld; }
 
-bool pc_window_pad_dpad_down_held(int player) { return sPadDpadDownHeld[player & 1]; }
-
 static bool sKeyBindingsInitialized = false;
 
 // Gamepad remapping state.
@@ -1362,7 +1360,9 @@ void pc_window_poll_events(PADStatus* pad) {
         const bool saveDown = quickHeld(PC_KEY_ACT_QUICKSAVE);
         const bool loadDown = quickHeld(PC_KEY_ACT_QUICKLOAD);
         if (saveDown && !sQuickSaveWasDown) pc_quicksave_request_save();
-        if (loadDown && !sQuickLoadWasDown) pc_settings_request_quick_load_confirm();
+        // F7 opens the F1 menu on Quick Load. While a load is already running,
+        // ignore it: Escape must cancel the load, not close that menu.
+        if (loadDown && !sQuickLoadWasDown && !pc_quicksave_load_active()) pc_settings_request_quick_load_confirm();
         sQuickSaveWasDown = saveDown;
         sQuickLoadWasDown = loadDown;
         // Escape (or player 1's B) cancels a load under way: a fresh press
