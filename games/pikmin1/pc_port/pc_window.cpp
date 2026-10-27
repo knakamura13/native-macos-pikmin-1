@@ -272,7 +272,8 @@ static SDL_Scancode sKeyBindings[PC_KEY_ACT_COUNT];
 // el código (izquierdo = A, derecho = B, central = Z) son sus valores por defecto.
 static SDL_Scancode sKeyBindings2[PC_KEY_ACT_COUNT];
 static bool sSwarmHeld = false; // PC_KEY_ACT_SWARM sampled by the last poll
-// D-pad Down of each player's pad, which is also the swarm button.
+// Physical D-pad Down of each player's pad. Filed into the deterministic
+// input record. Not the swarm button (issue #138): lie down stays on D-pad Down.
 static bool sPadDpadDownHeld[2] = { false, false };
 
 // Lock-On y Charge se consumen como flanco: el bucle sondea el mando muchas
@@ -1083,10 +1084,11 @@ static bool pc_window_read_gamepad(SDL_GameController* ctl, u16& button, s8& sti
     // Swarming on the pad is its own Swarm binding (issue #138): D-pad Down
     // keeps the original lie down, with or without the mod. The right stick
     // alone makes the original C-stick column, never a group at the cursor.
-    // The physical button is still recorded so deterministic mode can tell a
-    // gamepad Down from a keyboard Down. It does not set the swarm button.
-    sPadDpadDownHeld[player & 1] = SDL_GameControllerGetButton(ctl, SDL_CONTROLLER_BUTTON_DPAD_DOWN) != 0;
     sFreeCamSubY[player & 1] = 0.0f;
+    // Record the physical button for the input log. Swarm is only the Swarm
+    // binding: D-pad Down keeps the original lie down (issue #138), including
+    // while A is held to change Pikmin kind.
+    sPadDpadDownHeld[player & 1] = SDL_GameControllerGetButton(ctl, SDL_CONTROLLER_BUTTON_DPAD_DOWN) != 0;
     if (pc_settings_get_free_camera()) {
         if (abs(ry) > axisDeadZone) sFreeCamSubY[player & 1] = pc_pad_axis_from_sdl(-ry) / 74.0f;
         if (abs(rx) > axisDeadZone) {
@@ -1360,7 +1362,7 @@ void pc_window_poll_events(PADStatus* pad) {
         const bool saveDown = quickHeld(PC_KEY_ACT_QUICKSAVE);
         const bool loadDown = quickHeld(PC_KEY_ACT_QUICKLOAD);
         if (saveDown && !sQuickSaveWasDown) pc_quicksave_request_save();
-        if (loadDown && !sQuickLoadWasDown) pc_quicksave_request_load();
+        if (loadDown && !sQuickLoadWasDown) pc_settings_request_quick_load_confirm();
         sQuickSaveWasDown = saveDown;
         sQuickLoadWasDown = loadDown;
         // Escape (or player 1's B) cancels a load under way: a fresh press
