@@ -16,6 +16,7 @@ static_assert(PAD_BUTTON_LEFT == PC_MENU_PAD_LEFT && PAD_BUTTON_RIGHT == PC_MENU
 #include "pc_icon.h"
 #include "netplay/pc_netplay_det.h"
 #include "netplay/pc_input_log.h"
+#include "quicksave/pc_quicksave.h"
 #if PIKI_PC_TOUCH
 #include "gl/pc_gfx.h"
 #include "touch/pc_touch.h"
@@ -357,6 +358,10 @@ const SDL_Scancode kDefaultKeyBindings[PC_KEY_ACT_COUNT] = {
     /* PC_KEY_ACT_GYRO_RECENTER */ SDL_SCANCODE_UNKNOWN, // el giroscopio va en el mando
     /* PC_KEY_ACT_BOMB        */ SDL_SCANCODE_B, // B solo es "atrás" dentro de los menús
     /* PC_KEY_ACT_SPEEDRUN_RESET */ SDL_SCANCODE_F5,
+    // Quick Save: F6/F7 are debug keys only outside deterministic mode, which
+    // the feature always runs in, and F5 stays the speedrun reset.
+    /* PC_KEY_ACT_QUICKSAVE    */ SDL_SCANCODE_F6,
+    /* PC_KEY_ACT_QUICKLOAD    */ SDL_SCANCODE_F7,
 };
 
 SDL_Scancode pc_window_default_key_binding2(int action) {
@@ -396,6 +401,8 @@ const int kDefaultGamepadBindings[PC_KEY_ACT_COUNT] = {
     /* PC_KEY_ACT_GYRO_RECENTER */ -1, // sin botón libre por defecto; se asigna en Controls
     /* PC_KEY_ACT_BOMB        */ -1, // ídem
     /* PC_KEY_ACT_SPEEDRUN_RESET */ -1, // Back abre los ajustes; se asigna en Controls o en el menú Speedrun
+    /* PC_KEY_ACT_QUICKSAVE    */ -1,
+    /* PC_KEY_ACT_QUICKLOAD    */ -1,
 };
 
 // Action names for UI display.
@@ -407,6 +414,7 @@ static const char* kKeyActionNames[PC_KEY_ACT_COUNT] = {
     "Swarm to cursor",
     "Lock-On", "First Person", "Gyro Recenter", "Bomb",
     "Speedrun Reset",
+    "Quick Save", "Quick Load",
 };
 
 static void initKeyBindings() {
@@ -1328,6 +1336,39 @@ void pc_window_poll_events(PADStatus* pad) {
         if (pc_bind_is_mouse(second) && !mouseSecondOk) return false;
         return pc_window_binding_held(second, state, boundMouse);
     };
+
+    // Quick Save (pc_quicksave.h): the save and load actions, from the
+    // keyboard or player 1's pad when a button is bound. Not game input: a
+    // request acts at the end of the tick, outside the sim, and is never
+    // recorded. With the feature off they do nothing.
+    if (pc_quicksave_enabled()) {
+        static bool sQuickSaveWasDown = false;
+        static bool sQuickLoadWasDown = false;
+        auto quickHeld = [&](int action) {
+            if (sSettingsMenuOpen) return false;
+            if (held(action)) return true;
+            const int bind = sGamepadBindings[action];
+            return sControllers[0] != nullptr && bind >= 0 && pc_window_gamepad_bind_held(sControllers[0], bind);
+        };
+        const bool saveDown = quickHeld(PC_KEY_ACT_QUICKSAVE);
+        const bool loadDown = quickHeld(PC_KEY_ACT_QUICKLOAD);
+        if (saveDown && !sQuickSaveWasDown) pc_quicksave_request_save();
+        if (loadDown && !sQuickLoadWasDown) pc_quicksave_request_load();
+        sQuickSaveWasDown = saveDown;
+        sQuickLoadWasDown = loadDown;
+        // Escape (or player 1's B) cancels a load under way: a fresh press
+        // after the load began, so a key held from before does not.
+        static bool sCancelWasDown = false;
+        static bool sLoadWasActive = false;
+        const bool loadActive = pc_quicksave_load_active();
+        const bool cancelDown = !sSettingsMenuOpen
+            && (state[SDL_SCANCODE_ESCAPE] != 0
+                || (sControllers[0] != nullptr
+                    && SDL_GameControllerGetButton(sControllers[0], SDL_CONTROLLER_BUTTON_B) != 0));
+        if (loadActive && sLoadWasActive && cancelDown && !sCancelWasDown) pc_quicksave_request_cancel();
+        sCancelWasDown = cancelDown;
+        sLoadWasActive = loadActive;
+    }
 
     u16 button = 0;
     s8  stickX = 0;

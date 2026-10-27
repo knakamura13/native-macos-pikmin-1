@@ -2446,6 +2446,11 @@ void pc_gfx_set_render_resolution(int width, int height) {
     printf("[PC Port] Internal render resolution requested: %dx%d\n", sRenderResolutionW, sRenderResolutionH);
 }
 
+void pc_gfx_get_render_resolution(int* width, int* height) {
+    if (width) *width = sRenderResolutionW;
+    if (height) *height = sRenderResolutionH;
+}
+
 void pc_gfx_set_render_scale(float scale) {
     sRenderScale = std::clamp(scale, 0.25f, 4.0f);
     sRenderScaleSet = true;

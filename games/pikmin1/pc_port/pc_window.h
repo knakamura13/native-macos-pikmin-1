@@ -65,6 +65,9 @@ enum {
     PC_KEY_ACT_BOMB          = 24,
     // Modo Speedrun: mantener 1 s reinicia la run (pc_speedrun.cpp).
     PC_KEY_ACT_SPEEDRUN_RESET = 25,
+    // Quick Save (experimental, pc_quicksave.h): save the day here, load it back.
+    PC_KEY_ACT_QUICKSAVE = 26,
+    PC_KEY_ACT_QUICKLOAD = 27,
     PC_KEY_ACT_COUNT
 };
 void pc_window_set_key_binding(int action, SDL_Scancode scancode);
