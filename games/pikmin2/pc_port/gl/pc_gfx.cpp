@@ -8706,6 +8706,29 @@ static uint32_t sBatchPrims = 0;   // primitives merged into the open batch
 // GL_TRIANGLE_STRIP would have applied, or every other face would flip.
 static void append_primitive(const PcGfxHostVector<Vertex>& v, GXPrimitive type, PcGfxHostVector<Vertex>& sBatchVerts) {
     const size_t n = v.size();
+    // Pre-reserve required capacity for batching to eliminate vector reallocations in hot primitive submission loops.
+    // Behavior is identical since only vector capacity is increased.
+    size_t extra = 0;
+    switch (type) {
+    case GX_TRIANGLES:
+    case GX_LINES:
+    case GX_POINTS:
+        extra = n;
+        break;
+    case GX_TRIANGLESTRIP:
+    case GX_TRIANGLEFAN:
+        extra = (n >= 2) ? (n - 2) * 3 : 0;
+        break;
+    case GX_QUADS:
+        extra = (n / 4) * 6;
+        break;
+    case GX_LINESTRIP:
+        extra = (n >= 1) ? (n - 1) * 2 : 0;
+        break;
+    }
+    if (extra > 0) {
+        sBatchVerts.reserve(sBatchVerts.size() + extra);
+    }
     switch (type) {
     case GX_TRIANGLES:
         sBatchVerts.insert(sBatchVerts.end(), v.begin(), v.end());
