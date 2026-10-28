@@ -800,6 +800,40 @@ if(PIKMIN_NETPLAY_BUILD)
     target_sources(${NECTAR_GAME} PRIVATE $<TARGET_OBJECTS:pc_netplay_libm_obj>)
 endif()
 
+# Scenario builds: the same float results on every platform, so a stand-in
+# state-hash log from Linux or Windows CI means the same as one from macOS
+# (tools/scenarios/README.md, "Cross-platform floats"). Without it, arm64
+# clang fuses multiply-adds (-ffp-contract defaults to on) and each OS's libm
+# rounds sinf/atan2f/... differently. -ffp-contract=off forbids the fusion and
+# the netplay build's software libm replaces the platform one. On Apple,
+# pc_scenario_sincos_apple.c also replaces __sincosf_stret/__sincos_stret,
+# which clang calls when it fuses a sin and a cos of the same value. Release
+# builds never set PIKMIN_BUILD_SCENARIOS, so their flags and libm are
+# unchanged. A netplay build already has both.
+option(PIKMIN_SCENARIO_FLOAT_DET
+    "Scenario builds: no FMA contraction and the software libm (cross-platform identical floats)" ON)
+set(PIKMIN_SCENARIO_FLOAT_DET_ACTIVE OFF)
+if(PIKMIN_BUILD_SCENARIOS AND PIKMIN_SCENARIO_FLOAT_DET AND NOT PIKMIN_NETPLAY_BUILD
+        AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    set(PIKMIN_SCENARIO_FLOAT_DET_ACTIVE ON)
+    foreach(target IN LISTS PIKMIN_OPTIMIZED_TARGETS)
+        target_compile_options(${target} PRIVATE -ffp-contract=off)
+    endforeach()
+    if(NOT TARGET pc_netplay_libm_obj)
+        add_library(pc_netplay_libm_obj OBJECT pc_port/netplay/pc_netplay_libm.c)
+        target_compile_options(pc_netplay_libm_obj PRIVATE
+            ${PC_NETPLAY_LIBM_NO_BUILTIN_FLAGS} -fno-lto -ffp-contract=off)
+    endif()
+    set(PIKMIN_SCENARIO_LIBM_OBJECTS $<TARGET_OBJECTS:pc_netplay_libm_obj>)
+    if(APPLE)
+        add_library(pc_scenario_sincos_obj OBJECT pc_port/scenarios/pc_scenario_sincos_apple.c)
+        target_compile_options(pc_scenario_sincos_obj PRIVATE -fno-builtin -fno-lto -ffp-contract=off)
+        list(APPEND PIKMIN_SCENARIO_LIBM_OBJECTS $<TARGET_OBJECTS:pc_scenario_sincos_obj>)
+    endif()
+    target_sources(${NECTAR_GAME} PRIVATE ${PIKMIN_SCENARIO_LIBM_OBJECTS})
+    message(STATUS "Scenario float determinism: -ffp-contract=off and the software libm")
+endif()
+
 # Netplay lockstep session (third_party/NETPLAY_VENDOR.md). GekkoNet is its own
 # static library: GekkoLib/src/*.cpp with -std=gnu++20, GEKKONET_NO_ASIO and
 # GEKKONET_STATIC. Quoted includes search its own directories first
@@ -1973,6 +2007,16 @@ if(PIKMIN_BUILD_SCENARIOS)
     set_source_files_properties(src/jaudio/pikiseq.c
         PROPERTIES INCLUDE_DIRECTORIES "${CMAKE_CURRENT_SOURCE_DIR}/include")
     target_link_libraries(nectar_standin_generator PRIVATE nectar_mapcore nectar_assets)
+    # The generator writes the object stages' .mod geometry with float maths
+    # (nectar_assets, nectar_mapcore), so it gets the same treatment: without
+    # it the arm64 build writes different sandbox_objects.mod and
+    # sandbox_all_objects.mod bytes than x86-64.
+    if(PIKMIN_SCENARIO_FLOAT_DET_ACTIVE)
+        foreach(target nectar_standin_generator nectar_mapcore nectar_assets)
+            target_compile_options(${target} PRIVATE -ffp-contract=off)
+        endforeach()
+        target_sources(nectar_standin_generator PRIVATE ${PIKMIN_SCENARIO_LIBM_OBJECTS})
+    endif()
     set_property(TARGET nectar_standin_generator PROPERTY INCLUDE_DIRECTORIES "")
     target_include_directories(nectar_standin_generator PRIVATE
         ${NECTAR_LIBS_DIR}/nectar_assets/include ${NECTAR_LIBS_DIR}/nectar_mapcore/include)
