@@ -17,8 +17,11 @@ namespace {
 // part the Pikmin attack ('gate'); the posts at its ends ('side') are solid but
 // not attackable. Sizes are round numbers of the same order as a Forest of
 // Hope gate as seen in play (a wall a few captains high, wider than the squad),
-// not measured from the disc model.
-constexpr float kPanelHalfWidth = 75.0f;
+// not measured from the disc model. The panel's half-width (105, a 210-unit
+// wall) was chosen with the placement below: a wider panel moves where the
+// Pikmin work it away from the captain, which sets how far the first one walks
+// back to his hand (standin-k-investigation.md).
+constexpr float kPanelHalfWidth = 105.0f;
 constexpr float kPanelHeight    = 90.0f;
 constexpr float kPanelHalfDepth = 12.0f;
 constexpr float kPostWidth      = 20.0f;
@@ -153,17 +156,19 @@ SandboxGatePlacement sandboxGatePlacement()
 	// slide off a reinforced gate and stop against it about 220 units from the
 	// start; that gate's generator stands 203 units ahead of him and 34 units to
 	// his left, turned 35 degrees. The sandbox gate takes that relation (a
-	// gameplay layout, not geometry: our wall has its own size), moved 2 units
-	// along the walk and turned 34 degrees: of about 100 layouts within a few
-	// units and degrees of the disc's, that one gives K 16 / 18 at 30 / 60 Hz
-	// against the disc's 15 / 18. K is a chaotic outcome of where each Pikmin
-	// stands when it gives up, so this is a chosen point, not a plateau: its
-	// neighbours give 8 to 16 at 30 Hz and 16 to 80 at 60 Hz
+	// gameplay layout, not geometry: our wall has its own size), moved 6 units
+	// closer and turned 36 degrees, with the 210-unit panel above. Of about 600
+	// layouts searched around the disc's (turn, position, panel width and
+	// depth), that one gives K 15 / 18 at 30 / 60 Hz, the disc's exactly, and its
+	// 1-unit and 1-degree neighbours give 13 to 17 at 30 Hz (60 Hz: 16 to 20,
+	// or 28 to 50 when the squad ends up on the far side of the panel). K is a
+	// chaotic outcome of where each Pikmin stands when it gives up, so this is a
+	// chosen point in the calmest region found, not a plateau
 	// (standin-k-investigation.md).
 	SandboxGatePlacement p;
 	p.x    = -34.0f;
-	p.z    = -201.0f;
-	p.rotY = 34;
+	p.z    = -197.0f;
+	p.rotY = 36;
 	return p;
 }
 

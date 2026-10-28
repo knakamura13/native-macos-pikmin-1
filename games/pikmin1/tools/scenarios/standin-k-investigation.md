@@ -93,11 +93,11 @@ before commit) showed:
 
 - **The gate.** A `sluice bomb` item, born from an item generator in
   `stages/sandbox/default.gen` (`writeItemGenerator`, gen.h). It stands where
-  the disc's gate stands relative to the captain (34 units to his left), 201
-  units ahead and turned 34 degrees (the disc's: 203 and 35 degrees; see
-  "Re-fit on the merged tree" below).
+  the disc's gate stands relative to the captain (34 units to his left), 197
+  units ahead and turned 36 degrees (the disc's: 203 and 35 degrees; see
+  "Exact K on the integrated tree" below).
 - **Its files, ours.** `objects/gate/gt_hard.mod`: two posts on joint 0 and a
-  panel on joint 1, plain boxes (150 x 90 x 24 panel, 20-unit posts), with the
+  panel on joint 1, plain boxes (210 x 90 x 24 panel, 20-unit posts), with the
   collinfo the game reads (`gate` and `side` platforms, `flag` sphere).
   `centcoll.mod` and `sidecoll.mod`: the same boxes as collision
   (`writePlatformMod`, mod_writer.h). `gate.bin` and `gt_hard.anm`: six static
@@ -183,7 +183,7 @@ intro-length difference between the trees, but it does not remove the
 layout sensitivity: the same 39-layout grid with the hold gave K30 8 to 16 and
 K60 13 to 77, again with no plateau.
 
-**Chosen point.** Of the gate layouts tried with the hold (39-layout grid and
+**Chosen point (superseded below).** Of the gate layouts tried with the hold (39-layout grid and
 the 27-layout neighbourhood below), one is within one tick of the disc at both
 rates: z -201, x -34, 34 degrees. It is committed. Its neighbourhood, gate
 moved 1 unit (x, z) or 1 degree:
@@ -210,20 +210,80 @@ of the disc at 30 Hz. The committed point is an outlier in it.
 | Stand-ins, gate 36 degrees, no hold (as merged) | 11, 11, 11 | 35, 35, 35 |
 | Stand-ins, gate 34 degrees at z -201, 45-tick walk start (committed) | 16, 16, 16 | 18, 18, 18 |
 
+### Exact K on the integrated tree (`aceb6995`)
+
+On the integrated tree (gate, stand-in cinemas, audio, objects) the committed
+layout above still gave 16 / 18 against the disc's 15 / 18. The aim was then
+the disc's K exactly.
+
+**The 30 Hz offset is not the hand.** A trace of the walk to the hand showed
+the stand-in captain's `rhnd` sphere 3.24 units to his left at ground level,
+the disc's 3.66 to his right and 4.56 up. Putting the disc's hand position
+into every stand-in captain pose (a translation of joint 7; ThrowWait alone
+does not move it, the lower-body animator drives that joint) put the sphere
+exactly where the disc's is, but the 49-layout grid's K30 did not move up
+(7 to 16, median 11). The experiment was reverted; `standin_anims.*` are
+unchanged. The acceleration and speeds of the walk are the disc's
+(`pikiMgr.bin` CreatureProp and PikiProp, `Creature::moveVelocity`); the
+remaining difference is the path, which other Pikmin block.
+
+**Panel width is the lever.** K30 follows where the squad works the panel,
+because the first Pikmin to give up walks back from there. Widening the
+panel moves that spot away from the captain. Over a 300-layout random search
+(turn 30 to 40 degrees, z -197 to -207, x -30 to -38, panel half-width 75 to
+110, half-depth 10 to 16), the K30 median was 12 at half-width 75 and 13 at
+100 to 110; at 105 it was 13 with the neighbourhood of the hit centred on 15.
+9 of the 300 layouts failed the scenario (a case-1 or case-2 assertion at one
+rate), so a layout change needs both rates checked.
+
+**Exact hit.** One layout gave 15 / 18: half-width 105 (a 210-unit panel),
+z -197, x -34, 36 degrees, half-depth 12. It is committed. Its
+neighbourhood, one parameter or the 3 x 3 x 3 cube of turn, z and x moved by
+1:
+
+| turn | z | x -33 | x -34 | x -35 |
+|---|---|---|---|---|
+| 35 | -196 | 13/18 | 16/29 | 14/31 |
+| 35 | -197 | 13/18 | 16/18 | 13/33 |
+| 35 | -198 | 13/29 | 13/18 | 16/28 |
+| 36 | -196 | 14/18 | 16/18 | 19/19 |
+| 36 | -197 | 14/30 | **15/18** | 16/31 |
+| 36 | -198 | 15/28 | 16/20 | 17/28 |
+| 37 | -196 | 15/20 | 15/29 | 19/34 |
+| 37 | -197 | 16/32 | 15/50 | 17/30 |
+| 37 | -198 | 8/32 | 15/29 | 18/34 |
+
+| Other neighbour of the hit | K (30 Hz / 60 Hz) |
+|---|---|
+| half-width 100, 102, 108, 110 | 13/32, 15/19, 15/28, 14/36 |
+| half-depth 11, 13 | 13/40, 13/16 |
+
+At 30 Hz this is the calmest region found: 15 of 26 neighbours are within one
+tick of 15 and all but one give 13 to 19. At 60 Hz the neighbours split: 9 of 26 give 16 to 20, the others
+28 to 50 (the first Pikmin back is then one on the far side of the panel). So
+the exact 60 Hz match is still a chosen point, not a plateau.
+
+| Tree (integrated tree, 3 runs per cell) | 30 Hz | 60 Hz |
+|---|---|---|
+| Disc (Forest of Hope) | 15, 15, 15 | 18, 18, 18 |
+| Stand-ins, gate 34 degrees at z -201, 150-unit panel (as merged) | 16, 16, 16 | 18, 18, 18 |
+| Stand-ins, gate 36 degrees at z -197, 210-unit panel (committed) | 15, 15, 15 | 18, 18, 18 |
+
 ### Limits
 
-- Matching K within one tick depends on the chosen layout, which is a lucky
-  point, not a plateau (above). A change to
+- The exact match depends on the chosen layout: at 30 Hz its neighbours stay
+  near 15, at 60 Hz about half of them jump to 28 to 50 (above). A change to
   the squad AI, collision, animations, or the sim RNG draws can move both trees'
   K independently. Re-measure both after such a change.
-- The stand-in gate is not the disc's shape. Its panel is wider than the
-  disc's attack spheres suggest and has no break motions (they never play on a
+- The stand-in gate is not the disc's shape. Its panel (210 units) is chosen
+  for K, not measured, and it has no break motions (they never play on a
   bomb gate).
 - Only Kuttuku, Job2 and Gakkari have disc timing. The walk and turn motions
   of the Pikmin are still plain 40-frame stand-ins, so the walk to the hand can
   still differ in speed from the disc (the disc's Pikmin starts more slowly).
-  This is a likely reason the stand-in K30 sits about 3 ticks below the disc's
-  across most layouts. Not checked.
+  With the 150-unit panel the stand-in K30 sat about 3 ticks below the disc's
+  across most layouts; the hand position was ruled out as the cause (above),
+  and the wider panel removes most of the offset without explaining it.
 - The 45-tick walk start is the disc's intro length on this tree. If the disc
   intro changes (for example the intro gate's START cadence), re-measure: a
   longer disc intro keeps the hold at 0, a shorter one would hold the disc
