@@ -117,6 +117,7 @@ public:
 				mCheckedWait = false;
 				mSawFlying = false;
 				mThrownEvent = false;
+				mGrabSeen = false;
 				mStepStart = t;
 			} else if (t - mStepStart > 2 * bound) {
 				scenarioFailf(t, "captain Walk with a Normal Pikmin in the plate within reach", "captain state %d, %d in plate, %d within %.0f", cap,
@@ -145,7 +146,19 @@ public:
 			} else if (mCase == 1) {
 				release = (t == mPress); // A down on tick P only
 			} else {
-				release = (t == mPress + mK + 1); // released K + 2 ticks after the press
+				// Released two ticks after this Pikmin's own grab completes. Not K + 2
+				// after the press: a Pikmin standing nearer than the calibration one
+				// would be released before its grab.
+				if (!mGrabSeen && cap == NAVISTATE_ThrowWait && static_cast<NaviThrowWaitState*>(navi->getCurrState())->mIsHoldingThrowPiki) {
+					mGrabSeen = true;
+					mGrabTick = t;
+				}
+				if (mGrabSeen) {
+					release = (t == mGrabTick + 2);
+				} else if (t - mPress > bound) {
+					scenarioFailf(t, "grab completes", "mIsHoldingThrowPiki never set within %u ticks", bound);
+					return;
+				}
 			}
 			if (release) {
 				mHoldA     = false;
@@ -245,6 +258,8 @@ private:
 	int mCase           = 0;
 	unsigned mPress     = 0;
 	unsigned mK         = 0;
+	bool mGrabSeen      = false;
+	unsigned mGrabTick  = 0;
 	unsigned mStepStart = 0;
 	bool mHoldA         = false;
 	bool mSawHanged     = false;
