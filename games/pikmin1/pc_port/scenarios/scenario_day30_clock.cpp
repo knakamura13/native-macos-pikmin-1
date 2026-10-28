@@ -6,12 +6,20 @@
 // sunset. The run starts on Day 2 and moves to Day 30 mid-run, because the
 // clock hold reads only mCurrentDay each tick; generator files and the RNG
 // reseed, which key off the day at stage load, are not what is under test.
+//
+// Every window is a tick count, not game time. The clock moves by one tick's
+// frame time each tick, so one tick is frameTime / mRealSecsPerGameHour game
+// hours: about 1/2,025 h at 30 Hz on the stand-in stage, about 1/6,750 h on
+// the disc's Forest of Hope, half that at 60 Hz. Day 30 starts that many hours
+// times kSunsetTicks before the end hour, so sunset is the same number of ticks
+// away on every tree and rate.
 #include "scenarios/pc_scenario_list.h"
 
 #if PIKI_SCENARIOS
 
 #include "MoviePlayer.h"
 #include "PlayerState.h"
+#include <cmath>
 #include <cstdio>
 
 #include "Dolphin/pad.h"
@@ -21,15 +29,20 @@
 #include "pc_permadeath.h"
 #include "pc_speedrun.h"
 #include "settings/pc_settings.h"
+#include "system.h"
 
 namespace {
 
-constexpr unsigned kControlTicks = 300;
-constexpr unsigned kHoldTicks    = 300;
-// Sunset is 19:00. Disc stages stretch the day (about 6,750 ticks per game hour
-// at 30 Hz on Forest of Hope), so the run starts 12 game minutes before it.
-constexpr float kDay30StartHour  = 18.8f; // 12 game minutes (0.2 h) before sunset, about 1,350 ticks at 30 Hz
-constexpr int kLastDay           = 30;    // MAX_DAYS
+// The clock moves on every open tick, and the hold is checked on every tick, so
+// a few ticks tell a held clock from a moving one. 30 is a margin, not a need.
+constexpr unsigned kControlTicks = 30;
+constexpr unsigned kHoldTicks    = 30;
+// Day 30 starts this many clock ticks before the end hour (sunset, 19:00).
+constexpr unsigned kSunsetTicks  = 120;
+// The day end begins some ticks after the clock passes the end hour; this bounds
+// the whole Day 30 phase.
+constexpr unsigned kDay30Seconds = 30;
+constexpr int kLastDay           = 30; // MAX_DAYS
 
 class Day30Clock : public PcScenario {
 public:
@@ -66,6 +79,19 @@ public:
 				scenarioFailf(tick, "day 2", "day %d", clock.mCurrentDay);
 				return;
 			}
+			// One tick of clock in game hours; it must be well above float noise at
+			// the end hour, or "advanced" and "held" could not be told apart.
+			mHoursPerTick = gsys->getFrameTime() / clock.mRealSecsPerGameHour;
+			{
+				const float endHour = gameflow.mParameters->mEndHour();
+				const float noise   = std::nextafter(endHour, 2.0f * endHour) - endHour;
+				std::printf("[scenario] day30_clock: %.3f s per game hour, %.6g h per tick (%.0f ticks per hour), float step at %.2f h %.3g\n",
+				            clock.mRealSecsPerGameHour, mHoursPerTick, 1.0f / mHoursPerTick, endHour, noise);
+				if (!(mHoursPerTick > 16.0f * noise)) {
+					scenarioFailf(tick, "a clock tick above float noise", "%.6g h per tick, float step %.3g", mHoursPerTick, noise);
+					return;
+				}
+			}
 			pc_settings_scenario_set_infinite_day(0);
 			begin(tick, clock);
 			mPhase = Control;
@@ -73,13 +99,15 @@ public:
 		case Control:
 			// Ticks with a text window or movie open do not count: they hold the clock.
 			if (!blocked()) ++mOpenTicks;
-			if (tick - mStartTick > 4 * kControlTicks * ticksPerSecond() / 30u) {
+			if (tick - mStartTick > kControlTicks + kBlockedSeconds * ticksPerSecond()) {
 				scenarioFailf(tick, "enough overlay-free ticks", "%u of %u in %u ticks", mOpenTicks, kControlTicks, tick - mStartTick);
 				return;
 			}
 			if (mOpenTicks >= kControlTicks) {
-				if (!(clock.mTimeOfDay > mTimeOfDay)) {
-					scenarioFailf(tick, "clock advances with Infinite Day off", "mTimeOfDay %.4f unchanged", clock.mTimeOfDay);
+				// At least half the open ticks' worth: the clock runs, and at its own rate.
+				if (!(clock.mTimeOfDay - mTimeOfDay >= 0.5f * kControlTicks * mHoursPerTick)) {
+					scenarioFailf(tick, "clock advances with Infinite Day off", "mTimeOfDay %.6f -> %.6f in %u open ticks", mTimeOfDay,
+					              clock.mTimeOfDay, mOpenTicks);
 					return;
 				}
 				pc_settings_scenario_set_infinite_day(1);
@@ -93,20 +121,22 @@ public:
 				return;
 			}
 			if (!blocked()) ++mOpenTicks;
-			if (tick - mStartTick > 4 * kHoldTicks * ticksPerSecond() / 30u) {
+			if (tick - mStartTick > kHoldTicks + kBlockedSeconds * ticksPerSecond()) {
 				scenarioFailf(tick, "enough overlay-free ticks", "%u of %u in %u ticks", mOpenTicks, kHoldTicks, tick - mStartTick);
 				return;
 			}
 			if (mOpenTicks >= kHoldTicks) {
 				clock.mCurrentDay = kLastDay;
-				clock.setTime(kDay30StartHour);
+				clock.setTime(gameflow.mParameters->mEndHour() - kSunsetTicks * mHoursPerTick);
+				std::printf("[scenario] day30_clock: day 30 starts at %.6f h, %u ticks before %.2f h\n", clock.mTimeOfDay, kSunsetTicks,
+				            gameflow.mParameters->mEndHour());
 				begin(tick, clock);
 				mPhase = Day30;
 			}
 			break;
 		case Day30: {
 			const unsigned ran = tick - mStartTick;
-			if (ran % 300 == 0) {
+			if (ran % 30 == 0) {
 				std::printf("[scenario] day30 +%u: time %.4f overlay %d dayEndActive %d movie %d\n", ran, clock.mTimeOfDay,
 				            (int)gameflow.mIsUIOverlayActive, (int)gameflow.mIsDayEndActive,
 				            gameflow.mMoviePlayer ? (int)gameflow.mMoviePlayer->mIsActive : -1);
@@ -116,6 +146,7 @@ public:
 					scenarioFailf(tick, "sunset at or after the end hour", "day end active at %.4f", clock.mTimeOfDay);
 					return;
 				}
+				std::printf("[scenario] day30_clock: day end began %u ticks into day 30, at %.6f h\n", ran, clock.mTimeOfDay);
 				scenarioPass();
 				return;
 			}
@@ -124,7 +155,7 @@ public:
 				scenarioFailf(tick, "clock advances on day 30", "clock held on day 30 at %.4f", clock.mTimeOfDay);
 				return;
 			}
-			if (ran > 8000u * ticksPerSecond() / 30u) {
+			if (ran > kDay30Seconds * (unsigned)ticksPerSecond()) {
 				scenarioFailf(tick, "sunset within the tick budget", "no day end by %.4f", clock.mTimeOfDay);
 			}
 			break;
@@ -135,6 +166,8 @@ public:
 private:
 	enum Phase { Settle, Control, HoldDay2, Day30 };
 	static constexpr unsigned kSettleTicks = 10;
+	// Ticks a text window or movie may hold a Control or HoldDay2 window open.
+	static constexpr unsigned kBlockedSeconds = 10;
 
 	static int ticksPerSecond() { return pc_scenario_ticks_per_second(); }
 	static bool blocked() { return gameflow.mIsUIOverlayActive || (gameflow.mMoviePlayer && gameflow.mMoviePlayer->mIsActive); }
@@ -152,6 +185,7 @@ private:
 	unsigned mStartTick = 0;
 	unsigned mOpenTicks = 0;
 	float mTimeOfDay    = 0.0f;
+	float mHoursPerTick = 0.0f;
 	float mSecsIntoHour = 0.0f;
 	int mGameHour       = 0;
 };

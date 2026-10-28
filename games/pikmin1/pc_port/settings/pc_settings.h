@@ -77,6 +77,7 @@ int pc_settings_get_infinite_day(void);
 void pc_settings_scenario_enable(void);
 void pc_settings_scenario_set_fps_mode(int fpsMode);
 void pc_settings_scenario_set_infinite_day(int on);
+void pc_settings_scenario_set_window_size(int width, int height);
 #endif
 int pc_settings_get_eternal_night(void);
 int pc_settings_get_fireflies(void);

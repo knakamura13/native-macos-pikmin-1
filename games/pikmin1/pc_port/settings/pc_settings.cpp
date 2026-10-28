@@ -1234,6 +1234,11 @@ int netplayApplyConfigText(const char* text) {
 static bool sScenarioSettings   = false;
 static int sScenarioFpsMode     = 0;
 static int sScenarioInfiniteDay = 0;
+// The scenario window (PIKMIN_SCENARIO_WINDOW, see pc_scenario.cpp). Every tick
+// draws a frame, which under software GL costs per pixel, and no scenario reads
+// the picture.
+static int sScenarioWindowWidth  = 64;
+static int sScenarioWindowHeight = 36;
 #endif
 
 void saveConfig() {
@@ -1376,8 +1381,9 @@ void loadConfig() {
     if (sScenarioSettings) {
         // Windowed, small so per-tick cost stays low under software GL, and no
         // vsync wait.
-        sConfig.windowWidth  = 640;
-        sConfig.windowHeight = 360;
+        sConfig.windowWidth  = sScenarioWindowWidth;
+        sConfig.windowHeight = sScenarioWindowHeight;
+        sConfig.renderScale  = 1.0f; // the scene renders at the window size
         sConfig.vsync        = false;
         sHadConfigFile       = true;
         return;
@@ -9024,6 +9030,11 @@ int pc_settings_get_infinite_day(void) { if (pc_speedrun_active()) return 0;
 void pc_settings_scenario_enable(void) { sScenarioSettings = true; }
 void pc_settings_scenario_set_fps_mode(int fpsMode) { sScenarioFpsMode = fpsMode; }
 void pc_settings_scenario_set_infinite_day(int on) { sScenarioInfiniteDay = on; }
+void pc_settings_scenario_set_window_size(int width, int height)
+{
+    sScenarioWindowWidth  = width;
+    sScenarioWindowHeight = height;
+}
 #endif
 
 int pc_settings_get_free_camera(void) { if (pc_speedrun_active()) return 0;

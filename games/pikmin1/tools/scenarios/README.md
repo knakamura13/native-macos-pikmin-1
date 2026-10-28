@@ -81,9 +81,7 @@ PIKMIN_SCENARIO_STAGE=stages/sandbox.ini \
 | `PIKMIN_SCENARIO_WATCHDOG_SECONDS` | Wall-clock limit in seconds, default 540. A value that is not a positive integer is ignored. |
 | `PIKMIN_SCENARIO_STATE_STATS` | Any value. With the verdict, prints per state id of the captain and of the Pikmin the longest uninterrupted stay in ticks and the entry count (`[scenario-states]` lines). A state stuck on an animation key the stand-ins lack shows as a long stay. |
 | `PIKMIN_LOG_FILE_OPENS` | File path. Appends `<game path>\t<OK\|FAILED>` per `DVDOpen`. Works in any build, used to make the boot manifest. The file is appended to, so use a fresh path per run. |
-
-There is no `PIKMIN_SCENARIO_WINDOW` variable. Window visibility is the
-`--scenario-visible` flag.
+| `PIKMIN_SCENARIO_WINDOW` | Window size `WxH`, default `64x36`. The scene renders at the same size (render scale 1, no 160x120 floor). Anything but two positive integers up to 8192 exits 2. See [Window size](#window-size). |
 
 A scenario run forces its own conditions:
 
@@ -94,7 +92,7 @@ A scenario run forces its own conditions:
   variable cannot change it; the sim RNG is reseeded from that seed, the day and
   the stage at each new day; the floating-point environment is pinned every tick.
   Two runs on one machine are identical, nothing more is claimed.
-- Settings that are neither read nor written: windowed 640x360, vsync off, the
+- Settings that are neither read nor written: windowed 64x36 (`PIKMIN_SCENARIO_WINDOW`), vsync off, the
   frame rate set from `--scenario-tick-rate`, Infinite Day set by the scenario.
 - A fresh `NECTAR_SAVE_DIR` under the system temp folder, named
   `nectar-scenario-<name>-<rate>-<pid>`. An ambient `NECTAR_SAVE_DIR` is not
@@ -105,6 +103,36 @@ A scenario run forces its own conditions:
   (`kClearedEnv` in `pc_scenario.cpp`: `PIKMIN_INPUT_RECORD`, `PIKMIN_UNLOCK_ALL`,
   `PIKMIN_COOP`, `PIKMIN_COOP_CAPTAINS`, `PIKMIN_REPLAY_TEST`, `PIKMIN_NO_H4M`,
   `PIKMIN_NETPLAY_EXIT_AFTER_TICKS` and three `PIKMIN_NETPLAY_TEST_*` variables).
+
+### Window size
+
+Every tick draws a frame, and the world sim runs inside the draw step, so a
+runner without a GPU (CI's macOS, Linux and Windows runners use a software
+renderer) pays per pixel on every tick. No scenario reads the picture. The
+default window is 64x36 and the scene renders at that size: the player's
+render scale (2/3) and its 160x120 floor do not apply (`pc_gfx_set_min_render_size`).
+
+Measured on an M3 Max with Apple's software renderer (the renderer macOS CI
+gets), forced by a local, uncommitted `SDL_GL_ACCELERATED_VISUAL` 0 in
+`pc_window.cpp`, `boot_smoke` at 30 Hz on the stand-in tree, 900 ticks plus boot:
+
+| Window | Scene rendered at | Wall time |
+|--------|-------------------|-----------|
+| 640x360 (old default, render scale 2/3) | 427x240 | 34.5 s |
+| 160x90 with the 160x120 floor | 160x120 | 9.8 s |
+| 64x36 with the 160x120 floor | 160x120 | 7.9 s |
+| 160x90 | 160x90 | 9.2 s |
+| 128x72 | 128x72 | 7.6 s |
+| 64x36 (default) | 64x36 | 4.1 to 4.9 s |
+
+The same runs on the GPU take under a second at any of these sizes, so local
+GPU timing cannot show this.
+
+The sim does not read the window size: every scenario's `--state-hash-log`
+at 160x90, 128x72 and 64x36 is byte-identical to the 640x360 run of the same
+scenario and rate, on the stand-in and the disc tree, and `throw_release`
+measures the same K. Set `PIKMIN_SCENARIO_WINDOW=640x360` (or larger) to
+compare, or with `--scenario-visible` to watch a run at a readable size.
 
 ### Exit codes
 
@@ -147,10 +175,28 @@ Registered in `games/pikmin1/CMakeLists.txt` under `if(PIKMIN_BUILD_SCENARIOS)`.
 `ctest -N` lists 13 stand-in entries (`-R ^scenario_ -LE game-assets`) and 6 disc
 entries (`-L game-assets`).
 
+All names are `scenario_<name>_<rate>`, at the rates in [Tick rates](#tick-rates).
+
+### Tick rates
+
+A scenario is registered at 60 as well as 30 only when the 60 Hz run executes
+code or timing the 30 Hz run does not. The disc entries keep `boot_smoke`,
+`throw_release` and `day30_clock` at both rates (issue #61).
+
+| Scenario | Rates | Why |
+|----------|-------|-----|
+| `boot_smoke` | 30, 60 | The rate is boot configuration (`fpsMode`, the tick length); each rate must boot and run. |
+| `throw_release` | 30, 60 | K and the release timings are tick arithmetic and differ per rate (15 and 18). |
+| `day30_clock` | 30, 60 | The clock moves by one frame time per tick, so the hold and the sunset arithmetic differ per rate. |
+| `sprout_landing` | 30, 60 | `BuryInit` snaps the seed to the ground only above 30 Hz (`pc_seed_landing_snaps_to_ground`); 60 Hz is the only run of that path. |
+| `onion_skip` | 30, 60 | The movie advances half a frame per tick at 60 Hz (330 ticks against 660), so the skip frames and the boot motion's key events land on different ticks. |
+| `container_menu` | 30, 60 | Same object stage as `onion_skip`; both rates are registered, not yet measured for a rate-specific path. |
+| `objects_smoke` | 30 | Loads the every-object stage and counts the enemies born; neither depends on the tick rate. |
+
 | Entry | Data | Label | Notes |
 |-------|------|-------|-------|
 | `scenario_standin_generate` | writes `<build>/scenario-data` | | `FIXTURES_SETUP scenario_standin_tree`, 120 s timeout. Passes `--manifest tools/scenarios/boot-manifest.txt`. |
-| `scenario_<name>_<rate>` | stand-in tree | none | For `boot_smoke`, `throw_release`, `day30_clock`, `sprout_landing`, `onion_skip` and `objects_smoke`, each at 30 and 60. `FIXTURES_REQUIRED scenario_standin_tree`, 600 s timeout, `PIKMIN_SCENARIO_STAGE` as in the stage table below. No skip code: a missing or broken tree fails. |
+| `scenario_<name>_<rate>` | stand-in tree | none | For `boot_smoke`, `throw_release`, `day30_clock`, `sprout_landing`, `onion_skip` and `container_menu` at 30 and 60, and `objects_smoke` at 30 (see Tick rates). `FIXTURES_REQUIRED scenario_standin_tree`, 600 s timeout, `PIKMIN_SCENARIO_STAGE` as in the stage table below. No skip code: a missing or broken tree fails. |
 | `scenario_<name>_<rate>_disc` | a real install | `game-assets` | For `boot_smoke`, `throw_release` and `day30_clock` only, at 30 and 60 (6 entries). Runs in `<build>/scenario-scratch`, 600 s timeout, `SKIP_RETURN_CODE 77`. Set `PIKMIN_SCENARIO_DATA_DIR` to run it; otherwise CTest reports a skip. |
 
 Which stage each stand-in entry boots:
@@ -202,7 +248,7 @@ run. The unit tests run in a later step with `-E ^scenario_`. The environment is
 |----------|-------|-----------------|
 | `boot_smoke` | Day 1 | Boots into the stage and passes after 900 ticks. Fails if the stage-ready hook does not fire within 20,000 boot ticks. |
 | `throw_release` | Day 1 | The squad is born only after the stage has been ready for 45 ticks (a hold of neutral input; 0 on the disc, whose intro already takes 45), then the captain walks away for 4 s with three blue Pikmin following. Three cases follow, each starting when the captain is in Walk with a Normal Pikmin in the plate within 80 units: a calibration that holds A until the grab completes and measures K (ticks from the press to the grab), a case with A down for one tick only (the early release), and a case that releases 2 ticks after that Pikmin's own grab completes. Each case checks that the Pikmin is Hanged before the captain enters Throw (except the early release), the captain enters Throw, the Pikmin leaves the hand (moves at least 5 units), flies and lands (Normal), and the captain returns to Walk. The grab, Throw and flight steps are bounded at 5 s, landing and the Settle wait at 10 s. Also asserts the throw key is bound to A and, before the calibration, that the ThrowWait animation and the AnimMgr tables are sane. |
-| `day30_clock` | Day 2 | Infinite Day holds the world clock on Days 2 to 29 and not on Day 30 (regression test for upstream #100). Day 2 with the option off: the clock advances. Option on: it stays put. Then Day 30 at 18:48 with the option on: the clock advances to sunset and day end begins at or after the end hour. |
+| `day30_clock` | Day 2 | Infinite Day holds the world clock on Days 2 to 29 and not on Day 30 (regression test for upstream #100). Day 2 with the option off: the clock advances. Option on: it stays put. Each phase is 30 open ticks. Then Day 30 with the option on, started 120 clock ticks before the end hour (the start is computed from `mRealSecsPerGameHour` and the frame time, so it is the same tick count on every tree and rate): the clock advances to sunset and day end begins at or after the end hour. A build without the Day 30 exemption fails with `clock held on day 30` 30 ticks into Day 30. Passes at tick 277 at 30 Hz and 298 at 60 Hz (was 1,146 and 1,584). |
 | `container_menu` | Day 1, object stage | The captain walks onto the Onion's `cont` spot and presses A; the container menu (`DrawContainer`, stand-in `con01.blo` with its `p264` window) opens, passes Wait, Start and Operation, stays in Operation for 4 s with one stick push, and closes, once with B and once with A. The captain returns to Walk and the Onion count is unchanged. |
 | `onion_skip` | Day 1, object stage | The blue Onion discovery movie (upstream #205), started with `DEMOFLAG_DiscoverBlueOnyon`. Four cases: watched to the end, START before Boot, between Boot and the first seed, and between the seed and EmitCone. Each asserts that the movie plays and ends, the Onion boots and reaches Wait, and exactly one seed comes out. The between case is the regression test for #205 (0 seeds without the fix). Upstream PR #205 is still open; the fix is in this tree through the kyle-develop merge. See `standin-cinema.md`. |
 | `sprout_landing` | Day 1, object stage | Six seeds launched at the cliff the way `GoalAI::BootEmit` launches them. Each must plant (Wait) within a bound, not on a steep face, not below the ground and not floating more than 30 units above it. Height and speed at the start of Bury are printed, not asserted (upstream #208, merged upstream 2026-10-28, changes them at 30 Hz). See `standin-objects.md`. |
