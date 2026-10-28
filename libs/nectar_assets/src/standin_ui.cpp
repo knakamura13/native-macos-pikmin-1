@@ -8,7 +8,8 @@ namespace {
 
 // Tipos como en la tabla de etiquetas de #72: P imagen, B panel simple, T caja de
 // texto. Donde el juego acepta cualquier tipo se usa un panel simple, que es lo
-// más inerte. Sin ventanas: P2DWindow::loadResource desreferencia sus texturas.
+// más inerte. Ventanas solo la de con01.blo (p264): P2DWindow::loadResource
+// desreferencia sus cuatro texturas de esquina, así que lleva las del juego.
 
 BloPane node(BloType type, const std::string& tag)
 {
@@ -29,6 +30,17 @@ BloPane box(const std::string& tag, const std::string& text = std::string())
 	BloPane p = node(BloType::TextBox, tag);
 	p.font    = "standin";
 	p.text    = text;
+	return p;
+}
+
+// Ventana con las cuatro esquinas en `p2b_64.bti`, como la p264 del disco.
+BloPane containerWindow(const std::string& tag)
+{
+	BloPane p    = node(BloType::Window, tag);
+	p.texture    = "p2b_64.bti";
+	p.otherCorners = { "p2b_64.bti", "p2b_64.bti", "p2b_64.bti" };
+	p.winX = p.winY = 0;
+	p.winW = p.winH = 32;
 	return p;
 }
 
@@ -132,10 +144,13 @@ std::vector<StandinLayout> standinBloLayouts()
 		k.pics("cd%02d", 0, 11).add(pic("gath"));
 		out.push_back(layout("count.blo", k));
 	}
-	{ // drawContainer.cpp:66-136. Sin p264 ni ws8c, p2c4, ws8u, ws8l: solo los busca
-		// DrawContainer::start al abrir el menú del contenedor, fuera del arranque.
+	{ // drawContainer.cpp:66-136 y 186-195 (DrawContainer::start, al abrir el menú del
+		// contenedor): p264 es una ventana (el disco usa p2b_64.bti en las cuatro esquinas,
+		// que está en el juego de texturas) y ws8c, p2c4, ws8u, ws8l imágenes sin textura
+		// (setTexture no hace nada con cero texturas).
 		Kids k;
 		k.add(pane("pall")).add(pic("maru"));
+		k.add(containerWindow("p264")).add(pic("ws8c")).add(pic("p2c4")).add(pic("ws8u")).add(pic("ws8l"));
 		for (const char* t : { "cu_l", "cu_c", "cu_r", "cusl", "cusc", "cusr", "cl_l", "cl_c", "cl_r", "clsl", "clsc", "clsr", "cc_l", "cc_c",
 		                       "cc_r", "ccsl", "ccsc", "ccsr", "y_c_", "y_l_", "y_r_", "ysc_", "ysl_", "ysr_", "cont" })
 			k.add(pic(t));

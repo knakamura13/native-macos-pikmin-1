@@ -314,7 +314,9 @@ std::map<std::string, LayoutReq> requirements()
 	}
 	{
 		LayoutReq& l = m["con01.blo"];
-		l.reqs       = { { "pall", 'A' }, { "maru", 'P' }, { "cont", 'P' } };
+		// p264 is a window and the four below are pictures: DrawContainer::start
+		// (drawContainer.cpp:186-195) casts and dereferences them when the menu opens.
+		l.reqs       = { { "pall", 'A' }, { "maru", 'P' }, { "cont", 'P' }, { "p264", 'W' }, { "ws8c", 'P' }, { "p2c4", 'P' }, { "ws8u", 'P' }, { "ws8l", 'P' } };
 		cat(l.reqs, list({ "cu_l", "cu_c", "cu_r", "cusl", "cusc", "cusr", "cl_l", "cl_c", "cl_r", "clsl", "clsc", "clsr", "cc_l", "cc_c",
 		                   "cc_r", "ccsl", "ccsc", "ccsr", "y_c_", "y_l_", "y_r_", "ysc_", "ysl_", "ysr_" },
 		                 'P'));
@@ -362,6 +364,7 @@ bool kindOk(const BloPane& p, char kind)
 	switch (kind) {
 	case 'P': return p.type == BloType::Picture;
 	case 'B': return p.type == BloType::Pane;
+	case 'W': return p.type == BloType::Window;
 	case 'T': return p.type == BloType::TextBox;
 	default: return true;
 	}
@@ -436,7 +439,14 @@ void walkTextAndTags(const std::vector<BloPane>& v, const std::string& file)
 {
 	for (const BloPane& p : v) {
 		check(p.w > 0 && p.h > 0, file + ": '" + p.tag + "' has an empty rectangle");
-		check(p.type != BloType::Window, file + ": '" + p.tag + "' is a window pane (not used in v1)");
+		// The only window is con01.blo's p264, whose four corners must be the disc's p2b_64.bti
+		// (P2DWindow::loadResource dereferences them; the stand-in texture set carries it).
+		if (p.type == BloType::Window) {
+			check(file == "con01.blo" && p.tag == "p264", file + ": '" + p.tag + "' is a window pane other than con01.blo p264");
+			check(p.texture == "p2b_64.bti" && p.otherCorners[0] == "p2b_64.bti" && p.otherCorners[1] == "p2b_64.bti" &&
+			          p.otherCorners[2] == "p2b_64.bti",
+			      file + ": '" + p.tag + "' corners are not all p2b_64.bti");
+		}
 		check(p.type != BloType::Picture || p.texture.empty(), file + ": picture '" + p.tag + "' carries a texture name");
 		check(p.type != BloType::TextBox || !p.font.empty(), file + ": text box '" + p.tag + "' has no font name");
 		walkTextAndTags(p.children, file);
