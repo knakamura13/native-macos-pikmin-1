@@ -209,6 +209,20 @@ bool stagesIni(Tree& tree, std::string& error)
 // CreatureProp.h, AIConstant.h or CPlate.h (noted per line).
 // The other differing IDs (whistle, punch, health, growth, bombs) are left at
 // the code defaults because no v1 scenario touches them.
+//
+// K is not expected to equal the disc's (disc 13 / 14 ticks at 30 / 60 Hz,
+// stand-ins 12 / 23). With these values the walk to the hand and the grab run
+// identically on both trees: the same target speeds (240 beyond 2 x grab range,
+// then 120), the hand-over at 15 units, then ThrowWait's KEY_Action0 one frame
+// later. K is set by how far away the Pikmin is when the scenario presses A, and
+// that comes from the stage and the sim RNG, not from these files. On the disc
+// the captain walks into a Forest of Hope wall, the squad leaves the plate and
+// comes back, and A is pressed at 58 units (30 Hz) or 28 (60 Hz). On the open
+// sandbox the squad trails at about 79 units. Particle emitters also draw from
+// the sim RNG (zen::Rand), so the disc's K moves to 15 / 18 when only those
+// draws move to the cosmetic stream. Matching K would mean tuning sandbox
+// geometry to that RNG-dependent behaviour. Details are in
+// standin-k-investigation.md.
 bool parmFiles(Tree& tree, std::string& error)
 {
 	using nectar::parmFloat;
