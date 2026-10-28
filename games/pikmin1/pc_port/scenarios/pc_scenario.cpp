@@ -135,6 +135,8 @@ constexpr long kDefaultWatchdogSeconds = 540;
 void removeScratch()
 {
 	if (sScratchDir.empty()) return;
+	// PIKMIN_SCENARIO_KEEP_SAVE_DIR=1 keeps it for inspection (check_scenario_save_dir.cmake).
+	if (const char* keep = std::getenv("PIKMIN_SCENARIO_KEEP_SAVE_DIR"); keep != nullptr && std::strcmp(keep, "1") == 0) return;
 	std::error_code ec;
 	std::filesystem::remove_all(sScratchDir, ec);
 	sScratchDir.clear();
@@ -180,7 +182,9 @@ void usage(const char* msg)
 	std::fprintf(stderr, "[scenario] %s\n", msg);
 	std::fprintf(stderr, "usage: nectar --scenario <name> [--scenario-tick-rate 30|60] [--scenario-visible]\n");
 	std::fprintf(stderr, "scenarios:");
-	for (PcScenario* s : pc_scenario_all()) std::fprintf(stderr, " %s", s->name());
+	for (PcScenario* s : pc_scenario_all()) {
+		if (!s->testOnly()) std::fprintf(stderr, " %s", s->name());
+	}
 	std::fprintf(stderr, "\n");
 }
 
@@ -367,6 +371,7 @@ int pc_scenario_parse_argv(int argc, char** argv)
 		std::filesystem::remove_all(sScratchDir, ec);
 		std::filesystem::create_directories(sScratchDir, ec);
 		setEnv("NECTAR_SAVE_DIR", sScratchDir.string().c_str());
+		std::printf("[scenario] save dir %s\n", sScratchDir.string().c_str());
 	}
 	std::atexit(onExit);
 	startWatchdog(name);

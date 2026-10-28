@@ -29,6 +29,8 @@ public:
 	// Day the stage starts on (the day is consumed by GameCoreSection's constructor).
 	virtual int startDay() const { return 1; }
 	virtual bool supportsRate(int /*ticksPerSecond*/) const { return true; }
+	// True for runner self-tests (exit_zero): selectable by name, left out of the usage list.
+	virtual bool testOnly() const { return false; }
 	// Runs once when the stage is ready, before tick 0.
 	virtual void onStageReady() { }
 	// Fills pad 0 for this tick; pads 1-3 arrive neutral. Called every tick, before the sim.

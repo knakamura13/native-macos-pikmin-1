@@ -2,6 +2,24 @@
 
 #if PIKI_SCENARIOS
 
+#include <cstdlib>
+
+namespace {
+
+// Runner self-test (scenario_exit_atexit_fail): exit(0) before any verdict, as
+// System::halt and PPCHalt do. The runner's exit handler must turn it into exit 1.
+class ExitZero : public PcScenario {
+public:
+	const char* name() const override { return "exit_zero"; }
+	bool testOnly() const override { return true; }
+	void onTick(unsigned tick) override
+	{
+		if (tick >= 30) std::exit(0);
+	}
+};
+
+} // namespace
+
 const std::vector<PcScenario*>& pc_scenario_all(void)
 {
 	static const std::vector<PcScenario*> all = {
@@ -12,6 +30,7 @@ const std::vector<PcScenario*>& pc_scenario_all(void)
 		pc_scenario_make_onion_skip(),
 		pc_scenario_make_objects_smoke(),
 		pc_scenario_make_container_menu(),
+		[] { static ExitZero s; return static_cast<PcScenario*>(&s); }(),
 	};
 	return all;
 }
