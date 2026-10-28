@@ -152,8 +152,8 @@ int main(void) {
         SDL_GL_SwapWindow(win);
     }
     printf("60 swaps: %u ms\nGL_PROBE_OK\n", (unsigned)(SDL_GetTicks() - t0));
-    SDL_GL_DeleteContext(ctx);
-    SDL_DestroyWindow(win);
-    SDL_Quit();
-    return 0;
+    fflush(stdout);
+    /* No teardown: Mesa llvmpipe's context destruction hangs on Windows runners, and
+       the probe has already said everything it needs to. */
+    _Exit(0);
 }
