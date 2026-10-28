@@ -64,12 +64,43 @@ PIKMIN_SCENARIO_STAGE=stages/sandbox.ini \
 | `PIKMIN_SCENARIO_STAGE` | Stage `.ini` to boot, as written in `stages.ini`. Default `stages/stage1.ini` (Forest of Hope on disc). The stand-in tree uses `stages/sandbox.ini`. |
 | `PIKMIN_SCENARIO_TRACE` | Number of ticks after tick 0 for which the runner logs captain state, movie and overlay flags. |
 | `PIKMIN_LOG_FILE_OPENS` | File path. Appends `<game path>\t<OK\|FAILED>` per `DVDOpen`. Works in any build, used to make the boot manifest. |
+| `PIKMIN_SCENARIO_WINDOW` | Window size `WxH`, default `64x36`. The scene renders at the same size (render scale 1, no 160x120 floor). Anything but two positive integers up to 8192 exits 2. See [Window size](#window-size). |
 
 A scenario run forces its own conditions: dummy SDL audio, the netplay
-deterministic mode, settings that are neither read nor written (640x360 window,
-no vsync), a fresh `NECTAR_SAVE_DIR` in the temp folder removed at exit, and a
+deterministic mode, settings that are neither read nor written (a 64x36 window
+rendered at 64x36, no vsync), a fresh `NECTAR_SAVE_DIR` in the temp folder removed at exit, and a
 cleared list of environment variables that change the sim or the input
 (`kClearedEnv` in `pc_scenario.cpp`).
+
+### Window size
+
+Every tick draws a frame, and the world sim runs inside the draw step, so a
+runner without a GPU (CI's macOS, Linux and Windows runners use a software
+renderer) pays per pixel on every tick. No scenario reads the picture. The
+default window is 64x36 and the scene renders at that size: the player's
+render scale (2/3) and its 160x120 floor do not apply (`pc_gfx_set_min_render_size`).
+
+Measured on an M3 Max with Apple's software renderer (the renderer macOS CI
+gets), forced by a local, uncommitted `SDL_GL_ACCELERATED_VISUAL` 0 in
+`pc_window.cpp`, `boot_smoke` at 30 Hz on the stand-in tree, 900 ticks plus boot:
+
+| Window | Scene rendered at | Wall time |
+|--------|-------------------|-----------|
+| 640x360 (old default, render scale 2/3) | 427x240 | 34.5 s |
+| 160x90 with the 160x120 floor | 160x120 | 9.8 s |
+| 64x36 with the 160x120 floor | 160x120 | 7.9 s |
+| 160x90 | 160x90 | 9.2 s |
+| 128x72 | 128x72 | 7.6 s |
+| 64x36 (default) | 64x36 | 4.1 to 4.9 s |
+
+The same runs on the GPU take under a second at any of these sizes, so local
+GPU timing cannot show this.
+
+The sim does not read the window size: every scenario's `--state-hash-log`
+at 160x90, 128x72 and 64x36 is byte-identical to the 640x360 run of the same
+scenario and rate, on the stand-in and the disc tree, and `throw_release`
+measures the same K. Set `PIKMIN_SCENARIO_WINDOW=640x360` (or larger) to
+compare, or with `--scenario-visible` to watch a run at a readable size.
 
 ### Exit codes
 

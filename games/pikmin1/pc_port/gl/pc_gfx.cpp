@@ -713,6 +713,9 @@ static int sRenderWidth = 640;
 static int sRenderHeight = 480;
 static float sRenderScale = 2.0f / 3.0f;
 static bool sRenderScaleSet = false; // true once set by the settings module
+// Smallest internal render size (pc_gfx_set_min_render_size).
+static int sMinRenderWidth = 160;
+static int sMinRenderHeight = 120;
 
 // Aspect ratio support.
 enum AspectRatioMode {
@@ -2492,6 +2495,11 @@ float pc_gfx_get_render_scale(void) {
     return sRenderScale;
 }
 
+void pc_gfx_set_min_render_size(int width, int height) {
+    sMinRenderWidth = std::max(1, width);
+    sMinRenderHeight = std::max(1, height);
+}
+
 static float calculate_aspect_ratio(int mode, float windowAspect) {
     switch (mode) {
         case ASPECT_4_3:   return 4.0f / 3.0f;
@@ -3526,8 +3534,8 @@ void pc_gfx_begin_frame(void) {
                 baseHeight = baseWidth / sCurrentAspectRatio;
             }
         }
-        const int wantedWidth = std::max(160, int(lroundf(baseWidth * sRenderScale)));
-        const int wantedHeight = std::max(120, int(lroundf(baseHeight * sRenderScale)));
+        const int wantedWidth = std::max(sMinRenderWidth, int(lroundf(baseWidth * sRenderScale)));
+        const int wantedHeight = std::max(sMinRenderHeight, int(lroundf(baseHeight * sRenderScale)));
         if (wantedWidth != sRenderWidth || wantedHeight != sRenderHeight) {
             sRenderWidth = wantedWidth;
             sRenderHeight = wantedHeight;

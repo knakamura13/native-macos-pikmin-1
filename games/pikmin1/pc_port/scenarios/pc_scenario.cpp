@@ -28,6 +28,7 @@
 #include "netplay/pc_netplay_det.h"
 #include "Dolphin/pad.h"
 #include "pc_permadeath.h"
+#include "gl/pc_gfx.h"
 #include "pc_window.h"
 #include "randomizer/pc_randomizer.h"
 #include "settings/pc_settings.h"
@@ -276,6 +277,16 @@ int pc_scenario_parse_argv(int argc, char** argv)
 	if (const char* stage = std::getenv("PIKMIN_SCENARIO_STAGE")) {
 		if (*stage != '\0') sStageFile = stage;
 	}
+	// The window size, WxH (default in pc_settings.cpp). The sim does not read it.
+	int windowWidth = 0, windowHeight = 0;
+	if (const char* window = std::getenv("PIKMIN_SCENARIO_WINDOW"); window != nullptr && *window != '\0') {
+		char tail = '\0';
+		if (std::sscanf(window, "%dx%d%c", &windowWidth, &windowHeight, &tail) != 2 || windowWidth < 1 || windowHeight < 1
+		    || windowWidth > 8192 || windowHeight > 8192) {
+			usage((std::string("PIKMIN_SCENARIO_WINDOW must be WxH, for example 64x36, not ") + window).c_str());
+			return PC_SCENARIO_EXIT_USAGE;
+		}
+	}
 
 	sActive         = true;
 	sTicksPerSecond = rate;
@@ -298,6 +309,8 @@ int pc_scenario_parse_argv(int argc, char** argv)
 	pc_netplay_det_scenario_enable();
 	pc_settings_scenario_enable();
 	pc_settings_scenario_set_fps_mode(rate == 60 ? 1 : 0);
+	if (windowWidth > 0) pc_settings_scenario_set_window_size(windowWidth, windowHeight);
+	pc_gfx_set_min_render_size(1, 1); // the window size, below the player's 160x120 floor
 	pc_window_set_hidden(!visible);
 	pc_input_log_set_provider(providerThunk);
 	std::printf("[scenario] %s at %d ticks per second, stage %s, data %s\n", name, rate, sStageFile.c_str(), dataDir);
@@ -362,7 +375,11 @@ void pc_scenario_on_stage_ready(void)
 	if (!sActive || sStageReady) return;
 	sStageReady = true;
 	sTick       = 0;
-	std::printf("[scenario] stage ready after %u boot ticks\n", sBootTicks);
+	int drawableWidth = 0, drawableHeight = 0, renderWidth = 0, renderHeight = 0;
+	pc_gfx_get_drawable_size(&drawableWidth, &drawableHeight);
+	pc_gfx_get_render_size(&renderWidth, &renderHeight);
+	std::printf("[scenario] stage ready after %u boot ticks (drawable %dx%d, render %dx%d)\n", sBootTicks, drawableWidth,
+	            drawableHeight, renderWidth, renderHeight);
 }
 
 void pc_scenario_on_tick_end(void)
