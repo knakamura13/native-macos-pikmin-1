@@ -6,6 +6,7 @@
 
 #include <SDL.h>
 
+#include <csignal>
 #include <cstdarg>
 #include <cstdio>
 #include <cstdlib>
@@ -160,6 +161,35 @@ void removeScratch()
 // without a verdict is a failure. A missing window or GL context records its
 // verdict (4) through pc_scenario_on_no_gl before main returns.
 void onExit() { terminate(sVerdict ? sExitCode : PC_SCENARIO_EXIT_FAIL); }
+
+#ifndef _WIN32
+#if __has_include(<execinfo.h>)
+#include <execinfo.h>
+#define PC_SCENARIO_HAVE_BACKTRACE 1
+#endif
+
+// A fatal signal (an abort from OSPanic, a bad pointer) is a scenario failure,
+// not a crash: the player's handler would re-raise it with the default action,
+// and macOS then writes a crash report and can open a dialog for every failing
+// run. This prints a short backtrace and leaves through terminate().
+void onFatalSignal(int sig)
+{
+	std::fprintf(stderr, "[scenario] FAIL: fatal signal %d\n", sig);
+#if PC_SCENARIO_HAVE_BACKTRACE
+	void* frames[48];
+	const int n = backtrace(frames, 48);
+	backtrace_symbols_fd(frames, n, 2);
+#endif
+	terminate(PC_SCENARIO_EXIT_FAIL);
+}
+
+void installFatalSignalHandlers()
+{
+	for (int sig : {SIGABRT, SIGSEGV, SIGBUS, SIGILL, SIGFPE}) std::signal(sig, onFatalSignal);
+}
+#else
+void installFatalSignalHandlers() {}
+#endif
 
 void startWatchdog(const char* name)
 {
@@ -374,6 +404,7 @@ int pc_scenario_parse_argv(int argc, char** argv)
 		std::printf("[scenario] save dir %s\n", sScratchDir.string().c_str());
 	}
 	std::atexit(onExit);
+	installFatalSignalHandlers();
 	startWatchdog(name);
 	pc_netplay_det_scenario_enable();
 	pc_settings_scenario_enable();
