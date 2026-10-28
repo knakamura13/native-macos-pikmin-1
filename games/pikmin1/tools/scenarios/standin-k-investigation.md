@@ -258,8 +258,8 @@ neighbourhood, one parameter or the 3 x 3 x 3 cube of turn, z and x moved by
 | half-width 100, 102, 108, 110 | 13/32, 15/19, 15/28, 14/36 |
 | half-depth 11, 13 | 13/40, 13/16 |
 
-At 30 Hz this is the calmest region found: 21 of 26 neighbours are within one
-tick of 15. At 60 Hz the neighbours split: 11 of 26 give 16 to 20, the others
+At 30 Hz this is the calmest region found: 15 of 26 neighbours are within one
+tick of 15 and all but one give 13 to 19. At 60 Hz the neighbours split: 9 of 26 give 16 to 20, the others
 28 to 50 (the first Pikmin back is then one on the far side of the panel). So
 the exact 60 Hz match is still a chosen point, not a plateau.
 
