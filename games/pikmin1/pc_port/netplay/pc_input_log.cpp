@@ -259,6 +259,41 @@ void clear_tick_slots()
 	}
 }
 
+PcInputProviderFn sProvider = nullptr;
+
+// Scenario input (--scenario): the provider fills all four pads and the yaw
+// and ext slots for this tick, after the slots are cleared and before the
+// record write, so a recording captures what was fed. It overrides any real
+// gamepad or keyboard read.
+void apply_provider()
+{
+	if (sProvider == nullptr) return;
+	PcInputPad scripted[4];
+	for (int p = 0; p < 4; ++p) {
+		scripted[p] = PcInputPad{};
+		scripted[p].err = (p == 0) ? pc_input_log::kErrConnected : pc_input_log::kErrNoController;
+	}
+	sProvider(scripted);
+	PADStatus* pads = pc_netplay_pad_status();
+	for (int p = 0; p < 4; ++p) {
+		pads[p].button       = scripted[p].button;
+		pads[p].stickX       = scripted[p].stickX;
+		pads[p].stickY       = scripted[p].stickY;
+		pads[p].substickX    = scripted[p].substickX;
+		pads[p].substickY    = scripted[p].substickY;
+		pads[p].triggerLeft  = scripted[p].triggerLeft;
+		pads[p].triggerRight = scripted[p].triggerRight;
+		pads[p].analogA      = scripted[p].analogA;
+		pads[p].analogB      = scripted[p].analogB;
+		pads[p].err          = scripted[p].err;
+		sYawRaw[p]           = scripted[p].controlYaw;
+		sYawFlags[p]         = pc_input_log::kFlagsNone;
+		sYawValid[p]         = true;
+		sExt[p]              = scripted[p].flags & pc_input_log::kExtKnown;
+		sRotate[p]           = scripted[p].cursorRotate;
+	}
+}
+
 const char* argvValue(int argc, char** argv, const char* flag)
 {
 	for (int i = 1; i + 1 < argc; ++i) {
@@ -280,6 +315,8 @@ bool pc_input_log_is_record_active(void) { return sRecordActive; }
 bool pc_input_log_is_replay_active(void) { return sReplayActive; }
 
 void pc_input_log_set_yaw_capture_fn(PcYawCaptureFn fn) { sYawCaptureFn = fn; }
+
+void pc_input_log_set_provider(PcInputProviderFn fn) { sProvider = fn; }
 
 // Only the hook runs; the tick index, replay and record are untouched.
 void pc_input_log_capture_yaw(void)
@@ -463,6 +500,7 @@ void pc_input_log_tick(void)
 			// the slots and run the pre-sim capture before returning. The hook itself
 			// checks det/record, so the switch-off path stays untouched.
 			clear_tick_slots();
+			apply_provider();
 			if (sYawCaptureFn != nullptr) sYawCaptureFn();
 			return;
 		}
@@ -470,6 +508,7 @@ void pc_input_log_tick(void)
 
 	if (!sRecordActive && !sReplayActive) {
 		clear_tick_slots();
+		apply_provider();
 		if (sYawCaptureFn != nullptr) sYawCaptureFn();
 		return;
 	}
@@ -479,6 +518,7 @@ void pc_input_log_tick(void)
 	// reads the camera, so the input for tick N is complete before the sim
 	// for tick N runs.
 	clear_tick_slots();
+	apply_provider();
 
 	PADStatus* pads = pc_netplay_pad_status();
 

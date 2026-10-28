@@ -71,6 +71,13 @@ int pc_settings_get_idle_counter(void);
 int pc_settings_get_navi_health_pct(void);
 int pc_settings_get_teki_health_pct(void);
 int pc_settings_get_infinite_day(void);
+#if PIKI_SCENARIOS
+// --scenario settings layer: pikmin_settings.conf is neither read nor written.
+// Call before pc_settings_init. fpsMode is 0 for 30 Hz and 1 for 60 Hz.
+void pc_settings_scenario_enable(void);
+void pc_settings_scenario_set_fps_mode(int fpsMode);
+void pc_settings_scenario_set_infinite_day(int on);
+#endif
 int pc_settings_get_eternal_night(void);
 int pc_settings_get_fireflies(void);
 int pc_settings_get_free_camera(void);

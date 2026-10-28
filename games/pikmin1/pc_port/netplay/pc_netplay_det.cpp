@@ -66,6 +66,14 @@ unsigned readU32Env(const char* name, unsigned fallback)
 
 } // namespace
 
+#if PIKI_SCENARIOS
+// --scenario: deterministic, unthrottled, seed pinned to 0 in code so an
+// ambient PIKMIN_NETPLAY_* variable cannot leak into a run.
+static bool sScenarioForced = false;
+
+void pc_netplay_det_scenario_enable(void) { sScenarioForced = true; }
+#endif
+
 void pc_netplay_det_init(int argc, char** argv)
 {
 	// Re-readable so the host tests can toggle modes in-process.
@@ -77,6 +85,12 @@ void pc_netplay_det_init(int argc, char** argv)
 		}
 	}
 	sUnthrottled = sDeterministic && envIsOne("PIKMIN_NETPLAY_UNTHROTTLED");
+#if PIKI_SCENARIOS
+	if (sScenarioForced) {
+		sDeterministic = true;
+		sUnthrottled   = true;
+	}
+#endif
 	// Both RNG streams are main-thread only; remember which thread that is.
 	pc_sim_rng_note_main_thread();
 	if (sDeterministic) {
@@ -138,7 +152,10 @@ float pc_netplay_fixed_dt(int frameClamp)
 void pc_netplay_det_reseed_for_new_day(int dayIndex, int stageId)
 {
 	if (!sDeterministic) return;
-	const unsigned sessionSeed = readU32Env("PIKMIN_NETPLAY_SEED", 0);
+	unsigned sessionSeed = readU32Env("PIKMIN_NETPLAY_SEED", 0);
+#if PIKI_SCENARIOS
+	if (sScenarioForced) sessionSeed = 0;
+#endif
 	// FNV-1a/32 over the session seed, day index and stage id as u32 words.
 	// Every peer computes the same words from the same save.
 	unsigned hash = 2166136261u;

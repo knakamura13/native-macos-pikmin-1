@@ -1,4 +1,7 @@
 #include "OnePlayerSection.h"
+#if PIKI_SCENARIOS
+#include "scenarios/pc_scenario.h"
+#endif
 
 #include "CardSelectSection.h"
 #include "CmdStream.h"
@@ -419,6 +422,11 @@ void OnePlayerSection::init()
 			_kPrint  = FALSE;
 			_nPrint  = FALSE;
 			_cPrint  = FALSE;
+#endif
+
+#if PIKI_SCENARIOS
+			// Stage and day are set before the stage's constructors consume them.
+			if (pc_scenario_active()) pc_scenario_pre_stage();
 #endif
 
 			if (!gsys->mIsLoadingActive) {

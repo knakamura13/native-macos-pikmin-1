@@ -1,4 +1,7 @@
 #include "NewPikiGame.h"
+#if PIKI_SCENARIOS
+#include "scenarios/pc_scenario.h"
+#endif
 
 #include "Controller.h"
 #include "DayMgr.h"
@@ -2756,6 +2759,9 @@ public:
 			PRINT("final setup!\n");
 			gamecore->finalSetup();
 			mIsInitialSetup = false;
+#if PIKI_SCENARIOS
+			if (pc_scenario_active()) pc_scenario_on_stage_ready();
+#endif
 		}
 		if (mNextModeState) {
 			// force a mode transition if we have one pending

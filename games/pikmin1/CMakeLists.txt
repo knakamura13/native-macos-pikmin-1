@@ -153,11 +153,12 @@ else()
 endif()
 option(PIKMIN_BUILD_LAUNCHER "Build the standalone first-run launcher" ${PIKMIN_DESKTOP_DEFAULT})
 option(PIKMIN_BUILD_TESTS "Build the host-run test executables" ${PIKMIN_DESKTOP_DEFAULT})
+option(PIKMIN_BUILD_SCENARIOS "Build --scenario, the scripted gameplay scenario runner (see pc_port/scenarios)" OFF)
 option(NECTAR_BUILD_MAPMAKER "Build the VS map editor (tools/mapmaker)" ${PIKMIN_DESKTOP_DEFAULT})
 option(NECTAR_BUILD_MODELMAKER "Build the model maker (tools/modelmaker)" ${PIKMIN_DESKTOP_DEFAULT})
 option(NECTAR_ONLINE "Build the experimental direct online co-op layer" OFF)
 
-if(PIKMIN_BUILD_TESTS)
+if(PIKMIN_BUILD_TESTS OR PIKMIN_BUILD_SCENARIOS)
     enable_testing()
 endif()
 
@@ -176,6 +177,7 @@ add_compile_options("-ffile-prefix-map=${CMAKE_CURRENT_SOURCE_DIR}/=")
 
 add_compile_definitions(
     PIKI_PC_PORT=1
+    PIKI_SCENARIOS=$<BOOL:${PIKMIN_BUILD_SCENARIOS}>
     ${PIKMIN_GAME_VERSION}
     DTK_CONFIG_NONMATCHING=1
     PIKI_USE_GLES=$<BOOL:${PIKMIN_GLES}>
@@ -417,6 +419,14 @@ if (ANDROID)
 endif()
 if (PIKMIN_TOUCH)
     list(APPEND PC_PORT_SOURCES pc_port/touch/pc_touch.cpp)
+endif()
+if (PIKMIN_BUILD_SCENARIOS)
+    list(APPEND PC_PORT_SOURCES
+        pc_port/scenarios/pc_scenario.cpp
+        pc_port/scenarios/pc_scenario_list.cpp
+        pc_port/scenarios/scenario_boot_smoke.cpp
+        pc_port/scenarios/scenario_throw_release.cpp
+        pc_port/scenarios/scenario_day30_clock.cpp)
 endif()
 
 include_directories(
@@ -1582,4 +1592,25 @@ endif()
 # VRM u OBJ. Comparte con el editor de mapas la ImGui, OpenGL y nectar_assets.
 if (NECTAR_BUILD_MODELMAKER AND NOT ANDROID)
     add_subdirectory("${NECTAR_LIBS_DIR}/../tools/modelmaker" "${CMAKE_CURRENT_BINARY_DIR}/modelmaker")
+endif()
+
+# Scenario tests (see pc_port/scenarios and issue #59). Each runs
+# `nectar --scenario <name>` at 30 and 60 ticks per second. These are disc-mode
+# tests: PIKMIN_SCENARIO_DATA_DIR names a directory holding assets/ (a real
+# install). Unset or without assets/dataDir/parms/gamePrms.bin the binary exits
+# 77 and CTest reports a skip. The stand-in fixtures (no disc) are #68.
+if(PIKMIN_BUILD_SCENARIOS)
+    set(PIKMIN_SCENARIO_SCRATCH "${CMAKE_CURRENT_BINARY_DIR}/scenario-scratch")
+    file(MAKE_DIRECTORY "${PIKMIN_SCENARIO_SCRATCH}")
+    foreach(scenario boot_smoke throw_release day30_clock)
+        foreach(rate 30 60)
+            add_test(NAME scenario_${scenario}_${rate}_disc
+                COMMAND ${NECTAR_GAME} --scenario ${scenario} --scenario-tick-rate ${rate})
+            set_tests_properties(scenario_${scenario}_${rate}_disc PROPERTIES
+                WORKING_DIRECTORY "${PIKMIN_SCENARIO_SCRATCH}"
+                TIMEOUT 600
+                SKIP_RETURN_CODE 77
+                LABELS "game-assets")
+        endforeach()
+    endforeach()
 endif()

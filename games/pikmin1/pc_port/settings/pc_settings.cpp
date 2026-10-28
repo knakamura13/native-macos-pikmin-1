@@ -1168,7 +1168,19 @@ int netplayApplyConfigText(const char* text) {
 }
 #endif
 
+#if PIKI_SCENARIOS
+// --scenario: the settings file is neither read nor written, so a developer's
+// pikmin_settings.conf cannot change a run. fpsMode and infiniteDay are
+// overrides the scenario can switch at runtime.
+static bool sScenarioSettings   = false;
+static int sScenarioFpsMode     = 0;
+static int sScenarioInfiniteDay = 0;
+#endif
+
 void saveConfig() {
+#if PIKI_SCENARIOS
+    if (sScenarioSettings) return;
+#endif
 #if PIKI_NETPLAY_BUILD
     netplayRelockSessionFields();
     NetplayDiskValuesScope netplayDiskValues;
@@ -1299,6 +1311,17 @@ void saveConfig() {
 
 void loadConfig() {
     sConfig.applyDefaults();
+#if PIKI_SCENARIOS
+    if (sScenarioSettings) {
+        // Windowed, small so per-tick cost stays low under software GL, and no
+        // vsync wait.
+        sConfig.windowWidth  = 640;
+        sConfig.windowHeight = 360;
+        sConfig.vsync        = false;
+        sHadConfigFile       = true;
+        return;
+    }
+#endif
     std::string path = std::string(kConfigFilename);
     std::ifstream in(path, std::ios::in);
     if (!in) {
@@ -3862,9 +3885,13 @@ void pc_settings_init(void) {
     // Sin fichero previo, arrancar a la resolucion del monitor en vez de a un
     // 1280x720 fijo que en un panel 16:10 o 21:9 deja barras desde el principio.
     int idx = sHadConfigFile ? resolutionIndexFor(sPending.windowWidth, sPending.windowHeight) : -1;
+    bool keepWindowSize = false;
+#if PIKI_SCENARIOS
+    keepWindowSize = sScenarioSettings; // the scenario layer's small window, not the monitor's
+#endif
     if (idx < 0) {
         idx = defaultResolutionIndex();
-        if (!sResolutions.empty()) {
+        if (!sResolutions.empty() && !keepWindowSize) {
             sPending.windowWidth = sResolutions[idx].w;
             sPending.windowHeight = sResolutions[idx].h;
             sConfig.windowWidth = sPending.windowWidth;
@@ -8601,6 +8628,9 @@ const char* pc_settings_get_speedrun_ls_host(void) { return sConfig.speedrunLsHo
 int pc_settings_get_speedrun_ls_port(void) { return sConfig.speedrunLsPort; }
 int pc_settings_get_online_stun(void) { return sConfig.onlineStun; }
 int pc_settings_get_fps_mode(void) { if (pc_speedrun_active()) return 0;
+#if PIKI_SCENARIOS
+    if (sScenarioSettings) return sScenarioFpsMode;
+#endif
     return sConfig.fpsMode;
 }
 
@@ -8635,8 +8665,18 @@ int pc_settings_get_infinite_day(void) { if (pc_speedrun_active()) return 0;
     if (pc_vs_active()) return 1;
     // Misión: el día acaba con el reloj (decide el resultado).
     if (pc_mission_active()) return 0;
-    return pc_hardmode_active() ? 0 : sConfig.infiniteDay;
+    if (pc_hardmode_active()) return 0;
+#if PIKI_SCENARIOS
+    if (sScenarioSettings) return sScenarioInfiniteDay;
+#endif
+    return sConfig.infiniteDay;
 }
+
+#if PIKI_SCENARIOS
+void pc_settings_scenario_enable(void) { sScenarioSettings = true; }
+void pc_settings_scenario_set_fps_mode(int fpsMode) { sScenarioFpsMode = fpsMode; }
+void pc_settings_scenario_set_infinite_day(int on) { sScenarioInfiniteDay = on; }
+#endif
 
 int pc_settings_get_free_camera(void) { if (pc_speedrun_active()) return 0;
     return sConfig.freeCamera;

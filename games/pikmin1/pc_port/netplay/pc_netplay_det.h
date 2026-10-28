@@ -10,6 +10,11 @@
 // streams are reseeded per day (pc_sim_rng.h) and the FP environment is
 // pinned at the start of every tick.
 
+#if PIKI_SCENARIOS
+// --scenario: forces deterministic, unthrottled mode with seed 0. Call before pc_netplay_det_init.
+void pc_netplay_det_scenario_enable(void);
+#endif
+
 void pc_netplay_det_init(int argc, char** argv); // call once from main(), before the game starts
 bool pc_netplay_deterministic(void);            // true if --netplay-deterministic or PIKMIN_NETPLAY_DETERMINISTIC=1
 bool pc_netplay_unthrottled(void);              // det mode only: PIKMIN_NETPLAY_UNTHROTTLED=1 (fast replays)
