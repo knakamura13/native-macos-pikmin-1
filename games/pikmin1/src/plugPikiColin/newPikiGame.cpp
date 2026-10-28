@@ -1,4 +1,7 @@
 #include "NewPikiGame.h"
+#if defined(PIKI_PC_PORT)
+#include "pc_window.h"
+#endif
 #if PIKI_SCENARIOS
 #include "scenarios/pc_scenario.h"
 #endif
@@ -57,12 +60,12 @@
 #include "Kontroller.h"
 #if defined(PIKI_PC_PORT)
 #include "pc_coop.h"
-#include "pc_window.h"
 #include "mods/pc_mission.h"
 #include "timing/pc_render_phase.h"
 #include "netplay/pc_netplay_camlead.h"
 #include "netplay/pc_netplay_det.h"
 #include "netplay/pc_netplay_present.h"
+#include "quicksave/pc_quicksave.h"
 #if defined(PIKI_PC_PORT)
 #include "pc_permadeath.h"
 #include "randomizer/pc_randomizer.h"
@@ -563,6 +566,11 @@ struct DayOverModeState : public ModeState {
 			gamecore->exitDayEnd();
 			if (gameflow.mWorldClock.mCurrentDay < 2) {
 				gameflow.mWorldClock.mCurrentDay = 2;
+				// The results screen is not shown, but the voyage log still
+				// needs the day-1 entry. Record it only after the clock moves:
+				// getDocument stores mDaysSeen[getCurrDay()], and day 1 is slot 1.
+				int pageCount = 0;
+				playerState->mResultFlags.commitTutorialSkipDocument(gameflow.mWorldClock.mCurrentDay, pageCount);
 			}
 			pc_tutorial_skip_clear_pending();
 			mState = STATE_PcTutorialSkip;
@@ -1043,6 +1051,20 @@ ModeState* RunningModeState::update(u32& result)
 		gameflow.mPauseAll                         = FALSE;
 		mParentSection->mPendingOnePlayerSectionID = vsExit == PC_VS_EXIT_REMATCH ? ONEPLAYER_NewPikiGame : ONEPLAYER_GameExit;
 		if (vsExit != PC_VS_EXIT_REMATCH) pc_vs_note_left_to_title();
+		gsys->setFade(0.0f);
+		return new QuittingGameModeState(mParentSection);
+	}
+	// Quick save: the day is in play this tick (a save may be taken), and a
+	// load leaves it: a story day for the card select, which re-enters the
+	// recorded day (the speedrun reset's route), a VS match straight into the
+	// arena again (the rematch's route). A cancelled load leaves the day for
+	// the card select, or the title after a VS match.
+	pc_quicksave_note_running();
+	if (const int quickLoad = pc_quicksave_take_leave()) {
+		gameflow.mPauseAll                         = FALSE;
+		mParentSection->mPendingOnePlayerSectionID = quickLoad == 2   ? ONEPLAYER_NewPikiGame
+		                                           : quickLoad == 3 ? ONEPLAYER_GameExit
+		                                                            : ONEPLAYER_CardSelect;
 		gsys->setFade(0.0f);
 		return new QuittingGameModeState(mParentSection);
 	}
@@ -3464,6 +3486,10 @@ void GameMovieInterface::parse(GameMovieInterface::ComplexMessage& msg)
 NewPikiGameSection::NewPikiGameSection()
 {
 	Node::init("<NewPikiGameSection>");
+#if defined(PIKI_PC_PORT)
+	// Quick save: the day starts here (its card block, clock and mode).
+	pc_quicksave_day_prepare();
+#endif
 
 	gameflow.mCurrentStageID       = flowCont.mCurrentStage->mStageIndex;
 	gameflow.mPendingStageUnlockID = -1;

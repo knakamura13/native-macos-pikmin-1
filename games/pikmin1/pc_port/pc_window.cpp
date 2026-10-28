@@ -10,10 +10,16 @@ static_assert(PAD_BUTTON_LEFT == PC_MENU_PAD_LEFT && PAD_BUTTON_RIGHT == PC_MENU
                   && PAD_BUTTON_START == PC_MENU_PAD_START,
               "menu pad bits must match the GameCube pad");
 #include "timing/pc_frame_scheduler.h"
+#include "pc_menu_click.h"
+#include "pc_button_prompt.h"
+#include "pc_hand_cursor.h"
+#include "pc_photo_mode.h"
 #include "pc_speedrun.h"
 #include "pc_gyro.h"
 #include "pc_icon.h"
 #include "netplay/pc_netplay_det.h"
+#include "netplay/pc_input_log.h"
+#include "quicksave/pc_quicksave.h"
 #if PIKI_PC_TOUCH
 #include "gl/pc_gfx.h"
 #include "touch/pc_touch.h"
@@ -86,6 +92,10 @@ static void netplayResolvePendingPad();
 #define PC_NETPLAY_IGNORE_KEYBOARD false
 #define PC_NETPLAY_IGNORE_GAMEPADS false
 #endif
+
+// Last time a text window read the pad (pc_window_note_text_window_input).
+static bool   sTextWindowNoted = false;
+static Uint32 sTextWindowMs    = 0;
 
 // Última pulsación vista en el bucle de eventos, para el menú "pulsa un botón".
 static int            sLastPressKind   = PC_INPUT_DEV_NONE;
@@ -269,7 +279,9 @@ static SDL_Scancode sKeyBindings[PC_KEY_ACT_COUNT];
 // el código (izquierdo = A, derecho = B, central = Z) son sus valores por defecto.
 static SDL_Scancode sKeyBindings2[PC_KEY_ACT_COUNT];
 static bool sSwarmHeld = false; // PC_KEY_ACT_SWARM sampled by the last poll
-// D-pad Down of each player's pad, which is also the swarm button.
+// Physical D-pad Down of each player's pad. Filed into the deterministic
+// input record. Not the swarm button (issue #138): lie down stays on D-pad Down.
+static bool sPadDpadDownHeld[2] = { false, false };
 
 // Lock-On y Charge se consumen como flanco: el bucle sondea el mando muchas
 // veces entre ticks lógicos, así que la pulsación se guarda hasta que alguien
@@ -317,18 +329,61 @@ static int sControlMode = PC_CONTROL_CLASSIC;
 static int effectiveControlMode() { return pc_speedrun_active() ? PC_CONTROL_CLASSIC : sControlMode; }
 static float sMouseSensitivity = 2.0f;
 static bool sSettingsMenuOpen = false;
-// Pointer capture needs a running level (GameCoreSection sets this), so the
-// title and file screens keep a free pointer even in Mouse Cursor mode.
-static bool sGameplayActive = false;
+
+// Pointer capture needs a running level (GameCoreSection sets this), so the title and file
+// screens keep a free pointer even in Mouse Cursor mode. A pause or in-game menu over a
+// level releases it too, so its rows can be clicked.
+static bool sGameplayActive  = false;
+static bool sMenuOverlayOpen = false;
 static bool captureAllowed() {
-    return sGameplayActive && !sSettingsMenuOpen && effectiveControlMode() == PC_CONTROL_MOUSE_CURSOR;
+    return sGameplayActive && !sMenuOverlayOpen && !sSettingsMenuOpen && !pc_menu_click_pointer_menu_active()
+        && effectiveControlMode() == PC_CONTROL_MOUSE_CURSOR;
 }
-// Every relative-mode change goes through here so the gate always applies.
-// The system cursor hides only while the game owns the pointer.
+// Every relative-mode change goes through here, so the gate always applies. The system
+// cursor hides only while the game owns the pointer.
 static void applyMouseCapture() {
     const bool capture = sMouseRelativeMode && captureAllowed();
     SDL_SetRelativeMouseMode(capture ? SDL_TRUE : SDL_FALSE);
     SDL_ShowCursor(capture ? SDL_DISABLE : SDL_ENABLE);
+}
+
+// Hand cursor over pointer menu targets (pc_hand_cursor). Both system cursors are created
+// once, on the first change; pc_hand_cursor calls this only when the shape changes.
+static SDL_Cursor* sArrowCursor = nullptr;
+static SDL_Cursor* sHandCursor  = nullptr;
+static bool sCursorsMade        = false;
+static void pcSetSystemCursor(int shape) {
+    if (!sCursorsMade) {
+        sCursorsMade = true;
+        sArrowCursor = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_ARROW);
+        sHandCursor  = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_HAND);
+    }
+    SDL_Cursor* cursor = shape == PC_HAND_CURSOR_HAND ? sHandCursor : sArrowCursor;
+    if (cursor) SDL_SetCursor(cursor);
+}
+
+// The hand needs a pointer the player can see and move: not captured, not in relative
+// mode, not hidden, and a focused window. Otherwise the arrow goes back once.
+static void pcUpdateHandCursor() {
+    bool pointerFree = false;
+    if (sWindow && !sSettingsMenuOpen) {
+        pointerFree = (SDL_GetWindowFlags(sWindow) & SDL_WINDOW_INPUT_FOCUS) != 0 && !SDL_GetRelativeMouseMode()
+                   && SDL_ShowCursor(SDL_QUERY) == SDL_ENABLE;
+    }
+    pc_hand_cursor_update(pointerFree, pc_menu_click_hand_wanted());
+}
+
+static void pc_apply_capture_on_change(void) {
+    static bool sLastAllowed = false;
+    const bool allowed = captureAllowed();
+    if (allowed == sLastAllowed) return;
+    sLastAllowed = allowed;
+    applyMouseCapture();
+    if (allowed && sMouseRelativeMode) {
+        int dummyX = 0;
+        int dummyY = 0;
+        SDL_GetRelativeMouseState(&dummyX, &dummyY);
+    }
 }
 
 // Virtual cursor (mouse-controlled cursor, separate from movement stick)
@@ -367,6 +422,10 @@ const SDL_Scancode kDefaultKeyBindings[PC_KEY_ACT_COUNT] = {
     /* PC_KEY_ACT_GYRO_RECENTER */ SDL_SCANCODE_UNKNOWN, // el giroscopio va en el mando
     /* PC_KEY_ACT_BOMB        */ SDL_SCANCODE_B, // B solo es "atrás" dentro de los menús
     /* PC_KEY_ACT_SPEEDRUN_RESET */ SDL_SCANCODE_F5,
+    // Quick Save: F6/F7 are debug keys only outside deterministic mode, which
+    // the feature always runs in, and F5 stays the speedrun reset.
+    /* PC_KEY_ACT_QUICKSAVE    */ SDL_SCANCODE_F6,
+    /* PC_KEY_ACT_QUICKLOAD    */ SDL_SCANCODE_F7,
 };
 
 SDL_Scancode pc_window_default_key_binding2(int action) {
@@ -406,6 +465,8 @@ const int kDefaultGamepadBindings[PC_KEY_ACT_COUNT] = {
     /* PC_KEY_ACT_GYRO_RECENTER */ -1, // sin botón libre por defecto; se asigna en Controls
     /* PC_KEY_ACT_BOMB        */ -1, // ídem
     /* PC_KEY_ACT_SPEEDRUN_RESET */ -1, // Back abre los ajustes; se asigna en Controls o en el menú Speedrun
+    /* PC_KEY_ACT_QUICKSAVE    */ -1,
+    /* PC_KEY_ACT_QUICKLOAD    */ -1,
 };
 
 // Action names for UI display.
@@ -417,6 +478,7 @@ static const char* kKeyActionNames[PC_KEY_ACT_COUNT] = {
     "Swarm to cursor",
     "Lock-On", "First Person", "Gyro Recenter", "Bomb",
     "Speedrun Reset",
+    "Quick Save", "Quick Load",
 };
 
 static void initKeyBindings() {
@@ -514,6 +576,12 @@ int pc_window_get_gamepad_binding_p2(int action) {
     initGamepadBindings();
     if (sGamepadBindingsP2[action] >= 0) return sGamepadBindingsP2[action];
     return kDefaultGamepadBindings[action];
+}
+
+void pc_window_note_text_window_input(void)
+{
+    sTextWindowNoted = true;
+    sTextWindowMs    = SDL_GetTicks();
 }
 
 bool pc_window_last_input_is_gamepad(void)
@@ -984,6 +1052,7 @@ bool pc_window_init(const char* title, int width, int height) {
     // For now, start with relative mode OFF for menu navigation
     sMouseRelativeMode = false;
     SDL_SetRelativeMouseMode(SDL_FALSE);
+    pc_hand_cursor_init(pcSetSystemCursor);
     
     // Center mouse cursor initially
     sMouseCenterX = sWindowWidth / 2;
@@ -1092,6 +1161,10 @@ static bool pc_window_read_gamepad(SDL_GameController* ctl, u16& button, s8& sti
     // keeps the original lie down, with or without the mod. The right stick
     // alone makes the original C-stick column, never a group at the cursor.
     sFreeCamSubY[player & 1] = 0.0f;
+    // Record the physical button for the input log. Swarm is only the Swarm
+    // binding: D-pad Down keeps the original lie down (issue #138), including
+    // while A is held to change Pikmin kind.
+    sPadDpadDownHeld[player & 1] = SDL_GameControllerGetButton(ctl, SDL_CONTROLLER_BUTTON_DPAD_DOWN) != 0;
     if (pc_settings_get_free_camera()) {
         if (abs(ry) > axisDeadZone) sFreeCamSubY[player & 1] = pc_pad_axis_from_sdl(-ry) / 74.0f;
         if (abs(rx) > axisDeadZone) {
@@ -1143,7 +1216,16 @@ static bool pc_window_read_gamepad(SDL_GameController* ctl, u16& button, s8& sti
         || abs(rx) > noticeZone || abs(ry) > noticeZone;
 }
 
+void pc_gfx_get_drawable_size(int* width, int* height); // gl/pc_gfx.h
+
 void pc_window_poll_events(PADStatus* pad) {
+    // Age a menu click only on the logical input sample. The present path
+    // polls again with a null pad and must not drop a click the menu has not
+    // seen yet.
+    if (pad) {
+        pc_menu_click_set_enabled(!(sGameplayActive && pc_netplay_deterministic()));
+        pc_menu_click_begin_tick();
+    }
 #if PIKI_USE_JAUDIO
     PikiJAudioTick();
 #else
@@ -1209,6 +1291,9 @@ void pc_window_poll_events(PADStatus* pad) {
                                               event.type == SDL_MOUSEBUTTONDOWN);
                 if (event.type != SDL_MOUSEBUTTONDOWN)
                     break;
+                if (event.button.which != SDL_TOUCH_MOUSEID) pc_menu_click_disarm_hover();
+                if (event.button.button == SDL_BUTTON_RIGHT && event.button.which != SDL_TOUCH_MOUSEID)
+                    pc_menu_click_post_back();
                 // Menú F1 abierto: el clic izquierdo es un toque (misma lógica
                 // que la pantalla táctil: seleccionar fila / pulsar la ya elegida).
                 // (También en el mapa de zonas de las campañas: elegir zona con el ratón.)
@@ -1217,6 +1302,15 @@ void pc_window_poll_events(PADStatus* pad) {
                     int ww = 0, wh = 0;
                     SDL_GetWindowSize(sWindow, &ww, &wh);
                     if (ww > 0 && wh > 0) pc_settings_touch_tap(event.button.x / float(ww), event.button.y / float(wh));
+                } else if (!sSettingsMenuOpen && event.button.button == SDL_BUTTON_LEFT
+                           && event.button.which != SDL_TOUCH_MOUSEID) {
+                    // Title screen and main menu read this. It is not a game
+                    // button: Classic mode still ignores mouse buttons there.
+                    int ww = 0, wh = 0;
+                    if (sWindow) SDL_GetWindowSize(sWindow, &ww, &wh);
+                    if (ww > 0 && wh > 0) {
+                        pc_menu_click_post(event.button.x / float(ww), event.button.y / float(wh));
+                    }
                 }
                 // Issue #52: Escape (or the OS) can drop the mouse out of
                 // relative mode, which froze the cursor until the option was
@@ -1255,11 +1349,13 @@ void pc_window_poll_events(PADStatus* pad) {
                     sMouseCursorDeltaY = 0.0f;
                 }
                 // The matching button-up can be dropped when the window loses focus.
-                if (event.window.event == SDL_WINDOWEVENT_FOCUS_LOST)
+                if (event.window.event == SDL_WINDOWEVENT_FOCUS_LOST) {
                     sRealMouseButtons = 0;
+                    pc_hand_cursor_reset();
+                }
                 // Some platforms release the relative-mode grab while the
                 // window is unfocused; put it back on return (issue #52).
-                if (event.window.event == SDL_WINDOWEVENT_FOCUS_GAINED && !sSettingsMenuOpen) {
+                if (event.window.event == SDL_WINDOWEVENT_FOCUS_GAINED) {
                     applyMouseCapture();
                 }
                 break;
@@ -1277,8 +1373,10 @@ void pc_window_poll_events(PADStatus* pad) {
                 sLastPressKind = PC_INPUT_DEV_GAMEPAD;
                 sLastPressId   = event.cbutton.which;
                 sLastPressSerial++;
+                pc_menu_click_disarm_hover();
                 break;
             case SDL_KEYDOWN:
+                pc_menu_click_disarm_hover();
                 if (!event.key.repeat && event.key.keysym.scancode != SDL_SCANCODE_ESCAPE) {
                     sLastPressKind = PC_INPUT_DEV_KEYBOARD;
                     sLastPressId   = -1;
@@ -1324,6 +1422,30 @@ void pc_window_poll_events(PADStatus* pad) {
         }
     }
 
+    // Sample the pointer once per logical tick, after the click edge. Menus
+    // read this to move the highlight. It is not a button press.
+    if (pad) {
+        if (sSettingsMenuOpen || !sWindow) {
+            pc_menu_click_clear_pointer();
+        } else {
+            int ww = 0;
+            int wh = 0;
+            SDL_GetWindowSize(sWindow, &ww, &wh);
+            int mx = 0;
+            int my = 0;
+            SDL_GetMouseState(&mx, &my);
+            const bool inside = (SDL_GetWindowFlags(sWindow) & SDL_WINDOW_MOUSE_FOCUS) != 0 && ww > 0 && wh > 0 && mx >= 0
+                                && my >= 0 && mx < ww && my < wh;
+            if (inside) {
+                pc_menu_click_set_pointer(float(mx) / float(ww), float(my) / float(wh));
+            } else {
+                pc_menu_click_clear_pointer();
+            }
+        }
+        pc_apply_capture_on_change();
+        pcUpdateHandCursor();
+    }
+
     if (!pad) return;
 
     // Reset pad status for Channel 0
@@ -1335,10 +1457,26 @@ void pc_window_poll_events(PADStatus* pad) {
         pad[i].err = PAD_ERR_NO_CONTROLLER;
     }
 
+    // A click on a drawn button prompt ("Y Ship's Log", "A Read Diary") is that button for
+    // this sample. Taken before mouse bindings so the prompt's claim keeps the click from
+    // also being A. A running level owns the pointer (its clicks are game input), so only
+    // menus, the pause overlay and screens holding a pointer claim take prompt clicks.
+    std::uint16_t promptButton = 0;
+    {
+        const bool promptLive = !sSettingsMenuOpen && !(sGameplayActive && pc_netplay_deterministic())
+                             && (!sGameplayActive || sMenuOverlayOpen || pc_menu_click_pointer_menu_active());
+        int dw = 0, dh = 0;
+        pc_gfx_get_drawable_size(&dw, &dh);
+        promptButton = pc_button_prompt_sample(promptLive, dw, dh, (sRealMouseButtons & SDL_BUTTON_LMASK) != 0);
+    }
+
     const Uint8* state = SDL_GetKeyboardState(NULL);
     // Bindings may name a mouse button (issue #42). SDL_GetMouseState also
     // reports a finger, so mouse-button bindings use the real-mouse mask.
-    const Uint32 boundMouse = sRealMouseButtons;
+    Uint32 boundMouse = sRealMouseButtons;
+    // While a pointer menu holds the claim, a mouse button is the menu's click (pc_menu_click),
+    // never A or B, whichever button a player has bound. Keyboard and controller are unchanged.
+    if (pc_menu_click_pointer_menu_active()) boundMouse = 0;
     // La segunda tecla con un clic solo cuenta fuera de Classic, como los clics
     // fijos que sustituye (en Classic el ratón no juega).
     const bool mouseSecondOk = effectiveControlMode() != PC_CONTROL_CLASSIC;
@@ -1348,6 +1486,41 @@ void pc_window_poll_events(PADStatus* pad) {
         if (pc_bind_is_mouse(second) && !mouseSecondOk) return false;
         return pc_window_binding_held(second, state, boundMouse);
     };
+
+    // Quick Save (pc_quicksave.h): the save and load actions, from the
+    // keyboard or player 1's pad when a button is bound. Not game input: a
+    // request acts at the end of the tick, outside the sim, and is never
+    // recorded. With the feature off they do nothing.
+    if (pc_quicksave_enabled()) {
+        static bool sQuickSaveWasDown = false;
+        static bool sQuickLoadWasDown = false;
+        auto quickHeld = [&](int action) {
+            if (sSettingsMenuOpen) return false;
+            if (held(action)) return true;
+            const int bind = sGamepadBindings[action];
+            return sControllers[0] != nullptr && bind >= 0 && pc_window_gamepad_bind_held(sControllers[0], bind);
+        };
+        const bool saveDown = quickHeld(PC_KEY_ACT_QUICKSAVE);
+        const bool loadDown = quickHeld(PC_KEY_ACT_QUICKLOAD);
+        if (saveDown && !sQuickSaveWasDown) pc_quicksave_request_save();
+        // F7 opens the F1 menu on Quick Load. While a load is already running,
+        // ignore it: Escape must cancel the load, not close that menu.
+        if (loadDown && !sQuickLoadWasDown && !pc_quicksave_load_active()) pc_settings_request_quick_load_confirm();
+        sQuickSaveWasDown = saveDown;
+        sQuickLoadWasDown = loadDown;
+        // Escape (or player 1's B) cancels a load under way: a fresh press
+        // after the load began, so a key held from before does not.
+        static bool sCancelWasDown = false;
+        static bool sLoadWasActive = false;
+        const bool loadActive = pc_quicksave_load_active();
+        const bool cancelDown = !sSettingsMenuOpen
+            && (state[SDL_SCANCODE_ESCAPE] != 0
+                || (sControllers[0] != nullptr
+                    && SDL_GameControllerGetButton(sControllers[0], SDL_CONTROLLER_BUTTON_B) != 0));
+        if (loadActive && sLoadWasActive && cancelDown && !sCancelWasDown) pc_quicksave_request_cancel();
+        sCancelWasDown = cancelDown;
+        sLoadWasActive = loadActive;
+    }
 
     u16 button = 0;
     s8  stickX = 0;
@@ -1415,7 +1588,8 @@ void pc_window_poll_events(PADStatus* pad) {
 
     // Menus share one mapping. Enter, Space and left click accept. Escape,
     // Backspace and right click cancel. Arrows and WASD both move the cursor.
-    // Shift never cancels here. Free play keeps the bindings filled in above.
+    // Shift never cancels here, except that a text window still takes a Shift
+    // binding for B to show the whole page. Free play keeps the bindings above.
     if (pc_menu_mode_active()) {
         PcMenuPadKeys keys = {};
         auto down = [&](SDL_Scancode sc) { return state[sc] != 0; };
@@ -1439,18 +1613,24 @@ void pc_window_poll_events(PADStatus* pad) {
         // prompts, and consume then clears this pad. Both masks omit a finger.
         keys.clickLeft  = pc_menu_pad_click(sRealMouseButtons, sMousePressedMask, SDL_BUTTON_LEFT);
         keys.clickRight = pc_menu_pad_click(sRealMouseButtons, sMousePressedMask, SDL_BUTTON_RIGHT);
+        // A pointer menu hit-tests its own clicks and right clicks (pc_menu_click). There a
+        // mouse button is not also A or B, so a click on empty space cannot activate the
+        // highlighted row or back out. Keyboard and controller are unchanged.
+        if (pc_menu_click_pointer_menu_active()) {
+            keys.clickLeft  = false;
+            keys.clickRight = false;
+        }
+        const bool textWindow = pc_menu_pad_text_window_live(sTextWindowNoted, sTextWindowMs, SDL_GetTicks());
         auto keyBindHeld = [&](int bind) {
-            if (bind <= 0 || bind >= SDL_NUM_SCANCODES)
-                return false;
-            if (bind == SDL_SCANCODE_LSHIFT || bind == SDL_SCANCODE_RSHIFT)
-                return false;
-            return state[bind] != 0;
+            return pc_menu_pad_b_binding_counts(bind, textWindow) && state[bind] != 0;
         };
-        const bool nonShiftB = keyBindHeld(bindB1) || keyBindHeld(bindB2);
+        // Shift is included while a text window is live. Other menus pass a
+        // false binding check for it, so Shift still never cancels there.
+        const bool boundB = keyBindHeld(bindB1) || keyBindHeld(bindB2);
         std::uint16_t bits = button;
         std::int8_t sx = stickX;
         std::int8_t sy = stickY;
-        pc_menu_pad_apply(keys, true, nonShiftB, sKeyBindings[PC_KEY_ACT_START], sKeyBindings2[PC_KEY_ACT_START], bits, sx, sy);
+        pc_menu_pad_apply(keys, true, boundB, sKeyBindings[PC_KEY_ACT_START], sKeyBindings2[PC_KEY_ACT_START], bits, sx, sy);
         button = static_cast<u16>(bits);
         stickX = static_cast<s8>(sx);
         stickY = static_cast<s8>(sy);
@@ -1497,14 +1677,17 @@ void pc_window_poll_events(PADStatus* pad) {
     if (sController && !PC_NETPLAY_IGNORE_GAMEPADS) {
         usedGamepad = pc_window_read_gamepad(sController, button, stickX, stickY, substickX, substickY,
                                              triggerL, triggerR, sSwarmHeld);
+        if (usedGamepad) pc_menu_click_disarm_hover();
     }
     // Flanco del swarm de P1 una vez juntos teclado y mando (Charge).
     if (sSwarmHeld && !sSwarmWasDown[0]) sSwarmPending[0] = true;
     sSwarmWasDown[0] = sSwarmHeld;
-    if (usedGamepad)
+    if (usedGamepad) {
         sLastInputIsGamepad = true;
-    else if (usedKeyboard)
+    } else if (usedKeyboard) {
         sLastInputIsGamepad = false;
+        pc_menu_click_disarm_hover();
+    }
     pc_gyro_update(sController, sSettingsMenuOpen, pc_first_person_active() != 0);
     {
         const bool recenterDown = held(PC_KEY_ACT_GYRO_RECENTER)
@@ -1529,7 +1712,7 @@ void pc_window_poll_events(PADStatus* pad) {
     if (effectiveControlMode() != PC_CONTROL_CLASSIC) {
         int mouseX, mouseY;
         Uint32 mouseState = 0;
-        bool isRelative = sMouseRelativeMode;
+        bool isRelative = sMouseRelativeMode && captureAllowed();
 
         // Issue #52: if SDL let go of relative mode behind our back (long
         // idle in a menu, screen lock), the cursor stopped until the option
@@ -1614,6 +1797,7 @@ void pc_window_poll_events(PADStatus* pad) {
         (void)mouseState;
     }
 
+    button |= promptButton; // after the P2 swap: the pointer is player 1's
     pad[0].button      = button;
     pad[0].stickX     = stickX;
     pad[0].stickY     = stickY;
@@ -1670,6 +1854,7 @@ void pc_window_swap_buffers(void) {
 #if defined(__APPLE__)
         pc_gfx_end_swap_framebuffer(renderTarget);
 #endif
+        pc_button_prompt_frame_end();
         // VSync Off must not retain the software presentation limiter. Game
         // simulation uses the fixed-step scheduler independently. Netplay's
         // unthrottled replay bypasses it too, and a netplay session owns the
@@ -1724,6 +1909,61 @@ static int driver_swap_interval_for(int interval) {
 #endif
 }
 
+// Deterministic mode: the sim reads the Mouse Cursor path from the per-tick
+// input (pc_input_log.h, PKNI v4), never from here, so a replay feeds it the
+// same values from the same place. pc_input_log_tick runs this after PADRead:
+// it takes what the window gathered since the last tick and files it under the
+// keyboard owner's pad, whose captain the mouse drives (the same test
+// Navi::makeVelocity makes outside deterministic mode). Outside deterministic
+// mode it takes nothing, and the sim reads the window as before.
+static void pcWindowCaptureLocalInput(PcLocalInput out[4]) {
+    if (!pc_netplay_deterministic()) return;
+    for (int p = 0; p < 2; p++) {
+        if (pc_first_person_active_for(p)) out[p].flags |= pc_input_log::kLocalFirstPerson;
+        if (sPadDpadDownHeld[p]) out[p].flags |= pc_input_log::kLocalPadDpadDown;
+        // Each player's Bomb, Lock-On and Charge presses and held Swarm
+        // button, from the queues the sim drains outside deterministic mode
+        // (player 1's are captain 1's, as there).
+        uint8_t ext = 0;
+        if (pc_window_take_bomb_press(p)) ext |= pc_input_log::kExtBomb;
+        if (pc_window_take_lockon_press(p)) ext |= pc_input_log::kExtLockOn;
+        if (pc_window_take_swarm_press(p)) ext |= pc_input_log::kExtCharge;
+        if (p == 0 ? sSwarmHeld : sSwarmHeldP2) ext |= pc_input_log::kExtSwarm;
+        out[p].ext = ext;
+    }
+    const float dx = sMouseCursorDeltaX;
+    const float dy = sMouseCursorDeltaY;
+    sMouseCursorDeltaX = 0.0f;
+    sMouseCursorDeltaY = 0.0f;
+    const bool recenter = pc_gyro_take_recenter_cursor() != 0;
+    // Photo mode freezes the sim, so its toggle (F3 or the touch button) is
+    // input too: one flag for the whole game, on pad 0.
+    if (pc_photo_mode_poll_toggle()) out[0].flags |= pc_input_log::kLocalPhotoToggle;
+    const int owner = sKeyboardOwner;
+    if (owner < 0 || owner > 3) return;
+    PcLocalInput& in = out[owner];
+    if (effectiveControlMode() == PC_CONTROL_MOUSE_CURSOR || dx != 0.0f || dy != 0.0f) {
+        in.flags |= pc_input_log::kLocalMouseCursor;
+    }
+    // The gyro recenter brings the keyboard owner's cursor back in front of
+    // the captain, as Navi::makeVelocity does outside deterministic mode.
+    if (recenter) in.flags |= pc_input_log::kLocalGyroRecenter;
+    in.cursorDx = dx;
+    in.cursorDy = dy;
+    // The wheel picks the throw colour only when set to; otherwise the
+    // camera zooms with it (local view state) and takes the notches itself.
+    int steps = 0;
+    if (pc_settings_get_mouse_wheel_action() == 0) steps += pc_window_take_wheel_steps();
+#if PIKI_PC_TOUCH
+    // A tap on the HUD colour icon is one notch for the keyboard owner's
+    // captain whatever the wheel does, as the sim counts it outside
+    // deterministic mode.
+    steps += pc_touch_take_color_taps();
+#endif
+    in.wheelSteps = static_cast<int8_t>(std::clamp(steps, -127, 127));
+}
+static const bool sPcLocalCaptureRegistered = (pc_input_log_set_local_capture_fn(&pcWindowCaptureLocalInput), true);
+
 void pc_window_set_swap_interval(int interval) {
     // 0 is meaningful here: it is the port's 120 Hz mode. Only negatives are
     // nonsense.
@@ -1759,6 +1999,12 @@ void pc_window_shutdown(void) {
         SDL_GameControllerClose(p.ctl);
     sOpenPads.clear();
     sControllers[0] = sControllers[1] = nullptr;
+    pc_hand_cursor_reset();
+    if (sHandCursor) SDL_FreeCursor(sHandCursor);
+    if (sArrowCursor) SDL_FreeCursor(sArrowCursor);
+    sHandCursor = sArrowCursor = nullptr;
+    sCursorsMade = false;
+    pc_hand_cursor_init(nullptr);
     if (sGLContext) {
         SDL_GL_DeleteContext(sGLContext);
         sGLContext = nullptr;
@@ -2074,21 +2320,6 @@ float pc_window_get_mouse_sensitivity(void) {
     return sMouseSensitivity;
 }
 
-// GameCoreSection calls this on stage init and exit. Off-level, the pointer stays free.
-void pc_window_set_gameplay_active(bool active) {
-    sGameplayActive = active;
-    sMouseWheelSteps = 0;
-    sMouseCursorDeltaX = 0.0f;
-    sMouseCursorDeltaY = 0.0f;
-    if (captureAllowed()) sMouseRelativeMode = true;
-    applyMouseCapture();
-    if (sMouseRelativeMode && captureAllowed()) {
-        // Consume any pending relative mouse motion on capture start
-        int dummyX, dummyY;
-        SDL_GetRelativeMouseState(&dummyX, &dummyY);
-    }
-}
-
 void pc_window_set_settings_menu_open(bool open) {
     sSettingsMenuOpen = open;
     
@@ -2096,6 +2327,7 @@ void pc_window_set_settings_menu_open(bool open) {
     sMouseCursorDeltaX = 0.0f;
     sMouseCursorDeltaY = 0.0f;
     
+    pc_hand_cursor_reset();
     if (open) {
         sMouseRelativeMode = false;
         SDL_SetRelativeMouseMode(SDL_FALSE);
@@ -2108,6 +2340,36 @@ void pc_window_set_settings_menu_open(bool open) {
     
     // Consume any pending relative mouse motion after menu closes
     if (sMouseRelativeMode) {
+        int dummyX, dummyY;
+        SDL_GetRelativeMouseState(&dummyX, &dummyY);
+    }
+}
+
+// GameCoreSection calls this on stage init and exit. Off-level the pointer stays free, and
+// day-end screens take it back to a free pointer too.
+void pc_window_set_gameplay_active(bool active) {
+    sGameplayActive = active;
+    pc_hand_cursor_reset();
+    sMouseWheelSteps = 0;
+    sMouseCursorDeltaX = 0.0f;
+    sMouseCursorDeltaY = 0.0f;
+    if (captureAllowed()) sMouseRelativeMode = true;
+    applyMouseCapture();
+    if (sMouseRelativeMode && captureAllowed()) {
+        // Consume any pending relative mouse motion on capture start
+        int dummyX, dummyY;
+        SDL_GetRelativeMouseState(&dummyX, &dummyY);
+    }
+}
+
+// A pause or in-game menu over a level releases the pointer while it shows, and takes it
+// back when it closes.
+void pc_window_set_menu_overlay(bool open) {
+    sMenuOverlayOpen = open;
+    sMouseCursorDeltaX = 0.0f;
+    sMouseCursorDeltaY = 0.0f;
+    applyMouseCapture();
+    if (sMouseRelativeMode && captureAllowed()) {
         int dummyX, dummyY;
         SDL_GetRelativeMouseState(&dummyX, &dummyY);
     }

@@ -6,7 +6,7 @@ name: CI
 on:
   pull_request:
   push:
-    branches: [kyle-develop]
+    branches: [main, kyle-develop]
   workflow_dispatch:
 
 permissions:
@@ -115,6 +115,7 @@ jobs:
             -DPIKMIN_NATIVE_JAUDIO=OFF -DPIKMIN_BUILD_SCENARIOS=ON \
             $PLATFORM_FLAGS
 
+      # -k 0: report every compile error in one run, not only the first.
       - name: Build Pikmin 1
         id: build-p1
         run: cmake --build build/pikmin1 --parallel -- -k 0

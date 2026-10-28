@@ -27,6 +27,7 @@ static bool pcVsyncLocked(int frameClamp)
 }
 #include "netplay/pc_input_log.h"
 #include "netplay/pc_state_hash.h"
+#include "quicksave/pc_quicksave.h"
 #endif
 
 #include "bigFont.h"
@@ -449,6 +450,7 @@ void System::run(BaseApp* app)
 			if (pc_netplay_deterministic()) pc_netplay_det_profile_note_tick();
 			pc_input_log_tick_end();
 			pc_state_hash_tick_end(); // netplay harness: hash the sim after this tick
+			pc_quicksave_tick_end();  // quick save: a save, or a load's handoff, between ticks
 #if PIKI_SCENARIOS
 			pc_scenario_on_tick_end();
 #endif

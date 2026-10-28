@@ -318,6 +318,9 @@ set(PC_PORT_SOURCES
     pc_port/pc_menu_pad.cpp
     pc_port/pc_menu_mode.cpp
     pc_port/pc_menu_repeat.cpp
+    pc_port/pc_menu_click.cpp
+    pc_port/pc_button_prompt.cpp
+    pc_port/pc_hand_cursor.cpp
     pc_port/pc_photo_mode.cpp
     pc_port/pc_record.cpp
     pc_port/pc_permadeath.cpp
@@ -386,6 +389,12 @@ set(PC_PORT_SOURCES
     pc_port/netplay/pc_netplay_navilead.cpp
     # Co-op switch and direct boot (--coop-direct, netplay).
     pc_port/netplay/pc_coop_switch.cpp
+    # Quick Save (experimental). Inert unless the setting is on.
+    pc_port/quicksave/pc_quicksave.cpp
+    pc_port/quicksave/pc_quicksave_carry.cpp
+    pc_port/quicksave/pc_quicksave_file.cpp
+    pc_port/quicksave/pc_quicksave_io.cpp
+    pc_port/quicksave/pc_quicksave_progress.cpp
     pc_port/audio/pc_audio.cpp
     pc_port/audio/pc_envelope.cpp
     pc_port/audio/pc_jam.cpp
@@ -396,6 +405,8 @@ set(PC_PORT_SOURCES
     pc_port/audio/pc_dsp_host.cpp
     pc_port/settings/pc_settings.cpp
     pc_port/settings/pc_settings_p2d.cpp
+    pc_port/settings/pc_prompt_pointer.cpp
+    pc_port/settings/pc_sim_settings_text.cpp
     src/jaudio/pikiseq.c
     pc_port/dolphin_stubs/os_stubs.cpp
     pc_port/dolphin_stubs/pc_host_readable.cpp
@@ -469,7 +480,14 @@ set(SYSDOLPHIN_SOURCES
     src/sysDolphin/sysNew.cpp
     src/sysDolphin/system.cpp
     src/sysDolphin/texture.cpp
+    # Octagon, dead zone and trigger range. The rest of src/pad stays out;
+    # pad_stubs.cpp still owns the hardware calls.
+    src/pad/Padclamp.c
 )
+# Before the library target, so this translation unit is C++ in every target
+# that links it. pad.h declares PADClamp extern "C"; compiling the decomp as
+# C++ keeps that unmangled symbol.
+set_source_files_properties(src/pad/Padclamp.c PROPERTIES LANGUAGE CXX)
 
 # JAudio uses NextOS's host boundary, never the GameCube DSP boot/mailboxes.
 set(JAUDIO_TARGET_SOURCES "")
@@ -557,7 +575,7 @@ file(GLOB PLUGPIKI_YAMASHITA_SOURCES "src/plugPikiYamashita/*.cpp")
 #   src/os/          — Dolphin OS implementation (replaced by os_stubs)
 #   src/gx/          — GX hardware driver (replaced by gx_stubs)
 #   src/dvd/         — DVD hardware driver (replaced by dvd_stubs)
-#   src/pad/         — PAD hardware driver (replaced by pad_stubs)
+#   src/pad/         — PAD hardware driver (replaced by pad_stubs), except Padclamp.c
 #   src/vi/          — VI hardware driver (replaced by vi_stubs)
 #   src/card/        — Memory card driver (replaced by card_stubs)
 #   src/dsp/         — DSP driver (replaced by audio_stubs)
@@ -1292,6 +1310,22 @@ if(PIKMIN_BUILD_TESTS)
     target_compile_options(pc_menu_pad_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
     add_test(NAME pc_menu_pad_test COMMAND pc_menu_pad_test)
 
+    # Cutscene skip replays its keys by frame (header only)
+    add_executable(pc_cine_skip_order_test pc_port/pc_cine_skip_order_test.cpp)
+    target_include_directories(pc_cine_skip_order_test PRIVATE pc_port)
+    target_compile_options(pc_cine_skip_order_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME pc_cine_skip_order_test COMMAND pc_cine_skip_order_test)
+    # Text window presses through the menu translator (no game needed)
+    add_executable(pc_text_window_press_test pc_port/pc_text_window_press_test.cpp pc_port/pc_menu_pad.cpp)
+    target_include_directories(pc_text_window_press_test PRIVATE ${SDL2_INCLUDE_DIRS} pc_port)
+    target_compile_options(pc_text_window_press_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME pc_text_window_press_test COMMAND pc_text_window_press_test)
+    # GameCube PADClamp (no window). Links the decomp translation unit.
+    add_executable(pc_pad_clamp_test pc_port/pc_pad_clamp_test.cpp src/pad/Padclamp.c)
+    target_include_directories(pc_pad_clamp_test PRIVATE include pc_port)
+    target_compile_options(pc_pad_clamp_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME pc_pad_clamp_test COMMAND pc_pad_clamp_test)
+
     # Permadeath save block (no game needed)
     add_executable(pc_permadeath_test pc_port/pc_permadeath_test.cpp pc_port/pc_permadeath.cpp src/sysCommon/stream.cpp src/sysCommon/string.cpp)
     target_include_directories(pc_permadeath_test PRIVATE pc_port include)
@@ -1520,6 +1554,64 @@ if(PIKMIN_BUILD_TESTS)
     target_compile_options(pc_host_readable_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
     add_test(NAME pc_host_readable_test COMMAND pc_host_readable_test)
 
+    # Sprout landing policy (no map or window)
+    add_executable(pc_seed_landing_test pc_port/pc_seed_landing_test.cpp)
+    target_include_directories(pc_seed_landing_test PRIVATE pc_port)
+    target_compile_options(pc_seed_landing_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME pc_seed_landing_test COMMAND pc_seed_landing_test)
+
+    # Title screen and main menu clicks (no window, no disc)
+    add_executable(pc_menu_click_test pc_port/pc_menu_click_test.cpp pc_port/pc_menu_click.cpp)
+    target_include_directories(pc_menu_click_test PRIVATE pc_port)
+    target_compile_options(pc_menu_click_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME pc_menu_click_test COMMAND pc_menu_click_test)
+
+    add_executable(pc_file_select_pointer_test pc_port/pc_file_select_pointer_test.cpp pc_port/pc_menu_click.cpp)
+    target_include_directories(pc_file_select_pointer_test PRIVATE pc_port)
+    target_compile_options(pc_file_select_pointer_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME pc_file_select_pointer_test COMMAND pc_file_select_pointer_test)
+
+    # Hand cursor over pointer menu targets: hover state to cursor shape, with a stub setter
+    add_executable(pc_hand_cursor_test pc_port/pc_hand_cursor_test.cpp pc_port/pc_hand_cursor.cpp
+                   pc_port/pc_menu_click.cpp)
+    target_include_directories(pc_hand_cursor_test PRIVATE pc_port)
+    target_compile_options(pc_hand_cursor_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME pc_hand_cursor_test COMMAND pc_hand_cursor_test)
+
+    # New Game and Captain prompt mouse targets and their mapping (no window, no disc)
+    add_executable(pc_prompt_pointer_test pc_port/pc_prompt_pointer_test.cpp
+                   pc_port/settings/pc_prompt_pointer.cpp pc_port/pc_menu_click.cpp)
+    target_include_directories(pc_prompt_pointer_test PRIVATE pc_port)
+    target_compile_options(pc_prompt_pointer_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME pc_prompt_pointer_test COMMAND pc_prompt_pointer_test)
+
+    # Drawn button prompts (Y Ship's Log, A Read Diary) as click targets: rows, clicks, hover, log
+    add_executable(pc_button_prompt_test pc_port/pc_button_prompt_test.cpp pc_port/pc_button_prompt.cpp
+                   pc_port/pc_menu_click.cpp)
+    target_include_directories(pc_button_prompt_test PRIVATE pc_port)
+    target_compile_options(pc_button_prompt_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME pc_button_prompt_test COMMAND pc_button_prompt_test)
+    # Throw grab: an early release waits for KEY_Action0 (no window needed).
+    add_executable(pc_throw_release_test pc_port/pc_throw_release_test.cpp)
+    target_include_directories(pc_throw_release_test PRIVATE pc_port)
+    target_compile_options(pc_throw_release_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME pc_throw_release_test COMMAND pc_throw_release_test)
+    # Day-1 voyage log after Skip tutorial (no disc or save)
+    add_executable(pc_voyage_log_test
+        pc_port/pc_voyage_log_test.cpp
+        src/plugPikiKando/resultFlag.cpp)
+    target_compile_options(pc_voyage_log_test BEFORE PRIVATE
+        -I${CMAKE_CURRENT_SOURCE_DIR}/pc_port/voyage_log_stubs)
+    target_include_directories(pc_voyage_log_test BEFORE PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/pc_port/voyage_log_stubs)
+    target_include_directories(pc_voyage_log_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/include/Dolphin
+        ${CMAKE_CURRENT_SOURCE_DIR}/include/Dolphin/OS
+        ${PC_PORT_DIR})
+    target_compile_options(pc_voyage_log_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME pc_voyage_log_test COMMAND pc_voyage_log_test)
+
     # Host software DSP test (not linked into main game)
     add_executable(pc_dsp_host_test
         pc_port/audio/pc_dsp_host_test.cpp
@@ -1690,14 +1782,64 @@ if(PIKMIN_BUILD_TESTS)
     target_compile_options(pc_coop_switch_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
     add_test(NAME pc_coop_switch_test COMMAND pc_coop_switch_test)
 
-    # PKNI input-file format, yaw quantisation and the per-tick yaw slots.
+    # PKNI input-file format, yaw quantisation and the per-tick yaw and local slots.
     add_executable(pc_input_log_test
         pc_port/netplay/pc_input_log_test.cpp
-        pc_port/netplay/pc_input_log.cpp)
+        pc_port/netplay/pc_input_log.cpp
+        pc_port/netplay/pc_netplay_det.cpp
+        pc_port/netplay/pc_sim_rng.cpp)
     target_compile_options(pc_input_log_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
     add_test(NAME pc_input_log_test COMMAND pc_input_log_test)
     # A stray switch in the caller's environment would load a real file.
-    set_tests_properties(pc_input_log_test PROPERTIES ENVIRONMENT "PIKMIN_INPUT_RECORD=;PIKMIN_INPUT_REPLAY=")
+    set_tests_properties(pc_input_log_test PROPERTIES ENVIRONMENT
+        "PIKMIN_INPUT_RECORD=;PIKMIN_INPUT_REPLAY=;PIKMIN_NETPLAY_DETERMINISTIC=")
+
+    # Record/replay through pc_input_log_tick, one process per mode (the
+    # switches are read once per process); the replay needs the record's file.
+    add_executable(pc_input_log_runtime_test
+        pc_port/netplay/pc_input_log_runtime_test.cpp
+        pc_port/netplay/pc_input_log.cpp
+        pc_port/netplay/pc_netplay_det.cpp
+        pc_port/netplay/pc_sim_rng.cpp)
+    target_compile_options(pc_input_log_runtime_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    set(PKNI_TEST_DIR ${CMAKE_CURRENT_BINARY_DIR})
+    add_test(NAME pc_input_log_v4_record
+        COMMAND pc_input_log_runtime_test record ${PKNI_TEST_DIR}/pkni_v4_test.pkni)
+    add_test(NAME pc_input_log_v4_replay
+        COMMAND pc_input_log_runtime_test replay ${PKNI_TEST_DIR}/pkni_v4_test.pkni ${PKNI_TEST_DIR}/pkni_v4_rerecord.pkni)
+    add_test(NAME pc_input_log_v2_nondet
+        COMMAND pc_input_log_runtime_test record-nondet ${PKNI_TEST_DIR}/pkni_v2_test.pkni)
+    add_test(NAME pc_input_log_v3_replay
+        COMMAND pc_input_log_runtime_test replay-v3 ${PKNI_TEST_DIR}/pkni_v3_test.pkni ${PKNI_TEST_DIR}/pkni_v3_rerecord.pkni)
+    set_tests_properties(pc_input_log_v4_record PROPERTIES FIXTURES_SETUP pkni_v4_file)
+    set_tests_properties(pc_input_log_v4_replay PROPERTIES FIXTURES_REQUIRED pkni_v4_file)
+    add_test(NAME pc_input_log_memory_replay COMMAND pc_input_log_runtime_test memory)
+    set_tests_properties(pc_input_log_v4_record pc_input_log_v4_replay pc_input_log_v2_nondet pc_input_log_v3_replay
+        pc_input_log_memory_replay
+        PROPERTIES ENVIRONMENT "PIKMIN_INPUT_RECORD=;PIKMIN_INPUT_REPLAY=;PIKMIN_NETPLAY_DETERMINISTIC=")
+
+    # Canonical text and hash of the sim-affecting settings (recording header).
+    add_executable(pc_sim_settings_text_test
+        pc_port/settings/pc_sim_settings_text_test.cpp
+        pc_port/settings/pc_sim_settings_text.cpp)
+    target_compile_options(pc_sim_settings_text_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME pc_sim_settings_text_test COMMAND pc_sim_settings_text_test)
+
+    # Quick save file: format, CRC, truncation, header checks and atomic writes.
+    add_executable(pc_quicksave_file_test
+        pc_port/quicksave/pc_quicksave_file_test.cpp
+        pc_port/quicksave/pc_quicksave_file.cpp
+        pc_port/quicksave/pc_quicksave_io.cpp)
+    target_compile_options(pc_quicksave_file_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME pc_quicksave_file_test COMMAND pc_quicksave_file_test)
+
+    # Quick save helpers: the day-start precision block and the load progress.
+    add_executable(pc_quicksave_helpers_test
+        pc_port/quicksave/pc_quicksave_helpers_test.cpp
+        pc_port/quicksave/pc_quicksave_carry.cpp
+        pc_port/quicksave/pc_quicksave_progress.cpp)
+    target_compile_options(pc_quicksave_helpers_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME pc_quicksave_helpers_test COMMAND pc_quicksave_helpers_test)
 endif()
 
 # Netplay-only checks. The libm test compares against the platform libm

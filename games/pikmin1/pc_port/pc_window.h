@@ -66,6 +66,9 @@ enum {
     PC_KEY_ACT_BOMB          = 24,
     // Modo Speedrun: mantener 1 s reinicia la run (pc_speedrun.cpp).
     PC_KEY_ACT_SPEEDRUN_RESET = 25,
+    // Quick Save (experimental, pc_quicksave.h): save the day here, load it back.
+    PC_KEY_ACT_QUICKSAVE = 26,
+    PC_KEY_ACT_QUICKLOAD = 27,
     PC_KEY_ACT_COUNT
 };
 void pc_window_set_key_binding(int action, SDL_Scancode scancode);
@@ -86,8 +89,6 @@ static inline bool pc_bind_is_valid(int binding) { return binding >= 0 && bindin
 // Whether the swarm binding (keyboard, mouse or gamepad) is held right now.
 bool pc_window_swarm_held(void);
 bool pc_window_swarm_held_p2(void);
-/// D-pad Down on that player's pad: the pad's swarm button, so it must not
-/// also trigger the original D-pad Down action (Olimar lying down).
 /// Eje vertical del stick derecho con Free Camera activo (zoom del radar).
 float pc_window_free_camera_sub_y(void);
 /// Flanco de subida del Lock-On de ese jugador (0/1): true una vez por
@@ -170,6 +171,11 @@ void pc_window_discard_button_presses(void);
 // prompts match the F1 bindings the player is actually using.
 bool pc_window_last_input_is_gamepad(void);
 
+// Called by a text window on each frame it reads the pad. While it keeps
+// calling, a Shift binding for B reaches it as B in menu mode, so Shift shows
+// the whole page and turns it again. See pc_menu_pad_text_window_live().
+void pc_window_note_text_window_input(void);
+
 // Writes the F1 name for a message-box button tag (a/b/c/x/y/z/l/r) into buf.
 // Keyboard vs gamepad follows pc_window_last_input_is_gamepad(). In mouse
 // cursor mode, A/B/Z also list the matching mouse button.
@@ -209,6 +215,7 @@ void pc_window_set_mouse_sensitivity(float sensitivity);
 float pc_window_get_mouse_sensitivity(void);
 void pc_window_set_settings_menu_open(bool open);
 void pc_window_set_gameplay_active(bool active);  // pointer is captured only while a level runs
+void pc_window_set_menu_overlay(bool open);       // a pause or in-game menu releases the pointer
 
 // Virtual cursor (mouse-controlled cursor input)
 extern "C" s8 pc_window_get_virtual_cursor_x(void);

@@ -22,6 +22,8 @@
 #include "pc_file_dialog.h"
 #include "settings/pc_settings_p2d.h"
 #include "pc_menu_repeat.h"
+#include "pc_menu_click.h"
+#include "settings/pc_prompt_pointer.h"
 #ifdef __ANDROID__
 #include "android/pc_texpack_android.h"
 #include "android/pc_save_android.h"
@@ -54,6 +56,12 @@
 #include "mods/pc_campaign.h"
 #include "nectar_mapcore/pack.h"
 #include "netplay/pc_netplay_det.h"
+#include "quicksave/pc_quicksave.h"
+// Quick Load confirm (defined at the end of this file).
+int quickLoadRow();
+void armQuickLoad();
+#include "quicksave/pc_quicksave_progress.h"
+#include "settings/pc_sim_settings_text.h"
 #include "pc_achievements.h"
 #include "pc_speedrun.h"
 #include "pc_livesplit.h"
@@ -228,6 +236,11 @@ struct PcConfig {
     // Cámara cooperativa dinámica: una sola cámara con los Olimar cerca y
     // división fluida al alejarse. 0 = pantalla partida fija.
     int coopMergeCamera = 0;
+    // Quick Save (experimental): deterministic mode from launch and a
+    // recording of each day, so a day can be saved mid-way and loaded again
+    // (pc_quicksave.h). The Data page has the row. Read once at launch; a
+    // change takes effect at the next launch.
+    int quickSave = 0;
     // Colour grading. Neutral by default: the port should look like the game
     // until someone asks otherwise.
     int antialiasing = 0;   // 0 off, 1 FXAA
@@ -330,6 +343,7 @@ struct PcConfig {
         coopSplit = 0;
 #endif
         coopMergeCamera = 0;
+        quickSave = 0;
         antialiasing  = 0;
         fog           = 1;
         perPixelLighting = 0;
@@ -535,6 +549,11 @@ bool sWaitingForButton = false;
 // de la columna izquierda (cuenta también las cabeceras).
 int sOpenGroup = -1;
 int sGroupSel = 0;
+// Quick Load confirm: F7 (or the first A on the row) arms Data > Quick Load
+// now with the text of what it replaces; the next A on that row loads.
+bool sQuickLoadOpenRequested = false;
+bool sQuickLoadArmed         = false;
+char sQuickLoadConfirm[400]  = {};
 int sF1Scroll = 0;
 // Mientras se sondean las opciones de una fila (columna derecha) los cambios
 // solo tocan sPending: nada se aplica al vídeo ni al render.
@@ -987,6 +1006,7 @@ void closeMenu() {
     sWaitingForButton = false;
     sCaptureWaitRelease = false;
     sOpenGroup = -1;
+    sQuickLoadArmed = false;
     sMenuOpen = false;
     pc_window_set_settings_menu_open(false);
 }
@@ -1089,10 +1109,11 @@ void pc_settings_set_language(unsigned char language) {
 
 namespace {
 
-#if PIKI_NETPLAY_BUILD
-// Netplay: every setting that changes the simulation. Both peers hash these
-// in the handshake and they are locked for the session. Window, graphics,
-// audio, bindings, camera feel and other local-only rows are not here.
+// Every setting that changes the simulation. A netplay session hashes them in
+// the handshake and locks them for the session (netplay builds); a
+// deterministic recording locks them for the recorded day (below). Window,
+// graphics, audio, bindings, camera feel and other local-only rows are not
+// here: what they change reaches the sim, if at all, as recorded input.
 #define PC_NETPLAY_SESSION_FIELDS(X)                                                          \
     X(fpsMode) X(chainActions) X(holdToPluck) X(betterPathfinding) X(bluesOnlyWater)         \
     X(idleCounter) X(naviHealthPct) X(tekiHealthPct) X(infiniteDay) X(freeCamera)            \
@@ -1104,6 +1125,44 @@ namespace {
     X(vsPellets) X(lockOn) X(charge) X(throwWhileMoving) X(firstPerson) X(pikiLimit)         \
     X(dayMinutes) X(coopSplit) X(coopMergeCamera) X(debugKeys) X(gyroEnabled)
 
+// Deterministic recording (quick save): the settings a recorded day depends
+// on, fixed for the day and written into the recording's header text
+// (pc_settings_sim_config_text). The session list, plus the wheel's job
+// (colour or zoom). In deterministic mode the sim reads the wheel's notches
+// from the recorded input whatever the job, so this one is fixed for
+// clarity, not for the replay's sake.
+#define PC_SIM_RECORD_FIELDS(X) PC_NETPLAY_SESSION_FIELDS(X) X(mouseWheelAction)
+
+// From the start of a day in deterministic mode until the game leaves it,
+// the sim settings keep the values the day started with, so the day's input
+// replays against the same settings: the F1 rows that change them are greyed
+// (disabledReason) and any other change is undone when the settings save.
+// A netplay session has its own lock and never arms this one.
+bool sSimLockArmed = false;
+PcConfig sSimLockConfig;
+
+bool simLockStillInDay() {
+    return gameflow.mCurrGameSectionID == SECTION_OnePlayer
+        && gameflow.mNextOnePlayerSectionID == ONEPLAYER_NewPikiGame;
+}
+
+bool simLocked() {
+    if (!sSimLockArmed) return false;
+    if (simLockStillInDay()) return true;
+    sSimLockArmed = false;
+    printf("[PC Settings] deterministic recording: day over, sim-relevant settings unlocked\n");
+    fflush(stdout);
+    return false;
+}
+
+void simLockRelock() {
+    if (!simLocked()) return;
+#define PC_SIM_RELOCK(f) sConfig.f = sSimLockConfig.f; sPending.f = sSimLockConfig.f;
+    PC_SIM_RECORD_FIELDS(PC_SIM_RELOCK)
+#undef PC_SIM_RELOCK
+}
+
+#if PIKI_NETPLAY_BUILD
 bool sNetplaySessionLocked = false;
 PcConfig sNetplaySessionConfig;
 // The joiner of a launcher session adopted the host's values: the file keeps
@@ -1178,6 +1237,7 @@ static int sScenarioInfiniteDay = 0;
 #endif
 
 void saveConfig() {
+    simLockRelock();
 #if PIKI_SCENARIOS
     if (sScenarioSettings) return;
 #endif
@@ -1265,6 +1325,7 @@ void saveConfig() {
     out << "coopPlayers = " << sConfig.coopPlayers << "\n";
     out << "coopSplit = " << sConfig.coopSplit << "\n";
     out << "coopMergeCamera = " << sConfig.coopMergeCamera << "\n";
+    out << "quickSave = " << sConfig.quickSave << "\n";
     out << "antialiasing = " << sConfig.antialiasing << "\n";
     out << "fog = " << sConfig.fog << "\n";
     out << "perPixelLighting = " << sConfig.perPixelLighting << "\n";
@@ -1591,6 +1652,9 @@ void loadConfig() {
         else if (key == "coopMergeCamera") {
             sConfig.coopMergeCamera = atoi(val.c_str()) ? 1 : 0;
         }
+        else if (key == "quickSave") {
+            sConfig.quickSave = atoi(val.c_str()) ? 1 : 0;
+        }
         else if (key == "debugKeys") {
             sConfig.debugKeys = atoi(val.c_str()) ? 1 : 0;
         }
@@ -1760,29 +1824,18 @@ bool menuAcceptClick() {
     return (sMenuMouseEdge & SDL_BUTTON(SDL_BUTTON_LEFT)) != 0;
 }
 
-// Window coordinates, 0-1. Menus that hit-test cards use this instead of a
-// second take of the click.
-bool menuMouseNorm(float* nx, float* ny) {
-    int mx = 0, my = 0;
-    SDL_GetMouseState(&mx, &my);
-    SDL_Window* win = SDL_GetMouseFocus();
-    int ww = 0, wh = 0;
-    if (!win) return false;
-    SDL_GetWindowSize(win, &ww, &wh);
-    if (ww <= 0 || wh <= 0) return false;
-    *nx = float(mx) / float(ww);
-    *ny = float(my) / float(wh);
-    return true;
-}
-
 // Accept: Enter, numpad Enter, Space, left click, and a non-mouse A binding.
 // Cancel: Escape, Backspace, right click, and a B binding that is not Shift.
 // A text field keeps Backspace for delete and does not call menuCancelKey.
-bool menuOkKey() {
+// The accept keys without the left click, for a panel whose rows take the click themselves.
+bool menuOkKeyNoClick() {
     return keyWentDown(SDL_SCANCODE_RETURN) || keyWentDown(SDL_SCANCODE_KP_ENTER)
-        || keyWentDown(SDL_SCANCODE_SPACE) || menuAcceptClick()
+        || keyWentDown(SDL_SCANCODE_SPACE)
         || menuBindingWentDown(pc_window_get_key_binding(PC_KEY_ACT_A))
         || menuBindingWentDown(pc_window_get_key_binding2(PC_KEY_ACT_A));
+}
+bool menuOkKey() {
+    return menuOkKeyNoClick() || menuAcceptClick();
 }
 static bool menuCancelBinding(int bind) {
     if (bind == SDL_SCANCODE_LSHIFT || bind == SDL_SCANCODE_RSHIFT) return false;
@@ -2161,6 +2214,19 @@ void pollMenuInput() {
         openMenu();
         return;
     }
+    if (sQuickLoadOpenRequested) {
+        sQuickLoadOpenRequested = false;
+        if (!sMenuOpen) {
+            sMenuPlayer = 0;
+            openMenu();
+        }
+        sOpenGroup = PC_SET_GROUP_DATA;
+        sGroupSel  = quickLoadRow();
+        armQuickLoad();
+        return;
+    }
+    // Moving off the armed row (or to another page) takes the confirm back.
+    if (sQuickLoadArmed && (sOpenGroup != PC_SET_GROUP_DATA || sGroupSel != quickLoadRow())) sQuickLoadArmed = false;
 
     if (!sMenuOpen) {
         // No arrastrar a un menú futuro un toque hecho durante el juego.
@@ -3470,10 +3536,22 @@ bool drawGlassOption(int boxX, int boxY, int boxW, int boxH, const char* label, 
     return true;
 }
 
+// The button icons of the help line drawn last, and where each one starts. The VS lobby's
+// "A: play" hint takes a click over its span, so it reads these after the line is drawn.
+struct HelpLineIcon {
+    char letter;
+    int x;
+};
+constexpr int kHelpLineIcons = 8;
+HelpLineIcon sHelpIcons[kHelpLineIcons];
+int sHelpIconCount = 0;
+int sHelpLineY = 0, sHelpLineH = 0, sHelpLineEnd = 0;
+
 // Línea de ayuda centrada en cx. Con el marco P2D, cada letra de botón suelta
 // (A, B, X, Y, Z seguida de espacio, "/" o ":") se dibuja con el icono del
 // botón del juego; el resto del texto no cambia.
 void drawHelpLine(int cx, int y, const char* text, Colour c, int maxWidth = 570) {
+    sHelpIconCount = 0;
     if (!pc_settings_p2d_active()) {
         drawTextOutline(cx - menuTextWidth(text) / 2, y, "%s", c, Colour(8, 12, 28, 255), text);
         return;
@@ -3522,6 +3600,7 @@ void drawHelpLine(int cx, int y, const char* text, Colour c, int maxWidth = 570)
             }
             n = 0;
             if (*p == '\0') break;
+            if (sHelpIconCount < kHelpLineIcons) sHelpIcons[sHelpIconCount++] = HelpLineIcon{ *p, x };
             if (!pc_settings_p2d_button(x, y + (fh - icon) / 2 - 1, icon, *p)) {
                 const char letter[2] = { *p, '\0' };
                 pc_settings_p2d_text(x + (icon - pc_settings_p2d_text_width(letter, fw)) / 2, y, letter, c, fw, fh);
@@ -3531,6 +3610,24 @@ void drawHelpLine(int cx, int y, const char* text, Colour c, int maxWidth = 570)
         }
         if (n < int(sizeof(chunk)) - 1) chunk[n++] = *p;
     }
+    sHelpLineY = y;
+    sHelpLineH = fh;
+    sHelpLineEnd = x;
+}
+
+// Span of the button icon for letter in the help line drawn last: from its icon to the next
+// icon, or to the end of the line. False when that line drew no such icon.
+bool helpLineIconSpan(char letter, int* x0, int* x1, int* y0, int* y1)
+{
+    for (int i = 0; i < sHelpIconCount; i++) {
+        if (sHelpIcons[i].letter != letter) continue;
+        *x0 = sHelpIcons[i].x;
+        *x1 = i + 1 < sHelpIconCount ? sHelpIcons[i + 1].x : sHelpLineEnd;
+        *y0 = sHelpLineY;
+        *y1 = sHelpLineY + sHelpLineH;
+        return true;
+    }
+    return false;
 }
 
 void drawSubmenuSurface(DGXGraphics* gfx, int x, int y, int w, int h,
@@ -5007,15 +5104,16 @@ namespace {
 // Geometría compartida por el dibujo y los toques: tres filas de dos
 // opciones (Difficulty / Game mode / Skip tutorial) y, debajo, el botón Start.
 // Las flechas mueven el cursor, A elige la opción bajo él y solo Start empieza.
-const int kNgPanelW = 620;
-const int kNgPanelH = 420;
-const int kNgBoxW   = 230;
-const int kNgBoxH   = 44;
-const int kNgRowCount = 3;
+// The numbers live in pc_prompt_pointer so the mouse hit test uses the same boxes.
+const int kNgPanelW = kPcNewGamePanelW;
+const int kNgPanelH = kPcNewGamePanelH;
+const int kNgBoxW   = kPcNewGameBoxW;
+const int kNgBoxH   = kPcNewGameBoxH;
+const int kNgRowCount = kPcNewGameRows;
 const int kNgStartRow = kNgRowCount; // fila del botón Start
-int ngRowY(int panelY, int row) { return panelY + 72 + row * 70; }
-int ngStartX(int panelX) { return panelX + kNgPanelW / 2 - kNgBoxW / 2; }
-int ngBoxX(int panelX, int i) { return panelX + 40 + i * (kNgBoxW + 40); }
+int ngRowY(int panelY, int row) { return pc_newgame_row_y(panelY, row); }
+int ngStartX(int panelX) { return pc_newgame_start_x(panelX); }
+int ngBoxX(int panelX, int i) { return pc_newgame_box_x(panelX, i); }
 
 // En una partida Randomizer la fila 2 (Skip tutorial) queda fija en Yes: el
 // tutorial depende de generadores y una pieza que el barajado cambia.
@@ -5035,6 +5133,47 @@ void ngSetRowValue(int row, int v) {
     else               sNewGamePromptSkipTutorial = v != 0;
 }
 
+// Mouse on the New Game panel. Motion over an option or Start moves the cursor there. A click
+// on an option chooses it and returns 1; a click on Start returns 2. Empty space and the
+// locked Randomizer row do nothing. The claim keeps the click from also being A.
+int ngPointer() {
+    pc_menu_click_claim_pointer_menu();
+    DGXGraphics* gfx = (gsys && gsys->mDGXGfx) ? static_cast<DGXGraphics*>(gsys->mDGXGfx) : nullptr;
+    if (!gfx) return 0;
+    const int screenW = pc_gfx_menu_wide() ? pc_gfx_menu_virt_width() : gfx->mScreenWidth;
+    const int screenH = gfx->mScreenHeight;
+    PcMenuClickRect rects[PC_NEWGAME_PTR_COUNT];
+    pc_newgame_pointer_rects(screenW, screenH, rects);
+    int active[PC_NEWGAME_PTR_COUNT];
+    for (int i = 0; i < PC_NEWGAME_PTR_COUNT; ++i) active[i] = (i < PC_NEWGAME_PTR_START && ngSeedRow(i / 2)) ? 0 : 1;
+    float x = 0.0f, y = 0.0f;
+    if (pc_gfx_menu_graph_point(false, &x, &y)) {
+        const PcMenuClickResult hover
+            = pc_menu_click_hover(PC_MENU_CLICK_MAIN, x, y, rects, active, PC_NEWGAME_PTR_COUNT, kPcMenuClickMargin);
+        if (hover.index == PC_NEWGAME_PTR_START) {
+            sNewGamePromptRow = kNgStartRow;
+        } else if (hover.index >= 0) {
+            sNewGamePromptRow = hover.index / 2;
+            sNewGamePromptCol = hover.index % 2;
+        }
+    }
+    if (pc_gfx_menu_graph_point(true, &x, &y)) {
+        const PcMenuClickResult hit
+            = pc_menu_click_resolve(PC_MENU_CLICK_MAIN, x, y, rects, active, PC_NEWGAME_PTR_COUNT, kPcMenuClickMargin);
+        if (hit.action == PC_MENU_CLICK_ACTIVATE) {
+            if (hit.index == PC_NEWGAME_PTR_START) {
+                sNewGamePromptRow = kNgStartRow;
+                return 2;
+            }
+            sNewGamePromptRow = hit.index / 2;
+            sNewGamePromptCol = hit.index % 2;
+            ngSetRowValue(sNewGamePromptRow, sNewGamePromptCol);
+            return 1;
+        }
+    }
+    return 0;
+}
+
 void pcNewGamePromptInput() {
     if (!sNewGamePromptOpen) return;
 
@@ -5042,8 +5181,10 @@ void pcNewGamePromptInput() {
     bool right  = keyWentDown(SDL_SCANCODE_RIGHT) || keyWentDown(SDL_SCANCODE_D);
     bool up     = keyWentDown(SDL_SCANCODE_UP)    || keyWentDown(SDL_SCANCODE_W);
     bool down   = keyWentDown(SDL_SCANCODE_DOWN)  || keyWentDown(SDL_SCANCODE_S);
-    bool accept = menuOkKey();
+    // The boxes hit-test the left click (ngPointer), so a click is not also A on the cursor.
+    bool accept = menuOkKeyNoClick();
     bool cancel = menuCancelKey();
+    cancel |= pc_menu_click_take_back(); // right click: back
 
     left |= (sTouchFrameButtons & PAD_BUTTON_LEFT) != 0;
     right |= (sTouchFrameButtons & PAD_BUTTON_RIGHT) != 0;
@@ -5091,6 +5232,7 @@ void pcNewGamePromptInput() {
         if (promptPadA(ctl))  accept = true;
         if (promptPadB(ctl))  cancel = true;
     }
+    if (ngPointer() == 2) accept = true; // Start was clicked; an option click already chose it
 
     const int rows = kNgRowCount + 1; // opciones + Start
     if (up || down) {
@@ -5221,6 +5363,7 @@ void pc_newgame_prompt_draw(void) {
 
     const char* help = "Arrows: move    A / Enter: select    B / Esc: back";
     drawHelpLine(panelX + panelW / 2, panelY + 382, help, Colour(150, 165, 195, 255));
+    pc_gfx_note_menu_tap_space(screenW, screenH); // ngPointer maps the mouse through this projection
 }
 
 
@@ -5460,15 +5603,15 @@ const char* captainArt(int captain) {
 // Si falta el PNG de un Pikmin, sale de la textura del juego piki3 (116x64):
 // rojo, amarillo y azul tumbados con su hoja. Columnas de cada uno.
 const int kCaptainPikiCol[PC_CAPTAIN_COUNT][2] = { { 0, 0 }, { 0, 0 }, { 0, 38 }, { 34, 78 }, { 76, 116 } };
-constexpr int kCaptainBoxW = 104, kCaptainBoxGap = 9;
+constexpr int kCaptainBoxW = kPcCaptainBoxW, kCaptainBoxGap = kPcCaptainBoxGap;
 // Filas: 0 los de Pikmin 1; 1 los de Pikmin 2 instalados y el Puffmin, que
 // siempre está; 2 los personajes propios. Con las tres a la vista las
 // tarjetas son algo más bajas para caber en 480 de alto.
 constexpr int kCaptainBoxTall = 120, kCaptainBoxShort = 104;
 // Tarjetas a la vista por fila; los propios van por páginas de cinco.
-constexpr int kCaptainRowSlots = 5;
+constexpr int kCaptainRowSlots = kPcCaptainRowSlots;
 int sCaptainCustomPage = 0;
-constexpr int captainRowLeft(int count) { return (620 - (count * kCaptainBoxW + (count - 1) * kCaptainBoxGap)) / 2; }
+int captainRowLeft(int count) { return pc_captain_row_left(count); }
 int captainRowOf(int captain) {
     if (captain < PC_CAPTAIN_FIRST_PIKMIN2) return 0;
     return pc_captain_is_custom(captain) ? 2 : 1;
@@ -5566,8 +5709,9 @@ bool captainCardPos(int captain, int panelX, int panelY, int* x, int* y) {
     const int col = captainViewCol(captain);
     if (col < 0 || col >= kCaptainRowSlots) return false;
     const int shown = std::min(captainRowCount(row), kCaptainRowSlots);
-    *x = panelX + captainRowLeft(shown) + col * (kCaptainBoxW + kCaptainBoxGap);
-    *y = panelY + 84 + captainScreenRow(row) * (captainBoxH() + kCaptainBoxGap);
+    const PcMenuClickRect r = pc_captain_card_rect(panelX, panelY, captainScreenRow(row), col, shown, captainBoxH());
+    *x = r.minX;
+    *y = r.minY;
     return true;
 }
 const char* devAssignCaptainName(int captain) { return captainName(captain); }
@@ -5585,6 +5729,55 @@ const char* devAssignName(int player) {
     return "-";
 }
 
+// Mouse on the captain cards, in the graph the prompt draws (pc_captain_prompt_draw and the
+// co-op picker note it). Motion over a card highlights it. A click on a card picks it and
+// returns 1, so one click confirms; a click on a page arrow returns 2 (previous) or 3 (next).
+// Empty space does nothing. ignore drops the click and the hover during the opening window.
+int captainPickPointer(int* captain, bool ignore) {
+    pc_menu_click_claim_pointer_menu();
+    DGXGraphics* gfx = (gsys && gsys->mDGXGfx) ? static_cast<DGXGraphics*>(gsys->mDGXGfx) : nullptr;
+    if (!gfx) return 0;
+    const int screenW = pc_gfx_menu_wide() ? pc_gfx_menu_virt_width() : gfx->mScreenWidth;
+    const int screenH = gfx->mScreenHeight;
+    int panelX = 0, panelY = 0;
+    pc_captain_panel_origin(screenW, screenH, captainExtraH(), &panelX, &panelY);
+    constexpr int kPagePrev = -2, kPageNext = -3;
+    PcMenuClickRect rects[PC_CAPTAIN_COUNT + 2];
+    int ids[PC_CAPTAIN_COUNT + 2];
+    int count = 0;
+    for (int i = 0; i < PC_CAPTAIN_COUNT; ++i) {
+        int boxX = 0, boxY = 0;
+        if (!captainCardPos(i, panelX, panelY, &boxX, &boxY) || !pc_captain_available(i)) continue;
+        rects[count] = { boxX, boxY, boxX + kCaptainBoxW, boxY + captainBoxH() };
+        ids[count++] = i;
+    }
+    int arrowL = 0, arrowR = 0, arrowY = 0, arrowH = 0;
+    if (captainPageArrows(panelX, panelY, &arrowL, &arrowR, &arrowY, &arrowH)) {
+        rects[count] = { arrowL, arrowY, arrowL + kPcCaptainArrowW, arrowY + arrowH };
+        ids[count++] = kPagePrev;
+        rects[count] = { arrowR, arrowY, arrowR + kPcCaptainArrowW, arrowY + arrowH };
+        ids[count++] = kPageNext;
+    }
+    float x = 0.0f, y = 0.0f;
+    if (!ignore && pc_gfx_menu_graph_point(false, &x, &y)) {
+        const PcMenuClickResult hover
+            = pc_menu_click_hover(PC_MENU_CLICK_MAIN, x, y, rects, nullptr, count, kPcMenuClickMargin);
+        if (hover.index >= 0 && ids[hover.index] >= 0) *captain = ids[hover.index];
+    }
+    if (pc_gfx_menu_graph_point(true, &x, &y) && !ignore) {
+        const PcMenuClickResult hit
+            = pc_menu_click_resolve(PC_MENU_CLICK_MAIN, x, y, rects, nullptr, count, kPcMenuClickMargin);
+        if (hit.action == PC_MENU_CLICK_ACTIVATE && hit.index >= 0) {
+            const int id = ids[hit.index];
+            if (id == kPagePrev) return 2;
+            if (id == kPageNext) return 3;
+            *captain = id;
+            return 1;
+        }
+    }
+    return 0;
+}
+
 // Selector de capitán (Olimar, Louie o un Pikmin) compartido por el prompt de mandos del
 // coop y el de 1 jugador. Devuelve 0 nada, 1 aceptado, 2 atrás.
 int captainPickInput(int player, bool keyboardOk, SDL_GameController* ctl, int* captain, bool ignoreWindow) {
@@ -5597,8 +5790,10 @@ int captainPickInput(int player, bool keyboardOk, SDL_GameController* ctl, int* 
         right  = keyWentDown(SDL_SCANCODE_RIGHT) || keyWentDown(SDL_SCANCODE_D);
         up     = keyWentDown(SDL_SCANCODE_UP)    || keyWentDown(SDL_SCANCODE_W);
         down   = keyWentDown(SDL_SCANCODE_DOWN)  || keyWentDown(SDL_SCANCODE_S);
-        accept = menuOkKey();
+        // The cards hit-test the left click (captainPickPointer), so a click is not also A.
+        accept = menuOkKeyNoClick();
         back   = menuCancelKey();
+        back |= pc_menu_click_take_back(); // right click: back
     }
     if (player == 0) {
         left |= (sTouchFrameButtons & PAD_BUTTON_LEFT) != 0;
@@ -5647,6 +5842,15 @@ int captainPickInput(int player, bool keyboardOk, SDL_GameController* ctl, int* 
         if (padEdge(SDL_GameControllerGetButton(ctl, SDL_CONTROLLER_BUTTON_LEFTSHOULDER) != 0, 12)) pagePrev = true;
         if (padEdge(SDL_GameControllerGetButton(ctl, SDL_CONTROLLER_BUTTON_RIGHTSHOULDER) != 0, 13)) pageNext = true;
     }
+    // The mouse belongs to whoever has the keyboard. A click inside the opening window is
+    // taken and dropped with the rest of the input.
+    bool pointerPick = false;
+    if (keyboardOk) {
+        const int pointer = captainPickPointer(captain, ignoreWindow);
+        if (pointer == 1) pointerPick = true;
+        if (pointer == 2) pagePrev = true;
+        if (pointer == 3) pageNext = true;
+    }
     if (ignoreWindow) return 0;
     // Izquierda/derecha dan la vuelta dentro de la fila; arriba/abajo cambian
     // de fila (la segunda solo con Pikmin 2), a la misma columna o la última.
@@ -5675,29 +5879,9 @@ int captainPickInput(int player, bool keyboardOk, SDL_GameController* ctl, int* 
             captainKeepVisible(*captain);
         }
     }
-    // A click on a card selects that card. A click anywhere else confirms the
-    // card already highlighted. The opening click is ignored with the rest of
-    // the input (ignoreWindow returns above).
-    if (menuAcceptClick()) {
-        float nx = 0.0f, ny = 0.0f;
-        if (menuMouseNorm(&nx, &ny)) {
-            int dw = 0, dh = 0;
-            pc_gfx_get_drawable_size(&dw, &dh);
-            const float aspect = dh > 0 ? float(dw) / float(dh) : 4.0f / 3.0f;
-            const float screenW = aspect * 480.0f;
-            const float x = nx * screenW, y = ny * 480.0f;
-            const int panelX = int(screenW * 0.5f) - 310, panelY = 240 - (260 + captainExtraH()) / 2;
-            for (int i = 0; i < PC_CAPTAIN_COUNT; ++i) {
-                int boxX = 0, boxY = 0;
-                if (!captainCardPos(i, panelX, panelY, &boxX, &boxY) || !pc_captain_available(i)) continue;
-                if (x >= boxX && x <= boxX + kCaptainBoxW && y >= boxY && y <= boxY + captainBoxH()) {
-                    *captain = i;
-                    break;
-                }
-            }
-        }
-        accept = true;
-    }
+    // One click on a card picks it and confirms. Navigation above ran with no key held, so it
+    // left the clicked card alone.
+    if (pointerPick) accept = true;
     if (accept && *captain == PC_CAPTAIN_LOUIE && !devAssignLouieInstalled()) {
         // Sin el modelo no se puede jugar con Louie: aviso y se queda.
         sDevAssignLouieNoticeUntil = SDL_GetTicks() + 3000;
@@ -5851,6 +6035,7 @@ void pc_captain_prompt_draw(void) {
         captainPickDraw(gfx, panelX, panelY, panelW, 0, sCaptainPromptChoice,
                         captainSecondRow() ? "Arrows: choose    A / Enter: confirm    B / Esc: back"
                                             : "Left/Right: choose    A / Enter: confirm    B / Esc: back");
+        pc_gfx_note_menu_tap_space(screenW, screenH); // captainPickPointer maps the mouse through this
     }
     if (sCaptainCards3D) {
         // Mismo hueco que el sprite: encima del nombre de la tarjeta.
@@ -6032,6 +6217,7 @@ void pc_devassign_prompt_draw(void) {
             captainPickDraw(gfx, panelX, panelY, panelW, player, sDevAssignCaptain[player],
                             captainSecondRow() ? "Arrows: choose    A / Enter: confirm    B: reassign    Esc: back"
                                                : "Left/Right: choose    A / Enter: confirm    B: reassign    Esc: back");
+            pc_gfx_note_menu_tap_space(screenW, screenH);
         }
         if (sCaptainCards3D) {
             // Mismo hueco que el sprite: encima del nombre de la tarjeta.
@@ -6253,8 +6439,32 @@ void vsRuleText(int row, const char** label, char* value, size_t n)
 
 bool sVsRulesOpen   = false;
 int sVsRulesRow     = 0; // 0 = mapa, 1.. = reglas (vsRuleField(row - 1))
+// The "A: play" span of the lobby's help line, from the last frame the lobby drew.
+bool sVsPlaySpanOk = false;
+int sVsPlayX0 = 0, sVsPlayX1 = 0, sVsPlayY0 = 0, sVsPlayY1 = 0;
 int sVsRulesResult  = PC_DEVASSIGN_PENDING;
 constexpr int kVsMenuRows = kVsRuleRows + 1;
+
+// The rules panel. The draw and the mouse hit test both read this layout, so a click lands on
+// the row that is drawn.
+struct VsRulesLayout {
+    int panelX, panelY, panelW, panelH;
+    int rx, rowsY, colW, rowH;
+};
+
+VsRulesLayout vsRulesLayout(int screenW, int screenH)
+{
+    VsRulesLayout l;
+    l.panelW = std::min(800, screenW - 24);
+    l.panelH = 452;
+    l.panelX = screenW / 2 - l.panelW / 2;
+    l.panelY = screenH / 2 - l.panelH / 2;
+    l.colW   = (l.panelW - 72) / 2;
+    l.rx     = l.panelX + 24 + l.colW + 24;
+    l.rowsY  = l.panelY + 88;
+    l.rowH   = 34;
+    return l;
+}
 
 // Selector de mapa: posición en pc_vs_map_list y, si al pulsar A no se pudo
 // montar, por qué (se enseña en la tarjeta de abajo y no se empieza).
@@ -6277,6 +6487,46 @@ bool vsEndScreenShown()
     return pc_vs_active() && pc_vs_match_over() && sVsOverSince && SDL_GetTicks() - sVsOverSince >= kVsEndScreenDelayMs;
 }
 
+// Mouse on the rules panel. Motion over a row highlights it. A click highlights its row and
+// returns 1, so the caller cycles that row forward, as Right does. A click on the drawn
+// "A: play" hint returns 2, which is A. The claim keeps a left click in Mouse Cursor mode
+// from also being A.
+int pcVsRulesPointer()
+{
+    pc_menu_click_claim_pointer_menu();
+    DGXGraphics* gfx = (gsys && gsys->mDGXGfx) ? static_cast<DGXGraphics*>(gsys->mDGXGfx) : nullptr;
+    if (!gfx) return 0;
+    const int screenW       = pc_gfx_menu_wide() ? pc_gfx_menu_virt_width() : gfx->mScreenWidth;
+    const int screenH       = gfx->mScreenHeight;
+    const VsRulesLayout lay = vsRulesLayout(screenW, screenH);
+    PcMenuClickRect rects[kVsMenuRows + 1];
+    for (int row = 0; row < kVsMenuRows; row++) {
+        const int ry = lay.rowsY + row * lay.rowH;
+        rects[row]   = { lay.rx, ry, lay.rx + lay.colW, ry + lay.rowH };
+    }
+    int count = kVsMenuRows;
+    if (sVsPlaySpanOk) {
+        rects[kVsMenuRows] = { sVsPlayX0, sVsPlayY0, sVsPlayX1, sVsPlayY1 };
+        count              = kVsMenuRows + 1;
+    }
+    float x = 0.0f, y = 0.0f;
+    if (pc_gfx_menu_graph_point(false, &x, &y)) {
+        const PcMenuClickResult hover
+            = pc_menu_click_hover(PC_MENU_CLICK_MAIN, x, y, rects, nullptr, count, kPcMenuClickMargin);
+        if (hover.index >= 0 && hover.index < kVsMenuRows) sVsRulesRow = hover.index;
+    }
+    if (pc_gfx_menu_graph_point(true, &x, &y)) {
+        const PcMenuClickResult hit
+            = pc_menu_click_resolve(PC_MENU_CLICK_MAIN, x, y, rects, nullptr, count, kPcMenuClickMargin);
+        if (hit.action == PC_MENU_CLICK_ACTIVATE) {
+            if (hit.index == kVsMenuRows) return 2;
+            sVsRulesRow = hit.index;
+            return 1;
+        }
+    }
+    return 0;
+}
+
 void pcVsRulesInput()
 {
     if (!sVsRulesOpen) return;
@@ -6284,8 +6534,10 @@ void pcVsRulesInput()
     bool down   = keyWentDown(SDL_SCANCODE_DOWN) || keyWentDown(SDL_SCANCODE_S);
     bool left   = keyWentDown(SDL_SCANCODE_LEFT) || keyWentDown(SDL_SCANCODE_A);
     bool right  = keyWentDown(SDL_SCANCODE_RIGHT) || keyWentDown(SDL_SCANCODE_D);
-    bool accept = menuOkKey();
+    // The rows hit-test the left click, so a click on a row cycles it and is not also A.
+    bool accept = menuOkKeyNoClick();
     bool cancel = menuCancelKey();
+    cancel |= pc_menu_click_take_back(); // a right click backs out; a mouse press only
     up |= (sTouchFrameButtons & PAD_BUTTON_UP) != 0;
     down |= (sTouchFrameButtons & PAD_BUTTON_DOWN) != 0;
     left |= (sTouchFrameButtons & PAD_BUTTON_LEFT) != 0;
@@ -6302,6 +6554,9 @@ void pcVsRulesInput()
         if (promptPadA(ctl)) accept = true;
         if (promptPadB(ctl)) cancel = true;
     }
+    const int pointer = pcVsRulesPointer();
+    if (pointer == 1) right = true; // a click cycles its row forward, as Right does
+    if (pointer == 2) accept = true; // a click on the drawn "A: play" hint is A
     if (up) sVsRulesRow = (sVsRulesRow + kVsMenuRows - 1) % kVsMenuRows;
     if (down) sVsRulesRow = (sVsRulesRow + 1) % kVsMenuRows;
     if ((left || right) && sVsRulesRow == 0) {
@@ -6486,14 +6741,15 @@ void pc_vsrules_prompt_draw(void) {
     gfx->setOrthogonal(ortho.mMtx, RectArea(0, 0, screenW, screenH));
 
     const Colour title(255, 229, 120, 255), body(214, 224, 245, 255), dim(150, 165, 195, 255);
-    const int panelW = std::min(800, screenW - 24), panelH = 452;
-    const int panelX = screenW / 2 - panelW / 2, panelY = screenH / 2 - panelH / 2;
+    const VsRulesLayout lay = vsRulesLayout(screenW, screenH);
+    const int panelW = lay.panelW, panelH = lay.panelH;
+    const int panelX = lay.panelX, panelY = lay.panelY;
     drawPikminPanel(gfx, panelX, panelY, panelW, panelH, 22);
     drawPikminHeader(gfx, panelX, panelY, panelW, es ? "VS: Carrera de piezas" : "VS: Part Race");
 
-    const int colW = (panelW - 72) / 2;
+    const int colW = lay.colW;
     const int lx   = panelX + 24;
-    const int rx   = lx + colW + 24;
+    const int rx   = lay.rx;
 
     // ── Izquierda: cómo se juega, en tres tarjetas ─────────────────────────
     int y = panelY + 52;
@@ -6527,8 +6783,8 @@ void pc_vsrules_prompt_draw(void) {
 
     // ── Derecha: reglas ─────────────────────────────────────────────────────
     vsText(rx + 8, panelY + 56, es ? "REGLAS" : "RULES", title, 14, 21);
-    const int rowsY = panelY + 88;
-    constexpr int kRowH = 34;
+    const int rowsY = lay.rowsY;
+    const int kRowH = lay.rowH;
     const PcVsMapEntry& map = vsMapEntry();
     const bool mapBad       = !map.error.empty() || !sVsMapError.empty();
     for (int row = 0; row < kVsMenuRows; row++) {
@@ -6602,6 +6858,8 @@ void pc_vsrules_prompt_draw(void) {
     const char* help = es ? "Arriba/Abajo: opción   Izq/Der: cambiar   A: jugar   B: salir"
                           : "Up/Down: option   Left/Right: change   A: play   B: back";
     drawHelpLine(panelX + panelW / 2, panelY + panelH - 38, help, dim);
+    sVsPlaySpanOk = helpLineIconSpan('A', &sVsPlayX0, &sVsPlayX1, &sVsPlayY0, &sVsPlayY1);
+    pc_gfx_note_menu_tap_space(screenW, screenH);
 }
 
 
@@ -8206,6 +8464,95 @@ static void pollFilePicker()
 }
 #endif
 
+// Quick Save (pc_quicksave.h). While a quick load runs: the same panel as the
+// other menus, over the replay (whose world graphics are suppressed), with
+// the progress, the time so far and an estimate of the time left. Otherwise
+// the last save or load result for a few seconds, unless a menu (which shows
+// it as its notice) is open.
+void pc_settings_draw_quick_load(void) {
+    if (!pc_quicksave_enabled() || !gsys || !gsys->mDGXGfx) return;
+    PcQuickLoadStatus st;
+    const bool loading = pc_quicksave_load_status(&st);
+    char toast[192];
+    bool toastError = false;
+    float toastAge  = 0.0f;
+    const bool showToast = !loading && !sMenuOpen && !pc_glass_menu_active()
+                        && pc_quicksave_toast(toast, sizeof(toast), &toastError, &toastAge);
+    if (!loading && !showToast) return;
+    DGXGraphics* gfx = static_cast<DGXGraphics*>(gsys->mDGXGfx);
+    ensureFont();
+    if (!sFont) return;
+    const int screenW = gfx->mScreenWidth, screenH = gfx->mScreenHeight;
+    Matrix4f ortho;
+    gfx->setOrthogonal(ortho.mMtx, RectArea(0, 0, screenW, screenH));
+    auto fill = [&](int x, int y, int w, int h, Colour c) {
+        gfx->setColour(c, true);
+        gfx->setAuxColour(c);
+        gfx->fillRectangle(RectArea(x, y, x + w, y + h));
+    };
+    const int cx = screenW / 2;
+
+    if (showToast) {
+        PcSettingsP2DFrame nativeFrame(screenW, screenH);
+        // Laid out on a 480-high canvas, scaled to the window.
+        const float s = screenH / 480.0f;
+        auto px = [s](float v) { return int(v * s + 0.5f); };
+        const bool p2d = pc_settings_p2d_active();
+        auto textW = [&](const char* t, float fw) { return p2d ? pc_settings_p2d_text_width(t, px(fw)) : menuTextWidth(t); };
+        auto text = [&](int x, int y, const char* t, Colour c, float fw, float fh) {
+            if (p2d) pc_settings_p2d_text(x, y, t, c, std::max(1, px(fw)), std::max(1, px(fh)));
+            else drawTextOutline(x, y, "%s", c, Colour(0, 0, 0, c.a), t);
+        };
+        const float fade = std::min(1.0f, std::min(toastAge / 0.2f, (4.0f - toastAge) / 0.5f));
+        const u8 a       = u8(255.0f * std::max(0.0f, fade));
+        const int tw = textW(toast, 9), w = tw + px(28), h = px(26);
+        fill(cx - w / 2, px(14), w, h, Colour(8, 12, 28, u8(a * 0.8f)));
+        const Colour c = toastError ? Colour(255, 150, 150, a) : Colour(160, 240, 180, a);
+        text(cx - tw / 2, px(14) + (h - px(14)) / 2, toast, c, 9, 14);
+        return;
+    }
+
+    // Catch-up does not submit the world's graphics, so the frame behind the
+    // panel is covered. The panel is the one the other menus use.
+    fill(0, 0, screenW, screenH, Colour(0, 0, 0, 255));
+    const int panelW = std::min(560, std::max(280, screenW - 48));
+    const int panelH = std::min(220, std::max(200, screenH - 96));
+    const int panelX = cx - panelW / 2;
+    const int panelY = std::max(40, screenH / 2 - panelH / 2);
+    const Colour kBody(214, 224, 245, 255), kDim(150, 165, 195, 255), kGold(255, 205, 60, 255);
+    char dayLine[32], status[160];
+    std::snprintf(dayLine, sizeof(dayLine), "Day %d", st.day);
+    const pc_quicksave::LoadProgress p = pc_quicksave::load_progress(st.fed, st.total, st.replaySecs);
+    char elapsed[16], left[16];
+    pc_quicksave::format_clock(st.secs, elapsed, sizeof(elapsed));
+    if (!st.replaying) {
+        std::snprintf(status, sizeof(status), "Preparing the day...   %s", elapsed);
+    } else if (p.remainingKnown) {
+        pc_quicksave::format_clock(p.remaining, left, sizeof(left));
+        std::snprintf(status, sizeof(status), "%d%%   Elapsed %s   About %s left", p.percent, elapsed, left);
+    } else {
+        std::snprintf(status, sizeof(status), "%d%%   Elapsed %s   Estimating the time left...", p.percent, elapsed);
+    }
+    {
+        PcSettingsP2DFrame nativeFrame(screenW, screenH);
+        GlassTextScope glassText;
+        drawPikminPanel(gfx, panelX, panelY, panelW, panelH, 22);
+        drawPikminHeader(gfx, panelX, panelY, panelW, "Loading quick save");
+        drawTextOutline(cx - menuTextWidth(dayLine) / 2, panelY + 40, "%s", kDim, Colour(8, 12, 28, 255), dayLine);
+        drawTextOutline(cx - menuTextWidth(status) / 2, panelY + 108, "%s", kBody, Colour(8, 12, 28, 255), status);
+        const char* hint = st.cancelling ? "Cancelling..." : "Esc / B: cancel";
+        drawHelpLine(cx, panelY + panelH - 36, hint, kDim, panelW - 48);
+    }
+    // After the glass plate, so the bar stays visible on top of it.
+    const int barW = panelW - 80, barH = 14, barX = panelX + 40, barY = panelY + 74;
+    fill(barX - 2, barY - 2, barW + 4, barH + 4, Colour(70, 85, 120, 255));
+    fill(barX, barY, barW, barH, Colour(8, 10, 16, 255));
+    if (st.replaying) {
+        const int filled = int(barW * (p.percent / 100.0f));
+        if (filled > 0) fill(barX, barY, filled, barH, kGold);
+    }
+}
+
 void pc_settings_draw(void) {
 #ifndef __ANDROID__
     pollFilePicker();
@@ -8793,6 +9140,11 @@ void pc_first_person_toggle_for(int player) {
     fp = !fp;
 }
 
+void pc_first_person_set_active_for(int player, int on) {
+    if (!sConfig.firstPerson) on = 0;
+    sFirstPersonActive[player == 1 ? 1 : 0] = on ? 1 : 0;
+}
+
 int pc_first_person_active(void) { return pc_first_person_active_for(0); }
 void pc_first_person_toggle(void) { pc_first_person_toggle_for(0); }
 
@@ -8835,6 +9187,8 @@ int pc_settings_get_coop_merge_camera(void) {
     if (pc_vs_active()) return 0;
     return sConfig.coopMergeCamera;
 }
+
+int pc_settings_get_quick_save(void) { return sConfig.quickSave; }
 
 int pcGameLanguageFromOs(unsigned char osLanguage) {
     static const int kGame[] = { 0, 2, 1, 3, 4 }; // en de fr es it -> en fr de es it
@@ -8899,6 +9253,36 @@ void pc_settings_record_original_look(int original) {
     fflush(stderr);
 }
 
+void pc_settings_sim_lock_day_begin(void) {
+#if PIKI_NETPLAY_BUILD
+    if (sNetplaySessionLocked) return; // the session's own lock holds
+#endif
+    sSimLockConfig = sConfig;
+    sSimLockArmed  = true;
+    printf("[PC Settings] deterministic recording: sim-relevant settings fixed for this day (hash %016llx)\n",
+           pc_settings_sim_config_hash());
+    fflush(stdout);
+}
+
+int pc_settings_sim_locked(void) { return simLocked() ? 1 : 0; }
+
+const char* pc_settings_sim_config_text(void) {
+    static std::string text;
+    pc_sim_settings_text::begin(text);
+#define PC_SIM_TEXT_FIELD(f) pc_sim_settings_text::add_int(text, #f, (long)sConfig.f);
+    PC_SIM_RECORD_FIELDS(PC_SIM_TEXT_FIELD)
+#undef PC_SIM_TEXT_FIELD
+    // Chosen before a day starts, outside the F1 rows; the day depends on them.
+    pc_sim_settings_text::add_int(text, "coopPlayers", sConfig.coopPlayers);
+    pc_sim_settings_text::add_int(text, "language", pc_settings_get_language());
+    pc_sim_settings_text::add_str(text, "vsMap", sConfig.vsMap);
+    return text.c_str();
+}
+
+unsigned long long pc_settings_sim_config_hash(void) {
+    return pc_sim_settings_text::hash(pc_settings_sim_config_text());
+}
+
 #if PIKI_NETPLAY_BUILD
 const char* pc_settings_netplay_config_text(void) {
     static std::string text;
@@ -8915,6 +9299,8 @@ const char* pc_settings_netplay_config_text(void) {
 
 void pc_settings_netplay_session_begin(const char* adoptConfigText) {
     if (sNetplaySessionLocked) return;
+    // The session's lock replaces a recorded day's (pc_settings_sim_lock_day_begin).
+    sSimLockArmed = false;
     if (adoptConfigText != nullptr) {
         sNetplayDiskConfig = sConfig;
         const std::string own = pc_settings_netplay_config_text();
@@ -9169,7 +9555,7 @@ namespace {
 // página de vídeo, de Advanced, de Graphics, de Mods...), así que reordenar
 // aquí no toca qué hace cada ajuste ni cómo se guarda: el .conf va por nombre.
 // ---------------------------------------------------------------------------
-enum RowSrc { SRC_MAIN, SRC_ADV, SRC_GFX, SRC_MODS, SRC_DATA, SRC_KEYS, SRC_PADS, SRC_RECENTER, SRC_ACH };
+enum RowSrc { SRC_MAIN, SRC_ADV, SRC_GFX, SRC_MODS, SRC_DATA, SRC_KEYS, SRC_PADS, SRC_RECENTER, SRC_ACH, SRC_QUICKSAVE };
 struct GroupRow {
     RowSrc src;
     int idx;
@@ -9275,7 +9661,8 @@ const GroupRow kCheatsRows[] = {
       "F5: add up to 20 red leaf Pikmin to the red Onion (requires an Onion and respects the Pikmin limit).\n"
       "F6: advance the clock by one in-game hour, capped just before sunset (with Infinite Day it only moves the lighting, except on the last day).\n"
       "F7: grant the Main Engine, top red Onion stock up to 20, and trigger the normal end-of-day sequence.\n"
-      "F8 (VS only): append both captains' XYZ coordinates to vs_positions.txt." },
+      "F8 (VS only): append both captains' XYZ coordinates to vs_positions.txt.\n"
+      "With Quick Save on, F6 is Quick Save and F7 is Quick Load." },
 #endif
 };
 
@@ -9291,6 +9678,11 @@ const GroupRow kDataRows[] = {
     { SRC_DATA, 3, "Online co-op: leave / rejoin", "As an online guest: stop playing and watch the host's captain while keeping your place. Choose it again, or press Start, to ask to rejoin; the host lets you back in outside menus and cutscenes." },
     { SRC_DATA, 4, "Online over the Internet", "On: when you create or join an online room, the game asks a free public server (Google or Cloudflare STUN) for this connection's Internet address, so a friend on another network can connect. Only that address is exchanged; the game itself goes directly between the two players. Some networks still block it (often mobile data on both sides). Off: no outside server is contacted, and only players on the same network or a VPN can connect." },
 #endif
+    // Quick Save (pc_quicksave.h). The F-keys need Fn on many laptops, so the
+    // two actions are rows too.
+    { SRC_QUICKSAVE, 0, "Quick Save (experimental)", "Save at any point of a day with Quick Save (F6) and go back to that point with Quick Load (F7). Loading replays the day, muted, behind a progress screen. F7 asks before it loads. Not in Challenge Mode, Permadeath, Speedrun, the Randomizer or online play. Any update of the game makes older quick saves unloadable. Takes effect after a restart." },
+    { SRC_QUICKSAVE, 1, "Quick Save now", "Saves this point of the day, as the Quick Save key (F6) does." },
+    { SRC_QUICKSAVE, 2, "Quick Load now", "Goes back to this file's quick save, as the Quick Load key (F7) does. On the title screen or in the file select: the newest quick save. Escape cancels the load." },
 };
 
 template <size_t N> constexpr int countOf(const GroupRow (&)[N]) { return (int)N; }
@@ -9419,6 +9811,7 @@ const GroupSection kSections[] = {
 #endif
     { PC_SET_GROUP_DATA, 0, "SAVE FILE" },
     { PC_SET_GROUP_DATA, 2, "SETTINGS" },
+    { PC_SET_GROUP_DATA, countOf(kDataRows) - 3, "QUICK SAVE" },
 };
 
 const char* rowSection(int group, int row) {
@@ -9452,6 +9845,7 @@ bool rowProbeable(int group, int row) {
     case SRC_ADV: return r->idx != 7;
     case SRC_GFX: return r->idx != 10 && r->idx != 11;
     case SRC_MODS: return true;
+    case SRC_QUICKSAVE: return r->idx == 0;
     default: return false;
     }
 }
@@ -9459,6 +9853,18 @@ bool rowProbeable(int group, int row) {
 bool hardLocked(const GroupRow& r) {
     return r.src == SRC_MODS && pc_hardmode_active()
         && (r.idx == 4 || r.idx == 5 || r.idx == 11 || r.idx == 12 || r.idx == 13);
+}
+
+// Whether a row changes a setting of PC_SIM_RECORD_FIELDS. Every mods row does,
+// except the control scheme (0) and the free camera stick speed (38), which
+// only shape input that is recorded anyway.
+bool rowChangesSimSetting(const GroupRow& r) {
+    switch (r.src) {
+    case SRC_MAIN: return r.idx == ROW_FPS_MODE;
+    case SRC_ADV: return r.idx == 4; // Gyro Aiming (gyroEnabled)
+    case SRC_MODS: return r.idx != 0 && r.idx != 38;
+    default: return false;
+    }
 }
 
 // Motivo por el que una fila no se puede cambiar ahora, o nullptr si se puede.
@@ -9475,6 +9881,8 @@ bool online_spectating() { return pc_netplay_online_spectating != nullptr && pc_
 
 const char* disabledReason(const GroupRow& r) {
     if (hardLocked(r)) return "Locked by Hard mode for this save file.";
+    if (rowChangesSimSetting(r) && simLocked())
+        return "Fixed until this day ends: the day is being recorded, and this setting changes the game.";
     switch (r.src) {
     case SRC_MAIN:
         if (r.idx == ROW_RESOLUTION && sPending.displayMode == PC_WINDOW_FULLSCREEN_BORDERLESS)
@@ -9498,6 +9906,11 @@ const char* disabledReason(const GroupRow& r) {
     case SRC_DATA:
         if (r.idx == 3 && !online_guest()) return "Only while you are the guest of an online co-op session.";
         break;
+    case SRC_QUICKSAVE: {
+        const char* why = r.idx == 1 ? pc_quicksave_save_unavailable() : r.idx == 2 ? pc_quicksave_load_unavailable() : "";
+        if (why[0] != '\0') return why;
+        break;
+    }
     default:
         break;
     }
@@ -9577,7 +9990,7 @@ bool pc_settings_row_enabled(int group, int row) {
 bool pc_settings_row_is_action(int group, int row) {
     if (group == PC_SET_PICKER_TEXPACKS || group == PC_SET_PICKER_HDMODELS) return true;
     const GroupRow* r = groupRow(group, row);
-    return r && ((r->src == SRC_DATA && r->idx != 4) || (r->src == SRC_ADV && r->idx == 7));
+    return r && ((r->src == SRC_DATA && r->idx != 4) || (r->src == SRC_ADV && r->idx == 7) || (r->src == SRC_QUICKSAVE && r->idx != 0));
 }
 
 const char* pc_settings_row_help(int group, int row) {
@@ -9591,6 +10004,7 @@ const char* pc_settings_row_help(int group, int row) {
         return help;
     }
     if (const GroupRow* r = groupRow(group, row)) {
+        if (r->src == SRC_QUICKSAVE && r->idx == 2 && sQuickLoadArmed) return sQuickLoadConfirm;
         const char* reason = disabledReason(*r);
         return reason ? reason : r->help;
     }
@@ -9674,6 +10088,16 @@ void pc_settings_row_value(int group, int row, char* out, unsigned long n) {
             else snprintf(out, n, "%s", online_guest() ? (online_spectating() ? "A: rejoin" : "A: leave") : "-");
             break;
         case SRC_ACH: break;
+        case SRC_QUICKSAVE:
+            if (r->idx == 0) {
+                // The game reads the setting at launch: say so while the
+                // running state is not the one chosen here.
+                const bool on = sPending.quickSave != 0;
+                snprintf(out, n, "%s%s", on ? "On" : "Off", on != pc_quicksave_enabled() ? "  (restart required)" : "");
+            } else {
+                snprintf(out, n, "%s", r->idx == 1 ? "A: save" : sQuickLoadArmed ? "A: confirm" : "A: load");
+            }
+            break;
         case SRC_KEYS:
         case SRC_PADS: snprintf(out, n, "Open  >"); break;
         case SRC_RECENTER: {
@@ -9753,6 +10177,23 @@ void pc_settings_row_change(int group, int row, int dir, bool ok) {
                 else pc_netplay_online_request_leave();
             }
             break;
+        case SRC_QUICKSAVE:
+            if (r->idx == 0) {
+                if (ok || left || right) sPending.quickSave = sPending.quickSave ? 0 : 1;
+            } else if (ok && r->idx == 1) {
+                pc_quicksave_request_save(); // the result shows as the menu's notice
+            } else if (ok && r->idx == 2 && !sQuickLoadArmed) {
+                armQuickLoad(); // the first A shows what the load replaces
+            } else if (ok && r->idx == 2) {
+                sQuickLoadArmed = false;
+                pc_quicksave_request_load();
+                // A load under way: the menus get out of the load screen's way.
+                if (pc_quicksave_load_active()) {
+                    if (sMenuOpen) closeMenu();
+                    if (pc_glass_menu_active()) pc_glass_menu_close();
+                }
+            }
+            break;
         default: break; // selectores
         }
         return;
@@ -9793,6 +10234,8 @@ void pc_settings_capture_poll(void) {
     if (sWaitingForKey) { pollKeyCapture(ctl); return; }
     if (sWaitingForButton || sCaptureWaitRelease) pollButtonCapture(ctl);
 }
+
+void pc_settings_post_notice(int isError, const char* message) { texturePackNotice(isError != 0, message); }
 
 bool pc_settings_notice(char* out, unsigned long n, bool* isError) {
     std::lock_guard<std::mutex> lock(sTexturePackNoticeMutex);
@@ -10113,3 +10556,28 @@ int pc_settings_cli(int argc, char** argv) {
     SDL_QuitSubSystem(SDL_INIT_VIDEO);
     return result;
 }
+
+void pc_settings_request_quick_load_confirm(void) { sQuickLoadOpenRequested = true; }
+
+// The Data page's "Quick Load now" row.
+int quickLoadRow() {
+    int count = 0;
+    const GroupRow* rows = groupRows(PC_SET_GROUP_DATA, &count);
+    for (int i = 0; i < count; i++) {
+        if (rows[i].src == SRC_QUICKSAVE && rows[i].idx == 2) return i;
+    }
+    return 0;
+}
+
+void armQuickLoad() {
+    char text[sizeof(sQuickLoadConfirm)];
+    if (!pc_quicksave_load_confirm_text(text, sizeof(text))) {
+        sQuickLoadArmed = false;
+        pc_settings_post_notice(1, text);
+        return;
+    }
+    snprintf(sQuickLoadConfirm, sizeof(sQuickLoadConfirm), "%s", text);
+    sQuickLoadArmed = true;
+    pc_settings_post_notice(0, "Quick Load: press A again to load, or move away to keep playing.");
+}
+

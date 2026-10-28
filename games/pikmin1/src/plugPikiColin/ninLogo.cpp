@@ -15,6 +15,7 @@
 #if defined(PIKI_PC_PORT)
 #include "netplay/pc_coop_switch.h"
 #include "pc_vs.h"
+#include "quicksave/pc_quicksave.h"
 #if PIKI_SCENARIOS
 #include "scenarios/pc_scenario.h"
 #endif
@@ -101,7 +102,8 @@ struct NinLogoSetupSection : public Node {
 #if PIKI_SCENARIOS
 			pcScenarioBoot = pc_scenario_active();
 #endif
-			if (pcLogoTime < kLogoTime && !pc_vs_direct_requested() && !pc_coop_direct_requested() && !pcScenarioBoot) {
+			if (pcLogoTime < kLogoTime && !pc_vs_direct_requested() && !pc_coop_direct_requested()
+			    && !pc_quicksave_boot_pending() && !pcScenarioBoot) {
 				pcLogoTime += gsys->getFrameTime();
 				f32 fade = 1.0f;
 				if (pcLogoTime < kFade) {

@@ -706,7 +706,7 @@ cmake --build build/pikmin1 -j"$(nproc)"
 ctest --test-dir build/pikmin1 --output-on-failure
 ```
 
-**Upstream policy.** Port bugfixes, mouse and keyboard features, and fixes for upstream-introduced features go upstream from a `fix/<name>` branch. Fork-only additions stay on `kyle-develop`. Before claiming a fix works on every platform, compile it on Windows and Linux. Details: [AGENTS.md](AGENTS.md).
+**Fork.** On this fork, `kyle-develop` is generated. Fork-only changes go on `kyle-patches`. Fixes for an open upstream PR go on that PR's branch. Details: [AGENTS.md](AGENTS.md).
 
 ## License
 

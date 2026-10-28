@@ -25,9 +25,11 @@
 #include "mods/pc_mission.h"
 #include "mods/pc_campaign.h"
 #include "pc_gfx.h"
+#include "pc_menu_click.h"
 #include "pc_speedrun.h"
 #include "pc_vs.h"
 #include "netplay/pc_coop_switch.h"
+#include "quicksave/pc_quicksave.h"
 #include <cstdio>
 #endif
 
@@ -387,6 +389,17 @@ public:
 					printf("[PC Port] Title screen reached\n");
 					fflush(stdout);
 				}
+				// Quick save load at launch (--quick-load, a story save): its
+				// own run, as the co-op direct boot below starts one.
+				if (pc_quicksave_take_title()) {
+					mNextSectionsFlag                = PACK_NEXT_ONEPLAYER(ONEPLAYER_GameSetup);
+					gameflow.mGamePrefs.mHasSaveGame = false;
+					gameflow.mIsChallengeMode        = FALSE;
+					Jac_SceneExit(SCENE_Exit, 0);
+					mState = STATE_ExitPending;
+					gsys->setFade(0.0f);
+					return;
+				}
 				// Editor de mapas (--vs-map): directo al VS, como si se hubiera
 				// elegido en el menú (ogTitle) y sin pasar por él.
 				// Editor de mapas (--mission-map, --campaign): directo a la misión
@@ -442,7 +455,20 @@ public:
 				if (!totalWindowOn) {
 
 					// handle pressing A or START on PRESS START screen
-					if (startWindowOn && !titleWindowOn && mController->keyClick(KBBTN_START | KBBTN_A)) {
+					bool startPressed = false;
+					if (startWindowOn && !titleWindowOn) {
+						startPressed = mController->keyClick(KBBTN_START | KBBTN_A);
+#if defined(PIKI_PC_PORT)
+						if (startWindow->pcPointerPressed()) {
+							startPressed = true;
+						}
+#endif
+					}
+					if (startPressed) {
+#if defined(PIKI_PC_PORT)
+						// The click that opened this menu must not also activate a row.
+						pc_menu_click_clear();
+#endif
 #if defined(VERSION_PIKIDEMO)
 						// demo doesn't use the title menu, jump straight into Forest of Hope challenge mode
 						mNextSectionsFlag                = PACK_NEXT_ONEPLAYER(ONEPLAYER_GameSetup);
@@ -744,10 +770,12 @@ public:
 			// draw PRESS START, main title menu, or hiscore menus as required
 			startWindow->draw(gfx);
 #if defined(PIKI_PC_PORT)
+			pc_gfx_note_menu_tap_space(pc_gfx_menu_virt_width(), 480);
 			pc_gfx_title_debug_probe("after_start");
 #endif
 			titleWindow->draw(gfx);
 #if defined(PIKI_PC_PORT)
+			pc_gfx_note_menu_tap_space(pc_gfx_menu_virt_width(), 480);
 			pc_gfx_title_debug_probe("after_title");
 #endif
 			if (totalWindow) {
