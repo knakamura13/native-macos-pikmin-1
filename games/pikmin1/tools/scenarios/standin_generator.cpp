@@ -26,6 +26,7 @@
 #include "nectar_assets/parms.h"
 #include "nectar_assets/stages_ini.h"
 #include "nectar_assets/standin_anims.h"
+#include "nectar_assets/standin_audio.h"
 #include "nectar_assets/standin_models.h"
 #include "nectar_assets/standin_textures.h"
 #include "nectar_assets/standin_ui.h"
@@ -42,6 +43,11 @@
 #include <vector>
 
 namespace fs = std::filesystem;
+
+// The game's BARC table for pikiseq.arc (src/jaudio/pikiseq.c, compiled into
+// this executable). Its size is 0x20 plus 0x20 per entry; the entry count is
+// the header's big-endian u32 at 0x0C.
+extern "C" std::uint8_t HEAD_pikiseq[];
 
 namespace {
 
@@ -386,10 +392,24 @@ bool siblingStandIns(Tree& tree, std::string& error)
 	return true;
 }
 
+// ── SndData for the native JAudio engine (standin-audio.md) ─────────────────
+// Only the PIKMIN_NATIVE_JAUDIO=ON build reads it; the legacy facade (OFF) loads
+// pikiseq.arc only after Banks/pikibank.bx, which is not written.
+bool audioStandIns(Tree& tree, std::string& error)
+{
+	const std::uint8_t* h     = HEAD_pikiseq;
+	const std::size_t entries = std::size_t(h[12]) << 24 | std::size_t(h[13]) << 16 | std::size_t(h[14]) << 8 | h[15];
+	std::vector<nectar::StandInFile> files;
+	if (!nectar::standInSndDataFiles(h, 0x20 + 0x20 * entries, files, error)) return fail(error, "stand-in SndData: " + error);
+	for (auto& f : files) tree["dataDir/" + f.path] = std::move(f.bytes);
+	return true;
+}
+
 bool buildTree(Tree& tree, std::string& error)
 {
 	tree.clear();
-	return parmFiles(tree, error) && archives(tree, error) && stagesIni(tree, error) && sandboxMap(tree, error) && siblingStandIns(tree, error);
+	return parmFiles(tree, error) && archives(tree, error) && stagesIni(tree, error) && sandboxMap(tree, error) && siblingStandIns(tree, error) &&
+	       audioStandIns(tree, error);
 }
 
 /// FNV-1a 64 over every path and its bytes, in path order.
