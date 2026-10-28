@@ -151,13 +151,19 @@ SandboxGatePlacement sandboxGatePlacement()
 	// The disc's throw_release trace (Forest of Hope, 30 Hz, temporary tracing,
 	// standin-k-investigation.md) has the captain walk about 185 units straight,
 	// slide off a reinforced gate and stop against it about 220 units from the
-	// start; that gate's generator stands about 205 units ahead of him and 35
-	// units to his left, turned 35 degrees. The sandbox gate starts from that
-	// relation (a gameplay layout, not geometry: our wall has its own size).
+	// start; that gate's generator stands 203 units ahead of him and 34 units to
+	// his left, turned 35 degrees. The sandbox gate takes that relation (a
+	// gameplay layout, not geometry: our wall has its own size). With 35 degrees
+	// the walk, the slide, the stop, BreakwallMode and the return through
+	// Emotion all happen as on the disc, and K is 13 / 16 at 30 / 60 Hz against
+	// the disc's 15 / 18. Of the turns 33 to 37 degrees, 36 gives 14 / 17, so the
+	// sandbox uses 36. K is very sensitive to the layout (see
+	// standin-k-investigation.md): it is a chaotic outcome of where each Pikmin
+	// stands when it gives up, not a property of the gate.
 	SandboxGatePlacement p;
 	p.x    = -34.0f;
 	p.z    = -203.0f;
-	p.rotY = 35;
+	p.rotY = 36;
 	return p;
 }
 

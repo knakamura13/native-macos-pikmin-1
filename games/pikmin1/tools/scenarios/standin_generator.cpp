@@ -383,7 +383,7 @@ const Allowed kManifestAllowlist[] = {
 	{ "dataDir/bosses/", "Forest of Hope bosses, created by its generators" },
 	{ "dataDir/objects/plants/", "Forest of Hope plants, created by its generators" },
 	{ "dataDir/objects/bridge/", "Forest of Hope bridges, created by its generators" },
-	{ "dataDir/objects/gate/", "Forest of Hope gates, created by its generators" },
+	{ "dataDir/objects/gate/", "the soft and hard gates of the Forest of Hope (gt_soft.mod and .anm); the sandbox has only a bomb gate, whose files are in the tree" },
 	{ "dataDir/objects/hinderrock/", "Forest of Hope push box, created by its generators" },
 	{ "dataDir/cinemas/", "Forest of Hope landing and Onion movies (STAGE_TESTMAP plays no landing); no cinema stand-ins" },
 	// Silent when missing: CoreNode::load and the null-checked opens keep the
