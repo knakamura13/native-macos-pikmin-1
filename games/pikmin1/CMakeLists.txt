@@ -1934,7 +1934,8 @@ if (NECTAR_BUILD_MODELMAKER AND NOT ANDROID)
 endif()
 
 # Scenario tests (see pc_port/scenarios and issue #59). Each runs
-# `nectar --scenario <name>` at 30 and 60 ticks per second. These are disc-mode
+# `nectar --scenario <name>` at 30 and, where the scenario depends on the tick
+# rate, 60 ticks per second (tools/scenarios/README.md, "Tick rates"). These are disc-mode
 # tests: PIKMIN_SCENARIO_DATA_DIR names a directory holding assets/ (a real
 # install). Unset or without assets/dataDir/parms/gamePrms.bin the binary exits
 # 77 and CTest reports a skip. The stand-in fixtures (no disc) are #68.
@@ -2026,8 +2027,10 @@ if(PIKMIN_BUILD_SCENARIOS)
     # tools/scenarios/standin_all_objects_stage.h): the soft gate, plants, bridges,
     # a push box, bosses and enemies, one of each. A boot-smoke run proves each
     # model, platform, animation table and parameter file loads. No disc entry.
+    # 30 Hz only: what it checks (loading, the enemies born) does not depend on
+    # the tick rate (tools/scenarios/README.md, "Tick rates").
     foreach(scenario objects_smoke)
-        foreach(rate 30 60)
+        foreach(rate 30)
             add_test(NAME scenario_${scenario}_${rate}
                 COMMAND ${CMAKE_COMMAND}
                     -DGAME=$<TARGET_FILE:${NECTAR_GAME}>

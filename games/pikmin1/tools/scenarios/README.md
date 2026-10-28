@@ -132,7 +132,22 @@ failure.
 
 ## CTest entries
 
-All names are `scenario_<name>_<rate>` for each scenario at 30 and 60.
+All names are `scenario_<name>_<rate>`, at the rates in [Tick rates](#tick-rates).
+
+### Tick rates
+
+A scenario is registered at 60 as well as 30 only when the 60 Hz run executes
+code or timing the 30 Hz run does not. The disc entries keep `boot_smoke`,
+`throw_release` and `day30_clock` at both rates (issue #61).
+
+| Scenario | Rates | Why |
+|----------|-------|-----|
+| `boot_smoke` | 30, 60 | The rate is boot configuration (`fpsMode`, the tick length); each rate must boot and run. |
+| `throw_release` | 30, 60 | K and the release timings are tick arithmetic and differ per rate (15 and 18). |
+| `day30_clock` | 30, 60 | The clock moves by one frame time per tick, so the hold and the sunset arithmetic differ per rate. |
+| `sprout_landing` | 30, 60 | `BuryInit` snaps the seed to the ground only above 30 Hz (`pc_seed_landing_snaps_to_ground`); 60 Hz is the only run of that path. |
+| `onion_skip` | 30, 60 | The movie advances half a frame per tick at 60 Hz (330 ticks against 660), so the skip frames and the boot motion's key events land on different ticks. |
+| `objects_smoke` | 30 | Loads the every-object stage and counts the enemies born; neither depends on the tick rate. |
 
 | Entry | Data | Label | Notes |
 |-------|------|-------|-------|
@@ -140,7 +155,7 @@ All names are `scenario_<name>_<rate>` for each scenario at 30 and 60.
 | `scenario_<name>_<rate>` | stand-in tree | none | `FIXTURES_REQUIRED scenario_standin_tree`, runs with `PIKMIN_SCENARIO_STAGE=stages/sandbox.ini`, 600 s timeout. No skip code: a missing or broken tree fails. |
 | `scenario_<name>_<rate>_disc` | a real install | `game-assets` | Runs in `<build>/scenario-scratch`, 600 s timeout, `SKIP_RETURN_CODE 77`. Set `PIKMIN_SCENARIO_DATA_DIR` to run it; otherwise CTest reports a skip. |
 
-`scenario_sprout_landing_<rate>` and `scenario_onion_skip_<rate>` (30 and 60) are stand-in only: they run with
+`scenario_sprout_landing_<rate>` and `scenario_onion_skip_<rate>` are stand-in only: they run with
 `PIKMIN_SCENARIO_STAGE=stages/sandbox_objects.ini`, the opt-in second stage
 with a cliff, an Onion, sprouts, a pellet and an enemy. See
 `standin-objects.md` for what the object stand-ins are, what was read from the
