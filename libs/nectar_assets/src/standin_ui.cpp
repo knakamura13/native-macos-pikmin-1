@@ -207,6 +207,11 @@ std::vector<StandinLayout> standinBloLayouts()
 	}
 	for (const char* f : { "tu_tx00.blo", "tu_tx26.blo", "tu_tx35.blo", "tu_tx37_00.blo", "tu_tx37_01.blo", "tu_tx37_02.blo" })
 		out.push_back(tutorialPage(f));
+	// The text keys of the stand-in cinemas (standin-cinema.md): TUT_RedOnion in
+	// demo04 and TUT_Zenmetu in demo60/61 (ogTutorialData.cpp bloFile_Oniyon,
+	// bloFile_Zenmetu).
+	for (const char* f : { "tu_tx03.blo", "tu_tx20.blo" })
+		out.push_back(tutorialPage(f));
 
 	return out;
 }

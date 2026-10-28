@@ -8,7 +8,7 @@
 //     cannot be linked, so the walker below repeats those calls in the same order.
 //     If those functions change, update the copy.
 //  2. nectar::readBlo, the library's mirror of the same loop.
-//  3. A tag and type table for the 20 stand-in layouts (transcribed from the
+//  3. A tag and type table for the 22 stand-in layouts (transcribed from the
 //     call sites in the issue notes, not from the generator's table) plus the
 //     game's search loops for DrawMenu, SpectrumCursorMgr and the letter and
 //     digit runs.
@@ -354,7 +354,7 @@ std::map<std::string, LayoutReq> requirements()
 	// ogMsgCtrlTagMgr: maru, ten and han text boxes (the last two are 3-letter tags
 	// with a leading NUL), each with text of at most 7 bytes (char[8] buffers).
 	m["wait_char.blo"].reqs = { { "maru", 'T' }, { std::string("\0ten", 4), 'T' }, { std::string("\0han", 4), 'T' } };
-	for (const char* f : { "tu_tx00.blo", "tu_tx26.blo", "tu_tx35.blo", "tu_tx37_00.blo", "tu_tx37_01.blo", "tu_tx37_02.blo" })
+	for (const char* f : { "tu_tx00.blo", "tu_tx26.blo", "tu_tx35.blo", "tu_tx37_00.blo", "tu_tx37_01.blo", "tu_tx37_02.blo", "tu_tx03.blo", "tu_tx20.blo" })
 		m[f].reqs = { { "tx00", 'A' } }; // tx00..tx19 are optional and any type (the disc has a picture in tu_tx37_01); the stand-in has one text box
 	return m;
 }
@@ -604,7 +604,7 @@ int main()
 	{
 		std::vector<nectar::StandinLayout> layouts = nectar::standinBloLayouts();
 		std::map<std::string, LayoutReq> reqs      = requirements();
-		check(layouts.size() == 20, "20 layouts: 12 on the boot path and 8 for day30_clock");
+		check(layouts.size() == 22, "22 layouts: 12 on the boot path, 8 for day30_clock, 2 for the stand-in cinema text keys");
 		const char* bootOrder[] = { "black.blo", "pause.blo", "pause_ok.blo", "gameover.blo", "gameove2.blo", "count.blo",
 			                        "con01.blo", "sund.blo",  "account.blo",  "play09.blo",   "play10.blo",   "play_day.blo" };
 		for (size_t i = 0; i < 12 && i < layouts.size(); i++) check(layouts[i].file == bootOrder[i], std::string("load order: ") + bootOrder[i]);
