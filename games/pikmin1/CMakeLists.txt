@@ -1419,6 +1419,22 @@ if(PIKMIN_BUILD_TESTS)
     target_compile_options(nectar_anim_writer_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
     add_test(NAME nectar_anim_writer_test COMMAND nectar_anim_writer_test ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/boot-manifest.txt)
 
+    # JAudio sequence archive writer and the stand-in SndData (standin-audio.md).
+    # The layout input is the game's own BARC table (src/jaudio/pikiseq.c); the
+    # port's PCSequenceArchive reads the .arc back and PCJamPlayer runs it.
+    add_executable(nectar_audio_writer_test
+        ${NECTAR_ASSETS_DIR}/tests/audio_writer_test.cpp
+        ${NECTAR_ASSETS_DIR}/src/audio_seq.cpp
+        ${NECTAR_ASSETS_DIR}/src/standin_audio.cpp
+        pc_port/audio/pc_jam.cpp
+        pc_port/audio/pc_instrument_bank.cpp
+        pc_port/audio/pc_sequence_archive.cpp
+        pc_port/audio/pc_wave_bank.cpp
+        src/jaudio/pikiseq.c)
+    target_include_directories(nectar_audio_writer_test PRIVATE pc_port include ${NECTAR_ASSETS_DIR}/include ${NECTAR_ASSETS_DIR}/src)
+    target_compile_options(nectar_audio_writer_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME nectar_audio_writer_test COMMAND nectar_audio_writer_test)
+
     # Photo mode camera convention (no stage needed)
     add_executable(pc_photo_mode_test pc_port/pc_photo_mode_test.cpp pc_port/pc_photo_mode.cpp)
     target_include_directories(pc_photo_mode_test PRIVATE ${SDL2_INCLUDE_DIRS} pc_port)
@@ -1747,7 +1763,14 @@ if(PIKMIN_BUILD_SCENARIOS)
     if(NOT TARGET nectar_mapcore)
         add_subdirectory("${NECTAR_LIBS_DIR}/nectar_mapcore" "${CMAKE_CURRENT_BINARY_DIR}/nectar_mapcore")
     endif()
-    add_executable(nectar_standin_generator tools/scenarios/standin_generator.cpp)
+    # src/jaudio/pikiseq.c is the game's BARC table for SndData/Seqs/pikiseq.arc
+    # (data only), compiled with this build's PIKMIN_GAME_VERSION so the
+    # stand-in .arc matches the executable's layout (standin-audio.md).
+    add_executable(nectar_standin_generator tools/scenarios/standin_generator.cpp src/jaudio/pikiseq.c)
+    # Source-level include path (every target here already has include/), so
+    # the generator's own empty include list stays free of the game headers.
+    set_source_files_properties(src/jaudio/pikiseq.c
+        PROPERTIES INCLUDE_DIRECTORIES "${CMAKE_CURRENT_SOURCE_DIR}/include")
     target_link_libraries(nectar_standin_generator PRIVATE nectar_mapcore nectar_assets)
     set_property(TARGET nectar_standin_generator PROPERTY INCLUDE_DIRECTORIES "")
     target_include_directories(nectar_standin_generator PRIVATE

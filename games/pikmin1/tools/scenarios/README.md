@@ -26,6 +26,11 @@ cmake -S games/pikmin1 -B build/pikmin1-scenarios -G Ninja \
 cmake --build build/pikmin1-scenarios --target pikmin_pc nectar_standin_generator
 ```
 
+The same scenarios also run with the original audio engine: configure a second
+build with `-DPIKMIN_NATIVE_JAUDIO=ON`. The generator writes a stand-in
+`SndData/Seqs/pikiseq.arc` that lets the engine boot with no sound data; see
+[standin-audio.md](standin-audio.md).
+
 `pikmin_pc` produces `build/pikmin1-scenarios/bin/nectar`.
 `nectar_standin_generator` is a separate executable, so release packaging never
 ships it. `PIKMIN_BUILD_SCENARIOS` also calls `enable_testing()` and defines
@@ -265,8 +270,11 @@ Build it with `cc gl_probe.c $(sdl2-config --cflags --libs) -o gl_probe`.
 
 ## Limitations
 
-- Audio is off. Scenario builds use `PIKMIN_NATIVE_JAUDIO=OFF` and
-  `SDL_AUDIODRIVER=dummy`, so nothing audio-related is tested.
+- Audio is off in the default scenario build (`PIKMIN_NATIVE_JAUDIO=OFF`,
+  `SDL_AUDIODRIVER=dummy`). A `PIKMIN_NATIVE_JAUDIO=ON` build boots the
+  original engine on stand-in sequences that play no notes, so it tests that
+  the engine starts and keeps running, not what it sounds like
+  ([standin-audio.md](standin-audio.md)).
 - Cutscenes are stand-ins with no actors (`standin-cinema.md`). The sandbox
   plays no landing; it plays the stand-in post-extinction movie (demo60), which
   the intro gate skips on its first tick. No scenario covers the Onion

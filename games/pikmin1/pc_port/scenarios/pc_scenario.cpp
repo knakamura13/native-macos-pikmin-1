@@ -24,6 +24,7 @@
 #include "Piki.h"
 #include "NaviMgr.h"
 #include "gameflow.h"
+#include "jaudio/piki_scene.h"
 #include "netplay/pc_netplay_det.h"
 #include "Dolphin/pad.h"
 #include "pc_permadeath.h"
@@ -341,6 +342,15 @@ void pc_scenario_pre_stage(void)
 	// RNG reseed), so it is set here and not in the stage-ready hook.
 	gameflow.mWorldClock.mCurrentDay = sScenario->startDay();
 	gameflow.mWorldClock.setTime(gameflow.mParameters->mStartHour());
+#if PIKI_USE_JAUDIO
+	// The title section the scenario boot skips (ninLogo.cpp) ends with
+	// Jac_SceneSetup(SCENE_Title) (titles.cpp), which is the only call that sets
+	// the engine's first_load flag (piki_scene.c __Loaded, 0x20000). Without it
+	// the stage's Jac_SceneSetup(SCENE_Course) spins forever waiting for that
+	// flag. The legacy facade (PIKMIN_NATIVE_JAUDIO=OFF) has no such wait, so
+	// the call is made in the native build only (standin-audio.md).
+	Jac_SceneSetup(SCENE_Title, 0);
+#endif
 	std::printf("[scenario] stage '%s' id %d, day %d\n", flowCont.mCurrentStage->mFileName, (int)flowCont.mCurrentStage->mStageID,
 	            sScenario->startDay());
 }

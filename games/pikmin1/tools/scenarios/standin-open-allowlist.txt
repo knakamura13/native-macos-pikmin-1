@@ -52,6 +52,12 @@ dataDir/objects/pellets/white3.anm
 dataDir/objects/pellets/white4.anm
 dataDir/objects/ufoparts/
 
+# Native JAudio builds only (PIKMIN_NATIVE_JAUDIO=ON; the OFF facade opens it
+# with fopen, not DVDOpen): Bank_Setup (bankloader.c) returns when the bank is
+# missing, so no wave group exists and every WaveScene_* call is a no-op. The
+# stand-in sequences play no notes, so nothing needs a bank (standin-audio.md).
+dataDir/SndData/Banks/pikibank.bx
+
 # Ghost replay record: gameCoreSection.cpp opens it and checks for null.
 dataDir/ghost/record.gst
 
