@@ -35,6 +35,10 @@ add_library(nectar_assets STATIC
     src/standin_textures.cpp
     src/anim.cpp
     src/standin_anims.cpp
+    # The scenario sandbox's gate (#68): item generator, platform .mod.
+    src/gen_item_writer.cpp
+    src/mod_platform_writer.cpp
+    src/standin_sandbox.cpp
     # Decodificador de texturas del launcher, reutilizado tal cual.
     ${NECTAR_P1_DIR}/pc_port/launcher/bti_decode.cpp
 )

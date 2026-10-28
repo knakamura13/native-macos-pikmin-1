@@ -51,6 +51,18 @@ constexpr int kThrowWaitGrabFrame = 1; ///< K: anim-key frame of ThrowWait's KEY
 constexpr int kThrowFrames        = 10;
 constexpr int kThrowReleaseFrame  = 1; ///< anim-key frame of Throw's KEY_Action0
 
+// The motions of a Pikmin working a gate and giving up (#68 sandbox gate,
+// standin_sandbox.h): ActBreakWall attacks on KEY_Action0 of Kuttuku (info 71)
+// or Job2 (info 41, on a platform), and a Pikmin that gives up plays Gakkari
+// (info 6) in PikiEmotionState until KEY_Finished. Their timing sets when the
+// squad comes back from the gate, so it is measured on the disc
+// (VERSION_GPIE01_01, pikis/animMgr.bin, read-only, 2026-10-28): anim keys,
+// info keys (loop start, KEY_Action0/1, loop end), the effect event key, flags
+// 5 (constant speed) and speed 30. No curves are copied.
+constexpr int kAnimInfoGakkari = 6;  ///< PIKIANIM_Gakkari (73)
+constexpr int kAnimInfoJob2    = 41; ///< PIKIANIM_Job2 (19)
+constexpr int kAnimInfoKuttuku = 71; ///< PIKIANIM_Kuttuku (48)
+
 /// One info: its AnimMgr record and the frame count of its payload.
 struct StandInAnim {
 	AnimInfoSpec info;
