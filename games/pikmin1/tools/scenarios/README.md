@@ -128,7 +128,9 @@ gets), forced by a local, uncommitted `SDL_GL_ACCELERATED_VISUAL` 0 in
 The same runs on the GPU take under a second at any of these sizes, so local
 GPU timing cannot show this.
 
-The sim does not read the window size: every scenario's `--state-hash-log`
+In a scenario the sim does not read the window size (in normal play it reads the
+window aspect through the culling frustum; see
+[coverage/render-sim-coupling.md](coverage/render-sim-coupling.md)): every scenario's `--state-hash-log`
 at 160x90, 128x72 and 64x36 is byte-identical to the 640x360 run of the same
 scenario and rate, on the stand-in and the disc tree, and `throw_release`
 measures the same K. Set `PIKMIN_SCENARIO_WINDOW=640x360` (or larger) to
