@@ -79,7 +79,7 @@ below, and that every `cinemas/` path in the boot manifest is a stand-in file.
 
 ## Stand-in set
 
-No actors, so no model or animation is opened. Every cut plays once (demo36 ends in a loop), so a movie
+No actors, so no model or animation is opened. Every cut plays once (demo36 and demo73 end in a loop), so a movie
 ends without a skip. Each scene is a short dolly towards the origin (or towards
 the target, for a Localized movie), 30 degrees, with one white light. The
 cameras, lights, lengths and frames are invented. The `.dsk` paths of the disc
@@ -96,6 +96,7 @@ boot are the ones listed in `boot-manifest.txt`.
 | `demo46.cin` + 1 scene (60) | Pikmin extinction (`DEMOID_Extinction`), Localized at the captain | Localized, HideNavi, NaviNoAI | FadeOut at 40; `GameEndCondition` (PikminZero) and `CleanupDayEnd` at 57 |
 | `demo47.cin` + 1 scene (60) | Day end after an extinction (`DEMOID_ExtDayEnd`, translated per stage; the sandbox falls back to Impact Site, demo47) | HideNavi, NaviNoAI | FadeIn at 0, FadeOut at 50, `ForceResults` at 57 |
 | `demo36.cin` + 2 scenes (30 + 10) | End-of-day results backdrop (`DEMOID_EndOfDayResults`, started by `DayOverModeState::initialisePhaseTwo` with the results window); used by `captain_death` | NonGameMovie | none. The first cut plays once, the second loops (`CINMODE_LoopScene`) until `exitDayEnd` drops the movie, as the disc's does (a 420-frame cut and a 10-frame loop). The results window stays up only while a movie is active: with no demo36 the phases advance on the next ticks and the day leaves for `GameExit` |
+| `demo73.cin` + 2 scenes (30 + 10) | Bad ending, Olimar fails to escape (`DEMOID_BadEndingFailEscape`, untranslated, started by `DayOverModeState::initialisePhaseTwo` on Day 30 with fewer than 25 parts); used by `extinction_day30` | NonGameMovie | `StartTotalResults` (12) at 27 in the first cut, which plays once; the second loops until the final results window reports done and `DayOverModeState::update` skips the scene. The disc's (read-only, 2026-10-28): NonGameMovie, a 449-frame cut with the key at 446, then a 4-frame loop, with the results backdrop and ship actors. Without it the window is built but never started and the phases run on |
 
 The discovery key frames follow the Onion's boot motion. Boot starts the motion
 (info colour + 3), and its `KEY_Action0` emits the first seed. Red keeps the
@@ -295,3 +296,43 @@ Files the chain opens besides the two movies and their two scenes: none that
 were missing. `gameover.blo` and `tu_tx20.blo` already exist. The scenario passes
 at `DayOverModeState`'s construction, before phase one opens the results
 screens.
+
+## Day-end screens: day_end and extinction_day30 (2026-10-28)
+
+`scenario_day_end.cpp` (`day_end`, `day_end_day29`) and
+`scenario_extinction_day30.cpp`. Stand-in only. What each chain opens that the
+tree did not have, and what was written for it (`standin_ui.cpp` and
+`standin_cinema.cpp`, both through the existing writers, `blo.h` and
+`cinema.h`):
+
+- The diary page of an ordinary sunset. `ResultFlags::getDocument` picks the
+  flag of lowest priority that is on: with nothing else on, `RESFLAG_Misc1`
+  (`re_n1_00.blo`, priority 600) on Day 2, and on Day 29 `RESFLAG_FinalDay`
+  (`re_g_00.blo`, priority 13), which `cleanupDayEnd` sets when the next day is
+  the last. One page each. Written like `re_j_00`: one `tx00` text box. The
+  disc's pages hold `tx00` to `tx02`, all optional to the code.
+- The bad ending's final results window (`DayOverModeState::makeTotalScoreWindow`,
+  built in phase two on Day 30). Its constructors open four screens:
+  `ufo_p.blo` (`DrawUfoParts`; `dataSet` looks up `ui01`-`ui30` pictures and
+  `un01`-`un30` text boxes once the window is operated), `f_result.blo`
+  (`DrawTotalScore`; every `search(.., true)` of its constructor: `win1`-`win4`,
+  the digit pictures `pa_l` ... `tp_1`, `pd_s` and `newd` pictures, the record rows
+  `pd01`-`dp05` and four small text boxes, a `best` anchor with one `b_00`),
+  `cha_sav2.blo` and `ac_chui.blo` (`DrawSaveMes`, inside the options save step).
+  Every tag and type the code asks for is also on the disc's file
+  (`NECTAR_DISC_DATA` run of `nectar_blo_writer_test`: 45 layouts, 0 problems).
+  The record-row texts are checked to fit the 128-byte buffers they are copied to.
+- `demo73.cin` (table above). The disc's demo73 starts the window with its
+  `StartTotalResults` key; the stand-in keeps that key and the loop. With it the
+  run goes through the scores, the parts list and the options save (A every 6
+  ticks), about 14 s at 30 Hz, then phase three and four. Without it (a run
+  before demo73 was written) the chain still reached `GameExit`, at tick 99
+  instead of 517 at 30 Hz, with the window never shown.
+
+Left missing on purpose, each a zero-length movie whose keys no chain step needs
+(allowlisted in `standin-open-allowlist.txt`): demo28 (the march-in, the
+sandbox stages' `DEMOID_DayEnd`; the disc's has one Notify key, FadeIn at 0),
+demo32 and demo56 (take-off), demo84 (red Onion flight) and demo69 (the bad
+ending's first movie; the disc's has Action keys only). demo74 (Olimin) is not
+opened: `MoviePlayer::startMovie` returns before it when the stage has no red
+Onion.

@@ -208,6 +208,32 @@ std::vector<Movie> movies()
 		m.cinema.cuts = { once, loop };
 		list.push_back(m);
 	}
+
+	// Bad ending, Olimar fails to escape (DEMOID_BadEndingFailEscape, demo73, untranslated):
+	// started by DayOverModeState::initialisePhaseTwo on Day 30 with fewer than 25 parts,
+	// right after makeTotalScoreWindow builds the final results window. The window does not
+	// start itself: the movie's Notify StartTotalResults key does (GameMovieInterface::parse).
+	// The disc's demo73 (read-only, 2026-10-28) is NonGameMovie, a 449-frame cut played once
+	// with that key at frame 446, then a 4-frame cut in a loop; DayOverModeState::update skips
+	// the scene when the window reports it is done, which ends the loop. Same shape here,
+	// shorter, with no actors (the disc's has the results backdrop and the ship). A missing
+	// demo73 is a zero-length movie: the window is built but never started, and phases three
+	// and four run on the next ticks.
+	{
+		Movie m;
+		m.cin           = "dataDir/cinemas/demo73.cin";
+		m.cinema.flags  = kCinNonGameMovie;
+		m.cinema.scenes = { "cinemas/demo73/demo73_t.dsk", "cinemas/demo73/demo73_l.dsk" };
+		m.sceneFrames   = { 30, 10 };
+		CinCut once, loop;
+		once.endFrame = 30;
+		once.keys     = { notify(kMovieCmdStartTotalResults, 0, 27) };
+		loop.scene    = 1;
+		loop.endFrame = 10;
+		loop.flags    = kCutLoop;
+		m.cinema.cuts = { once, loop };
+		list.push_back(m);
+	}
 	return list;
 }
 

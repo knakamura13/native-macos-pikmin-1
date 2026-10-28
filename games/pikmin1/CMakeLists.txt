@@ -443,7 +443,9 @@ if (PIKMIN_BUILD_SCENARIOS)
         pc_port/scenarios/scenario_onion_skip.cpp
         pc_port/scenarios/scenario_objects_smoke.cpp
         pc_port/scenarios/scenario_container_menu.cpp
-        pc_port/scenarios/scenario_captain_death.cpp)
+        pc_port/scenarios/scenario_captain_death.cpp
+        pc_port/scenarios/scenario_day_end.cpp
+        pc_port/scenarios/scenario_extinction_day30.cpp)
 endif()
 
 include_directories(
@@ -2033,7 +2035,8 @@ if(PIKMIN_BUILD_SCENARIOS)
         FIXTURES_SETUP scenario_standin_tree
         TIMEOUT 120)
     file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/scenario-logs")
-    foreach(scenario boot_smoke throw_release day30_clock extinction captain_death)
+    foreach(scenario boot_smoke throw_release day30_clock extinction captain_death
+            extinction_day30)
         foreach(rate 30 60)
             add_test(NAME scenario_${scenario}_${rate}
                 COMMAND ${CMAKE_COMMAND}
@@ -2054,8 +2057,13 @@ if(PIKMIN_BUILD_SCENARIOS)
     # tools/scenarios/standin_objects_stage.h): Onion, cliff, sprouts, pellet and
     # an enemy, all stand-ins. No disc entry: the stage does not exist on a real
     # install.
-    foreach(scenario sprout_landing onion_skip container_menu)
+    # day_end_day29 runs at 30 Hz only (tools/scenarios/README.md, "Tick rates").
+    foreach(scenario sprout_landing onion_skip container_menu
+            day_end day_end_day29)
         foreach(rate 30 60)
+            if(scenario STREQUAL "day_end_day29" AND rate EQUAL 60)
+                continue()
+            endif()
             add_test(NAME scenario_${scenario}_${rate}
                 COMMAND ${CMAKE_COMMAND}
                     -DGAME=$<TARGET_FILE:${NECTAR_GAME}>
