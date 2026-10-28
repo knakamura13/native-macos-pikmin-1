@@ -426,7 +426,8 @@ if (PIKMIN_BUILD_SCENARIOS)
         pc_port/scenarios/pc_scenario_list.cpp
         pc_port/scenarios/scenario_boot_smoke.cpp
         pc_port/scenarios/scenario_throw_release.cpp
-        pc_port/scenarios/scenario_day30_clock.cpp)
+        pc_port/scenarios/scenario_day30_clock.cpp
+        pc_port/scenarios/scenario_sprout_landing.cpp)
 endif()
 
 include_directories(
@@ -1758,7 +1759,7 @@ if(PIKMIN_BUILD_SCENARIOS)
     if(NOT TARGET nectar_mapcore)
         add_subdirectory("${NECTAR_LIBS_DIR}/nectar_mapcore" "${CMAKE_CURRENT_BINARY_DIR}/nectar_mapcore")
     endif()
-    add_executable(nectar_standin_generator tools/scenarios/standin_generator.cpp)
+    add_executable(nectar_standin_generator tools/scenarios/standin_generator.cpp tools/scenarios/standin_objects_stage.cpp)
     target_link_libraries(nectar_standin_generator PRIVATE nectar_mapcore nectar_assets)
     set_property(TARGET nectar_standin_generator PROPERTY INCLUDE_DIRECTORIES "")
     target_include_directories(nectar_standin_generator PRIVATE
@@ -1786,6 +1787,27 @@ if(PIKMIN_BUILD_SCENARIOS)
                 FIXTURES_REQUIRED scenario_standin_tree
                 WORKING_DIRECTORY "${PIKMIN_STANDIN_DATA}"
                 ENVIRONMENT "PIKMIN_SCENARIO_DATA_DIR=${PIKMIN_STANDIN_DATA};PIKMIN_SCENARIO_STAGE=stages/sandbox.ini"
+                TIMEOUT 600)
+        endforeach()
+    endforeach()
+
+    # Scenarios that run on the opt-in object stage (stages/sandbox_objects.ini,
+    # tools/scenarios/standin_objects_stage.h): Onion, cliff, sprouts, pellet and
+    # an enemy, all stand-ins. No disc entry: the stage does not exist on a real
+    # install.
+    foreach(scenario sprout_landing)
+        foreach(rate 30 60)
+            add_test(NAME scenario_${scenario}_${rate}
+                COMMAND ${CMAKE_COMMAND}
+                    -DGAME=$<TARGET_FILE:${NECTAR_GAME}>
+                    -DSCENARIO=${scenario} -DRATE=${rate}
+                    -DALLOWLIST=${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/standin-open-allowlist.txt
+                    -DLOG_DIR=${CMAKE_CURRENT_BINARY_DIR}/scenario-logs
+                    -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/run_standin_scenario.cmake)
+            set_tests_properties(scenario_${scenario}_${rate} PROPERTIES
+                FIXTURES_REQUIRED scenario_standin_tree
+                WORKING_DIRECTORY "${PIKMIN_STANDIN_DATA}"
+                ENVIRONMENT "PIKMIN_SCENARIO_DATA_DIR=${PIKMIN_STANDIN_DATA};PIKMIN_SCENARIO_STAGE=stages/sandbox_objects.ini"
                 TIMEOUT 600)
         endforeach()
     endforeach()

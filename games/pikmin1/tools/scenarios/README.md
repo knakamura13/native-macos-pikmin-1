@@ -49,7 +49,7 @@ PIKMIN_SCENARIO_STAGE=stages/sandbox.ini \
 
 | Argument | Meaning |
 |----------|---------|
-| `--scenario <name>` | Scenario to run: `boot_smoke`, `throw_release` or `day30_clock`. |
+| `--scenario <name>` | Scenario to run: `boot_smoke`, `throw_release`, `day30_clock` or `sprout_landing` (needs the object stage, below). |
 | `--scenario-tick-rate 30\|60` | Ticks per second. Default `30`. Any other value exits 2. |
 | `--scenario-visible` | Show the window. Default is hidden. |
 
@@ -103,6 +103,12 @@ All names are `scenario_<name>_<rate>` for each scenario at 30 and 60.
 | `scenario_standin_generate` | writes `<build>/scenario-data` | | `FIXTURES_SETUP scenario_standin_tree`, 120 s timeout. Passes `--manifest boot-manifest.txt`. |
 | `scenario_<name>_<rate>` | stand-in tree | none | `FIXTURES_REQUIRED scenario_standin_tree`, runs with `PIKMIN_SCENARIO_STAGE=stages/sandbox.ini`, 600 s timeout. No skip code: a missing or broken tree fails. |
 | `scenario_<name>_<rate>_disc` | a real install | `game-assets` | Runs in `<build>/scenario-scratch`, 600 s timeout, `SKIP_RETURN_CODE 77`. Set `PIKMIN_SCENARIO_DATA_DIR` to run it; otherwise CTest reports a skip. |
+
+`scenario_sprout_landing_<rate>` (30 and 60) is stand-in only: it runs with
+`PIKMIN_SCENARIO_STAGE=stages/sandbox_objects.ini`, the opt-in second stage
+with a cliff, an Onion, sprouts, a pellet and an enemy. See
+`standin-objects.md` for what the object stand-ins are, what was read from the
+disc and what remains.
 
 The stand-in entries run through `run_standin_scenario.cmake`. It starts
 `nectar`, keeps the scenario's exit code, and additionally fails the test on any

@@ -17,6 +17,11 @@ dataDir/stages/sandbox/0.gen
 dataDir/stages/sandbox/1.gen
 dataDir/stages/sandbox/init.gen
 dataDir/stages/sandbox/plants.gen
+# The object stage (standin_objects_stage.h) writes only default.gen too.
+dataDir/stages/sandbox_objects/0.gen
+dataDir/stages/sandbox_objects/1.gen
+dataDir/stages/sandbox_objects/init.gen
+dataDir/stages/sandbox_objects/plants.gen
 
 # Parameter files CoreNode::load skips silently when missing (node.cpp); every
 # value keeps its code default. key.bin: the throw key stays A, which

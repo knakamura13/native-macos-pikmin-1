@@ -32,6 +32,7 @@
 #include "nectar_assets/standin_ui.h"
 #include "nectar_mapcore/compile.h"
 #include "nectar_mapcore/map.h"
+#include "standin_objects_stage.h"
 
 #include <cstdint>
 #include <cstdio>
@@ -224,6 +225,11 @@ bool stagesIni(Tree& tree, std::string& error)
 	sandbox.name    = "sandbox";
 	sandbox.file    = kSandboxIni;
 	entries.push_back(sandbox);
+	nectar::StagesEntry objects; // the opt-in object sandbox (standin_objects_stage.h), also hidden, also STAGE_TESTMAP
+	objects.visible = false;
+	objects.name    = "sandbox_objects";
+	objects.file    = standin::kObjectsStageIni;
+	entries.push_back(objects);
 
 	std::string text;
 	if (!nectar::writeStagesIni(entries, text, error)) return fail(error, "stages.ini: " + error);
@@ -397,7 +403,8 @@ bool siblingStandIns(Tree& tree, std::string& error)
 bool buildTree(Tree& tree, std::string& error)
 {
 	tree.clear();
-	return parmFiles(tree, error) && archives(tree, error) && stagesIni(tree, error) && sandboxMap(tree, error) && siblingStandIns(tree, error);
+	return parmFiles(tree, error) && archives(tree, error) && stagesIni(tree, error) && sandboxMap(tree, error) && siblingStandIns(tree, error)
+	       && standin::addObjectsStage(tree, error);
 }
 
 /// FNV-1a 64 over every path and its bytes, in path order.

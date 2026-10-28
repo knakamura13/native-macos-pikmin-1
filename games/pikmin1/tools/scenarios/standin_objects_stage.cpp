@@ -1,0 +1,164 @@
+// The sandbox_objects stage (see standin_objects_stage.h).
+#include "standin_objects_stage.h"
+
+#include "nectar_assets/mod_writer.h"
+#include "nectar_assets/standin_objects.h"
+#include "nectar_mapcore/compile.h"
+#include "nectar_mapcore/map.h"
+
+#include <cstdio>
+
+namespace standin {
+
+namespace {
+
+using Bytes = std::vector<std::uint8_t>;
+
+constexpr const char* kStageGenDir = "stages/sandbox_objects/";
+constexpr const char* kMapMod      = "courses/sandbox_objects/sandbox_objects.mod";
+// In memory only: what compileMap reads through its GameFileReader.
+constexpr const char* kSourceMod = "courses/sandbox_objects/source.mod";
+constexpr const char* kSourceIni = "stages/sandbox_objects_base.ini";
+
+// compileMap always touches materials 0 (walls), 14 (floor), 15, 16, 23 and 24
+// and the game indexes mMaterialList[poly->mIndex] unchecked, so the source has
+// at least 25 (the same rule as the sandbox's source .mod).
+constexpr int kSourceMaterials = 25;
+
+bool fail(std::string& error, const std::string& what)
+{
+	error = what;
+	return false;
+}
+
+/// Flat-colour materials, tables only: the cliff is rock, the floor grass.
+bool sourceMod(Bytes& out, std::string& error)
+{
+	nectar::Model m;
+	for (int i = 0; i < kSourceMaterials; i++) {
+		nectar::ModMaterial mat;
+		mat.flags   = nectar::MOD_MAT_OPAQUE;
+		mat.texAttr = -1;
+		mat.colour  = i == 0 ? nectar::Rgba8 { 120, 110, 100, 255 } : nectar::Rgba8 { 110, 150, 90, 255 };
+		m.materials.push_back(mat);
+	}
+	if (!nectar::writeModTables(m, out, error)) return fail(error, "sandbox_objects source .mod: " + error);
+	return true;
+}
+
+/// The same base .ini as stages/sandbox.ini: map_file and the disc's day_multiply.
+std::string baseIni()
+{
+	return "# Object sandbox stage for the disc-free scenario tests, written by nectar_standin_generator.\n"
+	       "map_file\t\tcourses/sandbox_objects/sandbox_objects.mod\n"
+	       "day_multiply\t1.0\n";
+}
+
+/// What default.gen places. y is 0: the generators drop things on the ground.
+std::vector<nectar::ObjectGenSpec> generators()
+{
+	std::vector<nectar::ObjectGenSpec> g;
+	{
+		// The blue Onion. GenObjectItem::birth only creates an Onion whose colour
+		// the player already has a container for, unless the generator is named
+		// "next" (then only when the player has none).
+		nectar::ObjectGenSpec s;
+		s.kind          = nectar::ObjectGenSpec::Item;
+		s.generatorName = "next"; // a new game starts with the red container only
+		s.memo          = "blue onion";
+		s.name          = "goal";
+		s.itemParam     = 0;
+		s.pos           = { kOnionX, 0.0f, kOnionZ };
+		g.push_back(s);
+	}
+	const float sproutAt[3][2] = { { -100.0f, 120.0f }, { -60.0f, 150.0f }, { -20.0f, 180.0f } };
+	for (int i = 0; i < 3; i++) {
+		nectar::ObjectGenSpec s; // a buried sprout, colours blue, red, yellow
+		s.kind       = nectar::ObjectGenSpec::Piki;
+		s.memo       = "sprout";
+		s.pikiState  = 0;
+		s.pikiColour = i;
+		s.pos        = { sproutAt[i][0], 0.0f, sproutAt[i][1] };
+		g.push_back(s);
+	}
+	{
+		nectar::ObjectGenSpec s;
+		s.kind = nectar::ObjectGenSpec::Pellet;
+		s.memo = "red 1 pellet";
+		s.name = "pr01";
+		s.pos  = { -200.0f, 0.0f, 60.0f };
+		g.push_back(s);
+	}
+	{
+		nectar::ObjectGenSpec s;
+		s.kind     = nectar::ObjectGenSpec::Teki;
+		s.memo     = "dwarf bulborb";
+		s.tekiType = 3; // TEKI_Chappy
+		s.pos      = { -330.0f, 0.0f, 300.0f };
+		g.push_back(s);
+	}
+	return g;
+}
+
+} // namespace
+
+bool addObjectsStage(std::map<std::string, std::vector<std::uint8_t>>& tree, std::string& error)
+{
+	Bytes srcMod;
+	if (!sourceMod(srcMod, error)) return false;
+	const std::string ini = baseIni();
+
+	// 600-unit half width, 50-unit cells. The cliff is a step in the heights: the
+	// points from x = kCliffTopX up are kCliffHeight higher, so across the one cell
+	// between the foot and the top the ground rises 200 over 50 units, a slope of
+	// about 76 degrees (face normal y about 0.24, under the 0.5 that the sprout
+	// code treats as a wall) with a plateau above it.
+	nectar::MapDoc doc;
+	doc.name      = "sandbox_objects";
+	doc.symmetric = false;
+	doc.minX      = -600;
+	doc.maxX      = 600;
+	doc.minZ      = -600;
+	doc.maxZ      = 600;
+	doc.cell      = 50;
+	doc.sourceMod = kSourceMod;
+	doc.baseStage = kSourceIni;
+	doc.terrain.border.source = kSourceMod;
+	nectar::makeTerrainGrid(doc);
+	nectar::DocMaterial grass;
+	grass.source    = kSourceMod;
+	grass.index     = 14;
+	grass.attribute = 2;
+	doc.terrain.palette[0] = grass;
+	for (int iz = 0; iz <= doc.terrain.nz; iz++) {
+		for (int ix = 0; ix <= doc.terrain.nx; ix++) {
+			const double x = doc.minX + ix * doc.cell;
+			if (x >= double(kCliffTopX)) doc.terrain.heights[std::size_t(doc.terrain.vertexIndex(ix, iz))] = std::int16_t(kCliffHeight);
+		}
+	}
+
+	nectar::MapData data;
+	if (!nectar::expandMap(doc, data, error, /*validate=*/false)) return fail(error, "sandbox_objects map: " + error);
+
+	const nectar::GameFileReader read = [&](const std::string& path, Bytes& out) {
+		if (path == kSourceMod) {
+			out = srcMod;
+			return true;
+		}
+		if (path == kSourceIni) {
+			out.assign(ini.begin(), ini.end());
+			return true;
+		}
+		std::fprintf(stderr, "[standin] compileMap asked for %s, which the generator does not serve\n", path.c_str());
+		return false;
+	};
+	nectar::CompiledMap compiled;
+	if (!nectar::compileMap(data, read, kMapMod, compiled, error)) return fail(error, "sandbox_objects map: " + error);
+
+	tree[std::string("dataDir/") + kMapMod]           = compiled.mod;
+	tree[std::string("dataDir/") + kObjectsStageIni] = compiled.ini;
+	tree[std::string("dataDir/") + kStageGenDir + "default.gen"] = nectar::writeObjectGenFile(generators());
+	return true;
+}
+
+} // namespace standin
