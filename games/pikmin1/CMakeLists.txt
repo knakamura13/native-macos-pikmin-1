@@ -1723,4 +1723,43 @@ if(PIKMIN_BUILD_SCENARIOS)
                 LABELS "game-assets")
         endforeach()
     endforeach()
+
+    # Stand-in mode (#68): no disc. nectar_standin_generator writes the stand-in
+    # tree (every libs/nectar_assets writer, plus the sandbox stage) into
+    # <build>/scenario-data/assets/dataDir as a FIXTURES_SETUP test, so
+    # `ctest -R scenario_boot_smoke_30` builds the tree first. These carry no
+    # game-assets label and no SKIP_RETURN_CODE: a missing or broken tree fails.
+    # A separate executable, so release packaging (explicit targets) never ships it.
+    if(NOT TARGET nectar_mapcore)
+        add_subdirectory("${NECTAR_LIBS_DIR}/nectar_mapcore" "${CMAKE_CURRENT_BINARY_DIR}/nectar_mapcore")
+    endif()
+    add_executable(nectar_standin_generator tools/scenarios/standin_generator.cpp)
+    target_link_libraries(nectar_standin_generator PRIVATE nectar_mapcore nectar_assets)
+    set_property(TARGET nectar_standin_generator PROPERTY INCLUDE_DIRECTORIES "")
+    target_include_directories(nectar_standin_generator PRIVATE
+        ${NECTAR_LIBS_DIR}/nectar_assets/include ${NECTAR_LIBS_DIR}/nectar_mapcore/include)
+
+    set(PIKMIN_STANDIN_DATA "${CMAKE_BINARY_DIR}/scenario-data")
+    file(MAKE_DIRECTORY "${PIKMIN_STANDIN_DATA}")
+    add_test(NAME scenario_standin_generate
+        COMMAND nectar_standin_generator "${PIKMIN_STANDIN_DATA}"
+            --manifest "${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/boot-manifest.txt")
+    set_tests_properties(scenario_standin_generate PROPERTIES
+        FIXTURES_SETUP scenario_standin_tree
+        TIMEOUT 120)
+    foreach(scenario boot_smoke throw_release day30_clock)
+        foreach(rate 30 60)
+            add_test(NAME scenario_${scenario}_${rate}
+                COMMAND ${CMAKE_COMMAND}
+                    -DGAME=$<TARGET_FILE:${NECTAR_GAME}>
+                    -DSCENARIO=${scenario} -DRATE=${rate}
+                    -DALLOWLIST=${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/standin-open-allowlist.txt
+                    -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/run_standin_scenario.cmake)
+            set_tests_properties(scenario_${scenario}_${rate} PROPERTIES
+                FIXTURES_REQUIRED scenario_standin_tree
+                WORKING_DIRECTORY "${PIKMIN_STANDIN_DATA}"
+                ENVIRONMENT "PIKMIN_SCENARIO_DATA_DIR=${PIKMIN_STANDIN_DATA};PIKMIN_SCENARIO_STAGE=stages/sandbox.ini"
+                TIMEOUT 600)
+        endforeach()
+    endforeach()
 endif()

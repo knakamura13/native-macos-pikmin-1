@@ -1,0 +1,57 @@
+# Files a stand-in scenario run may fail to open (#68). One path per line,
+# relative to assets/; a line ending in '/' covers every path under it.
+# run_standin_scenario.cmake fails a run on any other "FAILED to open" line.
+# Each group says why the game tolerates the absence and why no v1 scenario
+# needs the file. Collected from boot_smoke, throw_release and day30_clock at
+# 30 and 60 ticks per second on macOS, 2026-10-27.
+
+# Sandbox generator files. Every .gen read is guarded (gameCoreSection.cpp
+# initStage): the day file prints NOT FOUND, init and plants are skipped.
+# Scenarios spawn their own Pikmin (#61), so only default.gen is written.
+dataDir/stages/sandbox/0.gen
+dataDir/stages/sandbox/1.gen
+dataDir/stages/sandbox/init.gen
+dataDir/stages/sandbox/plants.gen
+
+# Parameter files CoreNode::load skips silently when missing (node.cpp); every
+# value keeps its code default. key.bin: the throw key stays A, which
+# throw_release asserts. demo, sound, pelMgr: no demo flags, sound constants
+# or pellet configs are read by a v1 scenario.
+dataDir/parms/demo.bin
+dataDir/parms/sound.bin
+dataDir/parms/key.bin
+dataDir/parms/pelMgr.bin
+dataDir/camera/camepara.bin
+dataDir/tekipara/
+
+# Animation tables and bundles of objects other than the captain and Pikmin
+# (the other AnimMgrs, the known gap from #66). A missing bundle is ignored by
+# StdSystem::loadBundle and a missing AnimMgr table loads no infos; nothing a
+# v1 scenario asserts on animates them.
+dataDir/objects/ufo/ufo0705.anm
+dataDir/objects/ufo/ufo0705.bin
+dataDir/objects/pelAnim.bin
+dataDir/objects/pikihead/anims.bin
+dataDir/objects/pikihead/pikihead.anm
+dataDir/objects/bomb/anims.bin
+dataDir/objects/bomb/bomb.anm
+dataDir/objects/water/anims.bin
+dataDir/objects/water/water.anm
+dataDir/objects/fl_water/anims.bin
+dataDir/objects/fl_water/fl_water.anm
+dataDir/objects/goal/anims.bin
+dataDir/objects/goal/goal.anm
+dataDir/objects/pellets/white1.anm
+dataDir/objects/pellets/white2.anm
+dataDir/objects/pellets/white3.anm
+dataDir/objects/pellets/white4.anm
+dataDir/objects/ufoparts/
+
+# Ghost replay record: gameCoreSection.cpp opens it and checks for null.
+dataDir/ghost/record.gst
+
+# The post-extinction explanation movie (DEMOID_Unk60Cat; on disc the Forest
+# of Hope plays demo61). finalSetup triggers it because the squad is spawned
+# after the stage is ready. With no cinema stand-in, MoviePlayer finds no file
+# and the movie ends at once; the runner's intro gate waits for it either way.
+dataDir/cinemas/demo60.cin
