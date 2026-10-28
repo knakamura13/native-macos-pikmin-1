@@ -3,7 +3,7 @@
 Paths are relative to `games/pikmin1/`. Every `file:line` pointer was checked against 3c7d100b (after the kyle-develop merge) and carries its function name, which is the stable pointer if a number drifts. Verified items: see the verification log in [README.md](README.md).
 Tier: **S** = runs on stand-in assets (CI); **D** = needs the disc tier (local, `_disc` tests); **S+** = stand-in with the named extra asset.
 Effort: S small, M medium, L large. Risk = how likely a port change or mod breaks it unnoticed.
-Covered = by an existing scenario (boot_smoke, throw_release, day30_clock, sprout_landing, onion_skip, objects_smoke, captain_damage for DF29).
+Covered = by an existing scenario (boot_smoke, throw_release, day30_clock, sprout_landing, onion_skip, objects_smoke, container_menu, extinction, captain_death, captain_damage, ship_parts, onion_unlock, onion_unlock_whistle, day_end, day_end_day29, extinction_day30).
 
 ## 0. Facts that shape every scenario here
 

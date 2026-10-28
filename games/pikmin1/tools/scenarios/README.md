@@ -30,7 +30,7 @@ cmake --build build/pikmin1-scenarios --target pikmin_pc nectar_standin_generato
 ```
 
 `PIKMIN_BUILD_TESTS` defaults to ON, so this configure also registers the unit
-tests: `ctest -N` lists 107 entries, 29 of them scenario entries (with `ship_parts`; other branches add theirs). Most test
+tests: `ctest -N` lists 128 entries, 50 of them `scenario_` entries (44 stand-in, 6 disc). Most test
 executables are not built by the two targets above; CTest reports them as missing
 and `-R ^scenario_` leaves them out.
 
@@ -192,7 +192,7 @@ check does not run during the intro gate. Covers EC-05, EC-06, EC-08 and I-2.
 ## CTest entries
 
 Registered in `games/pikmin1/CMakeLists.txt` under `if(PIKMIN_BUILD_SCENARIOS)`.
-`ctest -N` lists 25 stand-in entries (`-R ^scenario_ -LE game-assets`, which counts the generator and the exit-code helper entries too) and 6 disc
+`ctest -N` lists 44 stand-in entries (`-R ^scenario_ -LE game-assets`, which counts the generator, the determinism pairs, and the exit-code and invariant helper entries too) and 6 disc
 entries (`-L game-assets`).
 
 All names are `scenario_<name>_<rate>`, at the rates in [Tick rates](#tick-rates).

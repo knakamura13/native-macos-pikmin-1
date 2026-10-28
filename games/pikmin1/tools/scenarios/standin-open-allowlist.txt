@@ -89,3 +89,8 @@ dataDir/cinemas/demo69.cin
 dataDir/effects/tex/waku.bti
 dataDir/effects/tex/waku02.bti
 dataDir/effects/tex/waku03.bti
+# extinction_day30: the bad-ending achievement (PC_ACH_BAD_ENDING) queues a toast
+# whose icon is screen/tex/end_navi.bti (pc_achievements.cpp). A missing icon is
+# tolerated. Achievements are saved per run in the scratch save folder, so the toast
+# shows on every run (it used to show on the first only, when the file was shared).
+dataDir/screen/eng_tex/end_navi.bti
