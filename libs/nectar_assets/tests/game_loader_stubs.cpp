@@ -19,3 +19,11 @@ void System::halt(immut char* file, int line, immut char* message)
 // Parm<Colour>::write in parameters.cpp references this (sysCommon/graphics.cpp);
 // the readers under test never call it.
 void Colour::write(Stream&) { }
+
+// P2DStream.cpp (the .blo test) reaches gsys and OSReport through LogStream
+// (system.h). The loaders under test never log, but MinGW's linker, unlike the
+// Mach-O and ELF ones, does not discard those references.
+System* gsys = nullptr;
+
+#include <cstdarg>
+void OSReport(const char*, ...) { }

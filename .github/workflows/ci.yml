@@ -227,7 +227,9 @@ jobs:
             LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a ./gl_probe
           elif [ "$RUNNER_OS" = "Windows" ]; then
             cp /mingw64/bin/opengl32.dll /mingw64/bin/libgallium_wgl.dll . 2>/dev/null || true
-            GALLIUM_DRIVER=llvmpipe ./gl_probe
+            ls -la opengl32.dll libgallium_wgl.dll || echo "Mesa DLLs not found beside the exe"
+            # A context that hangs is a probe failure, not a stuck job.
+            GALLIUM_DRIVER=llvmpipe timeout 120 ./gl_probe
           else
             ./gl_probe
           fi

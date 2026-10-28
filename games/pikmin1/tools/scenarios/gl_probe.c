@@ -81,6 +81,7 @@ static int compile(GLenum type, const char *src) {
 }
 
 int main(void) {
+    setvbuf(stdout, NULL, _IONBF, 0); /* the CI step can kill a hung probe; keep what it printed */
     SDL_SetMainReady();
     SDL_setenv("SDL_AUDIODRIVER", "dummy", 0);
     if (SDL_Init(SDL_INIT_VIDEO) != 0) return fail("SDL_Init");
