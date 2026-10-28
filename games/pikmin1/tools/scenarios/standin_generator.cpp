@@ -102,14 +102,48 @@ std::string sandboxBaseIni()
 	       "day_multiply\t1.0\n";
 }
 
-/// A flat floor with one steep cliff: compileMap with grid=false and one MapWall
-/// (DocWall defaults: thickness 40, height 150). The code dictates no cliff
-/// numbers and no v1 scenario uses the cliff (#68). It stands off to the side,
-/// clear of the 4 s walk throw_release scripts from the origin (stick forward is
-/// -z with the start camera; the captain covers about 640 units, the map edge is
-/// at 1200). A wall across that walk was tried: the captain stops against it
-/// and one Pikmin settles within 5 units of him, inside the disc's 15-unit grab
-/// range, so the grab skips the walk to the hand and K drops to 1.
+/// Sandbox walls, centre lines in map units (DocWall defaults: thickness 40,
+/// height 150). The captain starts at the origin and the throw_release walk
+/// away goes to -z (stick forward with the start camera).
+///
+/// These numbers are fitted, not derived. They make the stand-in
+/// throw_release calibration K equal the disc's (15 at 30 Hz, 18 at 60 Hz;
+/// standin-k-investigation.md). They are four short posts across the walk,
+/// 425 to 520 units from the start. The captain reaches them in the last
+/// second of the 4 s walk and is deflected between them. How far he gets
+/// depends on the tick rate (collision is resolved per tick): at the end of the
+/// walk he is at z = -510 at 30 Hz and z = -483 at 60 Hz. The trailing squad
+/// is then nearer at 60 Hz, so A is pressed with the nearest Pikmin at 76 units
+/// (30 Hz) or 52 units (60 Hz), and it walks to the hand around the posts. On
+/// the disc the presses are at 62 and 39 units, from a different situation (the
+/// squad works a Forest of Hope gate in BreakwallMode, then returns in
+/// Emotion); the sandbox does not copy that, only the resulting K.
+///
+/// The layout was found by a search: random layouts (one to three long walls,
+/// or a stopper with three to five posts), then small random moves around the
+/// closest ones, about 2,900 layouts measured at both rates. No single wall
+/// reached K >= 14 at 30 Hz with K <= 21 at 60 Hz, because on open ground the
+/// 60 Hz K is close to twice the 30 Hz K. The stopper of the found layout was
+/// dropped afterwards: the captain does not reach it, and K is the same
+/// without it. The match is sensitive: moving a post by 2 units can move K by
+/// several ticks, and a change to the squad or captain AI, to collision or to
+/// the sim RNG draws can break it. Re-measure K after such a change, and
+/// re-fit the posts if the stand-in K must match the disc again.
+///
+/// No other scenario moves the captain, so boot_smoke and day30_clock do not
+/// reach the posts. Before the fit the map had one wall at x = 700, off to the
+/// side, and K was 12 / 23.
+struct SandboxWall {
+	double ax, az, bx, bz;
+};
+constexpr SandboxWall kSandboxWalls[] = {
+	{ -20, -445, -2, -426 },
+	{ 60, -517, 42, -482 },
+	{ 21, -466, -4, -455 },
+	{ 73, -486, 45, -471 },
+};
+
+/// A flat floor with the walls above: compileMap with grid=false.
 bool sandboxMap(Tree& tree, std::string& error)
 {
 	Bytes sourceMod;
@@ -126,12 +160,14 @@ bool sandboxMap(Tree& tree, std::string& error)
 	doc.sourceMod = kSourceMod;
 	doc.baseStage = kSourceIni;
 	doc.terrain.border.source = kSourceMod;
-	nectar::DocWall cliff;
-	cliff.ax = 700;
-	cliff.az = -300;
-	cliff.bx = 700;
-	cliff.bz = 300;
-	doc.walls.push_back(cliff);
+	for (const SandboxWall& sw : kSandboxWalls) {
+		nectar::DocWall w;
+		w.ax = sw.ax;
+		w.az = sw.az;
+		w.bx = sw.bx;
+		w.bz = sw.bz;
+		doc.walls.push_back(w);
+	}
 
 	nectar::MapData data;
 	if (!nectar::expandMap(doc, data, error, /*validate=*/false)) return fail(error, "sandbox map: " + error);
@@ -210,18 +246,13 @@ bool stagesIni(Tree& tree, std::string& error)
 // The other differing IDs (whistle, punch, health, growth, bombs) are left at
 // the code defaults because no v1 scenario touches them.
 //
-// K is not expected to equal the disc's (disc 13 / 14 ticks at 30 / 60 Hz,
-// stand-ins 12 / 23). With these values the walk to the hand and the grab run
-// identically on both trees: the same target speeds (240 beyond 2 x grab range,
-// then 120), the hand-over at 15 units, then ThrowWait's KEY_Action0 one frame
-// later. K is set by how far away the Pikmin is when the scenario presses A, and
-// that comes from the stage and the sim RNG, not from these files. On the disc
-// the captain walks into a Forest of Hope wall, the squad leaves the plate and
-// comes back, and A is pressed at 58 units (30 Hz) or 28 (60 Hz). On the open
-// sandbox the squad trails at about 79 units. Particle emitters also draw from
-// the sim RNG (zen::Rand), so the disc's K moves to 15 / 18 when only those
-// draws move to the cosmetic stream. Matching K would mean tuning sandbox
-// geometry to that RNG-dependent behaviour. Details are in
+// With these values the walk to the hand and the grab run identically on both
+// trees: the same target speeds (240 beyond 2 x grab range, then 120), the
+// hand-over at 15 units, then ThrowWait's KEY_Action0 one frame later. K is set
+// by how far away the Pikmin is when the scenario presses A, and that comes
+// from the stage and the sim RNG, not from these files. These values stay the
+// disc's; the stand-in K (15 / 18 ticks at 30 / 60 Hz, as on the disc) comes
+// from the fitted sandbox walls (kSandboxWalls). Details are in
 // standin-k-investigation.md.
 bool parmFiles(Tree& tree, std::string& error)
 {
