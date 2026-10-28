@@ -138,6 +138,11 @@ jobs:
           RUN="ctest --test-dir build/pikmin1 --output-on-failure --timeout 600 -j 3 -R ^scenario_ -LE game-assets"
           if [ "$RUNNER_OS" = "Linux" ]; then xvfb-run -a $RUN; else $RUN; fi
 
+      # The throw_release calibration K per rate (a tuned fit; printed, not asserted).
+      - name: Scenario calibration summary
+        if: ${{ !cancelled() && steps.build-p1.outcome == 'success' && !contains(env.SCENARIO_SKIP_OS, runner.os) }}
+        run: bash games/pikmin1/tools/scenarios/ci_k_summary.sh build/pikmin1 "${{ matrix.name }}, native JAudio off"
+
       - name: Configure Pikmin 2
         if: ${{ !cancelled() }}
         run: |
@@ -210,6 +215,65 @@ jobs:
             -DPIKMIN_NATIVE_JAUDIO=ON
       - name: Build
         run: cmake --build build/jaudio --parallel -- -k 0
+
+  # The stand-in scenarios on a native JAudio build (standin-audio.md): the
+  # stand-in pikiseq.arc lets the engine boot a stage with no disc. Linux only,
+  # a separate build so jaudio-build keeps checking the release configuration.
+  jaudio-scenarios:
+    name: Native JAudio scenarios (Linux)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      BUILD_TYPE: Release
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_MAXSIZE: 300M
+      CCACHE_BASEDIR: ${{ github.workspace }}
+      CCACHE_NOHASHDIR: "true"
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            cmake ninja-build ccache pkg-config libsdl2-dev libgl1-mesa-dev libx11-dev \
+            libgl1-mesa-dri libglx-mesa0 libegl-mesa0 xvfb
+      - name: Restore ccache
+        uses: actions/cache@v6
+        with:
+          path: .ccache
+          key: ccache-jaudio-scen-${{ runner.os }}-${{ github.sha }}
+          restore-keys: ccache-jaudio-scen-${{ runner.os }}-
+      - name: Configure
+        run: |
+          cmake -S games/pikmin1 -B build/pikmin1 -G Ninja \
+            -DCMAKE_BUILD_TYPE="$BUILD_TYPE" \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            -DPIKMIN_BUILD_LAUNCHER=OFF -DPIKMIN_BUILD_TESTS=ON \
+            -DPIKMIN_NATIVE_JAUDIO=ON -DPIKMIN_BUILD_SCENARIOS=ON
+      - name: Build
+        id: build
+        run: cmake --build build/pikmin1 --parallel --target pikmin_pc nectar_standin_generator -- -k 0
+      - name: Test scenarios
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        env:
+          SDL_AUDIODRIVER: dummy
+          LIBGL_ALWAYS_SOFTWARE: "1"
+          GALLIUM_DRIVER: llvmpipe
+        run: |
+          xvfb-run -a ctest --test-dir build/pikmin1 --output-on-failure --timeout 600 -j 3 \
+            -R '^scenario_(boot_smoke|throw_release|day30_clock)_' -E _disc
+      - name: Scenario calibration summary
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: bash games/pikmin1/tools/scenarios/ci_k_summary.sh build/pikmin1 "Linux (x86-64), native JAudio on"
+      - name: Upload test logs
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-logs-jaudio-scenarios
+          path: |
+            build/pikmin1/Testing/Temporary/LastTest*.log
+            build/pikmin1/scenario-logs/
+          if-no-files-found: ignore
 
 
   # Reports, per OS, whether a hidden-window GL context of the kind the game
