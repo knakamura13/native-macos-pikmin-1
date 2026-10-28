@@ -1,7 +1,10 @@
 # Runs one scenario on the stand-in tree and fails on any `FAILED to open` line
 # that the allowlist does not name (#68's generator pass criteria). Called by
 # CTest as:
-#   cmake -DGAME=<nectar> -DSCENARIO=<name> -DRATE=<30|60> -DALLOWLIST=<file> -P run_standin_scenario.cmake
+#   cmake -DGAME=<nectar> -DSCENARIO=<name> -DRATE=<30|60> -DALLOWLIST=<file> [-DLOG_DIR=<dir>] -P run_standin_scenario.cmake
+# With LOG_DIR the run writes <dir>/scenario_<name>_<rate>.hash.log (--state-hash-log,
+# per-tick state hashes) and <dir>/scenario_<name>_<rate>.log (the run's output);
+# CI uploads that directory when a test fails.
 # with PIKMIN_SCENARIO_DATA_DIR and PIKMIN_SCENARIO_STAGE in the test's
 # environment. The scenario's own exit code is kept: anything but 0 fails.
 cmake_minimum_required(VERSION 3.16)
@@ -12,12 +15,21 @@ foreach(var GAME SCENARIO RATE ALLOWLIST)
     endif()
 endforeach()
 
+set(extra_args)
+if(DEFINED LOG_DIR)
+    file(MAKE_DIRECTORY "${LOG_DIR}")
+    list(APPEND extra_args --state-hash-log "${LOG_DIR}/scenario_${SCENARIO}_${RATE}.hash.log")
+endif()
+
 execute_process(
-    COMMAND "${GAME}" --scenario "${SCENARIO}" --scenario-tick-rate "${RATE}"
+    COMMAND "${GAME}" --scenario "${SCENARIO}" --scenario-tick-rate "${RATE}" ${extra_args}
     OUTPUT_VARIABLE out
     ERROR_VARIABLE out
     RESULT_VARIABLE rc)
 message("${out}")
+if(DEFINED LOG_DIR)
+    file(WRITE "${LOG_DIR}/scenario_${SCENARIO}_${RATE}.log" "${out}")
+endif()
 
 # One allowlisted path per line (relative to assets/); a line ending in '/'
 # covers every path under it; '#' starts a comment.

@@ -1747,6 +1747,7 @@ if(PIKMIN_BUILD_SCENARIOS)
     set_tests_properties(scenario_standin_generate PROPERTIES
         FIXTURES_SETUP scenario_standin_tree
         TIMEOUT 120)
+    file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/scenario-logs")
     foreach(scenario boot_smoke throw_release day30_clock)
         foreach(rate 30 60)
             add_test(NAME scenario_${scenario}_${rate}
@@ -1754,6 +1755,7 @@ if(PIKMIN_BUILD_SCENARIOS)
                     -DGAME=$<TARGET_FILE:${NECTAR_GAME}>
                     -DSCENARIO=${scenario} -DRATE=${rate}
                     -DALLOWLIST=${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/standin-open-allowlist.txt
+                    -DLOG_DIR=${CMAKE_CURRENT_BINARY_DIR}/scenario-logs
                     -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/run_standin_scenario.cmake)
             set_tests_properties(scenario_${scenario}_${rate} PROPERTIES
                 FIXTURES_REQUIRED scenario_standin_tree

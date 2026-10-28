@@ -183,6 +183,7 @@ jobs:
           name: test-logs-${{ runner.os }}
           path: |
             build/*/Testing/Temporary/LastTest*.log
+            build/*/scenario-logs/
             build/*/CMakeFiles/CMakeConfigureLog.yaml
           if-no-files-found: ignore
 
