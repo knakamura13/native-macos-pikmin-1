@@ -260,4 +260,72 @@ bool writeMod(const Model& m, std::vector<std::uint8_t>& out, std::string& error
 	return true;
 }
 
+bool writeModTables(const Model& m, std::vector<std::uint8_t>& out, std::string& error)
+{
+	if (!m.tevInfos.empty()) return fail(error, "the tables writer has no TEV infos: materials are colour-only");
+	for (std::size_t i = 0; i < m.texAttrs.size(); i++) {
+		const ModTexAttr& a = m.texAttrs[i];
+		if (a.texture < 0 || std::size_t(a.texture) >= m.textures.size()) return fail(error, "texattr " + std::to_string(i) + " points at a missing texture");
+	}
+	for (std::size_t i = 0; i < m.materials.size(); i++) {
+		const ModMaterial& mat = m.materials[i];
+		if (mat.flags & MOD_MAT_PVW) return fail(error, "material " + std::to_string(i) + " is PVW, which the tables writer does not write");
+		if (mat.texAttr >= int(m.texAttrs.size())) return fail(error, "material " + std::to_string(i) + " points at a missing texattr");
+	}
+
+	BeWriter w;
+	{
+		Chunk c(w, 0x00);
+		pad32(w);
+		w.u32(0);
+		w.u32(m.shapeFlags);
+	}
+	{ // Texture entry (mod.cpp, CHUNK_TEXTURE): u16 width, u16 height, s32 format,
+		// image count, 16 unused bytes, u32 byte count, pixels.
+		Chunk c(w, 0x20);
+		w.u32(std::uint32_t(m.textures.size()));
+		pad32(w);
+		for (const ModTexture& t : m.textures) {
+			w.u16(std::uint16_t(t.width));
+			w.u16(std::uint16_t(t.height));
+			w.s32(t.format);
+			w.u32(1);
+			for (int k = 0; k < 4; k++) w.u32(0);
+			w.u32(std::uint32_t(t.data.size()));
+			w.bytes(t.data);
+		}
+	}
+	{ // TexAttr (12 bytes): s16 texture, pad, s16 tiling, pad, f32 LOD bias.
+		Chunk c(w, 0x22);
+		w.u32(std::uint32_t(m.texAttrs.size()));
+		pad32(w);
+		for (const ModTexAttr& a : m.texAttrs) {
+			w.u16(std::uint16_t(a.texture));
+			w.u16(0);
+			w.u16(std::uint16_t(a.tiling));
+			w.u16(0);
+			w.f32(a.lodBias);
+		}
+	}
+	{
+		Chunk c(w, 0x30);
+		w.u32(std::uint32_t(m.materials.size()));
+		w.u32(0); // no TEV infos
+		pad32(w);
+		for (const ModMaterial& mat : m.materials) {
+			w.u32(mat.flags);
+			w.s32(mat.texAttr); // -1: colour only
+			w.u8(mat.colour.r);
+			w.u8(mat.colour.g);
+			w.u8(mat.colour.b);
+			w.u8(mat.colour.a);
+		}
+	}
+	{
+		Chunk c(w, 0xFFFF);
+	}
+	out.swap(w.b);
+	return true;
+}
+
 } // namespace nectar

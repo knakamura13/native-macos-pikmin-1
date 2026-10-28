@@ -120,12 +120,44 @@ bool standInTextureFiles(std::vector<StandInFile>& out, std::string& error)
 	if (!standInEffectTexBundle(fx.bytes, error)) return false;
 	out.push_back(std::move(fx));
 
-	// Sin entradas: los nombres salen de los .blo del HUD y el juego carga las
-	// texturas sueltas al mismo nombre.
+	// screen.bun: una entrada BTI por cada nombre de screenTextureNames(). En el
+	// disco esas texturas solo viven dentro del bundle (el arranque no las abre
+	// sueltas), y un null en loadTexExp aborta (NumberTex, drawCommon.cpp).
+	std::vector<BundleEntry> screen;
+	for (const std::string& name : screenTextureNames()) screen.push_back({ BUNDLE_BTI, name, bti });
 	StandInFile lang { "screen/eng_tex/screen.bun", {}, false };
-	if (!writeBundle({}, lang.bytes, error)) return false;
+	if (!writeBundle(screen, lang.bytes, error)) return false;
 	out.push_back(std::move(lang));
 	return true;
+}
+
+const std::vector<std::string>& screenTextureNames()
+{
+	// Nombres que el código pide con zen::loadTexExp (mTexDir "screen/eng_tex/"
+	// más el nombre base, zenSys.cpp) en el arranque y los tres escenarios v1.
+	// Salen del código, no del disco; se añadieron uno a uno con boot_smoke (#68).
+	static const std::vector<std::string> names = [] {
+		std::vector<std::string> v;
+		// zen::NumberTex (drawCommon.cpp): N_64 y N_sha64, 0 a 9, aborta si falta.
+		for (int i = 0; i < 10; i++) {
+			v.push_back("screen/eng_tex/" + std::to_string(i) + "_64.bti");
+			v.push_back("screen/eng_tex/" + std::to_string(i) + "_sha64.bti");
+		}
+		// PikiIconCallBack (drawGameInfo.cpp, pikiTexNametable): 19, aborta si falta.
+		for (const char* n : { "piki0", "bp_l64", "bp_b64", "bp_f64", "bp_lb64", "bp_bb64", "bp_fb64", "rp_l64", "rp_b64", "rp_f64",
+		                       "rp_lb64", "rp_bb64", "rp_fb64", "yp_l64", "yp_b64", "yp_f64", "yp_lb64", "yp_bb64", "yp_fb64" })
+			v.push_back(std::string("screen/eng_tex/") + n + ".bti");
+		// Cursor de menú (ya_u, ya_l) y animación del contenedor c_anim01-21; null
+		// tolerado, pero el disco las tiene en el bundle.
+		v.push_back("screen/eng_tex/ya_u.bti");
+		v.push_back("screen/eng_tex/ya_l.bti");
+		for (int i = 1; i <= 21; i++) v.push_back("screen/eng_tex/c_anim" + std::string(i < 10 ? "0" : "") + std::to_string(i) + ".bti");
+		// DrawContainer (drawContainer.cpp:138-146); ws08_160 y ws08_yel ya van sueltas.
+		for (const char* n : { "p2b_64", "p2r_64", "p2y_64", "ws08_red", "p2b_c_4", "p2b_c_r", "p2b_c_y" })
+			v.push_back(std::string("screen/eng_tex/") + n + ".bti");
+		return v;
+	}();
+	return names;
 }
 
 } // namespace nectar

@@ -35,9 +35,14 @@ const std::vector<std::string>& effectTextureNames();
 /// effects/tex/effects.bun: una entrada tipo 1 (BTI) por effectTextureNames().
 bool standInEffectTexBundle(std::vector<std::uint8_t>& out, std::string& error);
 
+/// Las texturas de screen/eng_tex/screen.bun ("screen/eng_tex/<x>.bti", la clave
+/// exacta que busca loadTexture), sacadas de las llamadas a zen::loadTexExp del
+/// arranque y de los escenarios v1 (#68).
+const std::vector<std::string>& screenTextureNames();
+
 /// Todas las texturas y bundles de textura que necesita el arranque, sueltos o
 /// en bundle, menos lo que otros escriben: los .anm (#66) y effects/pcr/effects.bun (#72).
-/// screen/eng_tex/screen.bun va con 0 entradas (sus nombres salen de los .blo).
+/// screen/eng_tex/screen.bun lleva una entrada por screenTextureNames().
 bool standInTextureFiles(std::vector<StandInFile>& out, std::string& error);
 
 } // namespace nectar

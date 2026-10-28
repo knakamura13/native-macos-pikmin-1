@@ -36,4 +36,14 @@ namespace nectar {
 /// padre de cada articulación con índice menor, índices dentro de rango.
 bool writeMod(const Model& model, std::vector<std::uint8_t>& out, std::string& error);
 
+/// Tables-only .mod: header (0x00), textures (0x20), texture attributes (0x22),
+/// materials (0x30) and the END chunk, nothing else. It is the source .mod that
+/// nectar_mapcore's compileMap copies its texture and material tables from
+/// (#68's sandbox map); the game never loads it. Only Model::shapeFlags,
+/// textures (width, height, format, data), texAttrs (texture, tiling, lodBias)
+/// and colour-only materials are written. Materials may point at a texAttr.
+/// false with the reason if the model carries anything else that would be
+/// dropped (TEV infos, PVW materials) or an index is out of range.
+bool writeModTables(const Model& model, std::vector<std::uint8_t>& out, std::string& error);
+
 } // namespace nectar
