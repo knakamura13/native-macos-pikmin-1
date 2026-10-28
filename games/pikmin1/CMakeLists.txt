@@ -443,7 +443,8 @@ if (PIKMIN_BUILD_SCENARIOS)
         pc_port/scenarios/scenario_onion_skip.cpp
         pc_port/scenarios/scenario_objects_smoke.cpp
         pc_port/scenarios/scenario_container_menu.cpp
-        pc_port/scenarios/scenario_captain_death.cpp)
+        pc_port/scenarios/scenario_captain_death.cpp
+        pc_port/scenarios/scenario_onion_unlock.cpp)
 endif()
 
 include_directories(
@@ -2055,6 +2056,26 @@ if(PIKMIN_BUILD_SCENARIOS)
     # an enemy, all stand-ins. No disc entry: the stage does not exist on a real
     # install.
     foreach(scenario sprout_landing onion_skip container_menu)
+        foreach(rate 30 60)
+            add_test(NAME scenario_${scenario}_${rate}
+                COMMAND ${CMAKE_COMMAND}
+                    -DGAME=$<TARGET_FILE:${NECTAR_GAME}>
+                    -DSCENARIO=${scenario} -DRATE=${rate}
+                    -DALLOWLIST=${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/standin-open-allowlist.txt
+                    -DLOG_DIR=${CMAKE_CURRENT_BINARY_DIR}/scenario-logs
+                    -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/run_standin_scenario.cmake)
+            set_tests_properties(scenario_${scenario}_${rate} PROPERTIES
+                FIXTURES_REQUIRED scenario_standin_tree
+                WORKING_DIRECTORY "${PIKMIN_STANDIN_DATA}"
+                ENVIRONMENT "PIKMIN_SCENARIO_DATA_DIR=${PIKMIN_STANDIN_DATA};PIKMIN_SCENARIO_STAGE=stages/sandbox_objects.ini"
+                TIMEOUT 600)
+        endforeach()
+    endforeach()
+
+    # First-pluck unlocks on the object stage, by hand and by Whistle Pluck
+    # (scenario_onion_unlock.cpp). 30 and 60: the walk, the pluck approach and
+    # the whistle circle run on frame-time arithmetic (README "Tick rates").
+    foreach(scenario onion_unlock onion_unlock_whistle)
         foreach(rate 30 60)
             add_test(NAME scenario_${scenario}_${rate}
                 COMMAND ${CMAKE_COMMAND}
