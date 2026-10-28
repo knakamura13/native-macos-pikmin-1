@@ -21,6 +21,7 @@
 
 #include "nectar_assets/archive.h"
 #include "nectar_assets/bundle.h"
+#include "nectar_assets/cinema.h"
 #include "nectar_assets/gen.h"
 #include "nectar_assets/mod_writer.h"
 #include "nectar_assets/parms.h"
@@ -386,10 +387,20 @@ bool siblingStandIns(Tree& tree, std::string& error)
 	return true;
 }
 
+// ── Cinemas (standin-cinema.md) ────────────────────────────────────────────
+bool standInCinemas(Tree& tree, std::string& error)
+{
+	std::vector<nectar::StandInCinemaFile> files;
+	if (!nectar::writeStandInCinemas(files, error)) return fail(error, "stand-in cinemas: " + error);
+	for (const auto& f : files) tree[f.path] = textBytes(f.text);
+	return true;
+}
+
 bool buildTree(Tree& tree, std::string& error)
 {
 	tree.clear();
-	return parmFiles(tree, error) && archives(tree, error) && stagesIni(tree, error) && sandboxMap(tree, error) && siblingStandIns(tree, error);
+	return parmFiles(tree, error) && archives(tree, error) && stagesIni(tree, error) && sandboxMap(tree, error) && siblingStandIns(tree, error)
+	    && standInCinemas(tree, error);
 }
 
 /// FNV-1a 64 over every path and its bytes, in path order.
@@ -429,7 +440,6 @@ const Allowed kManifestAllowlist[] = {
 	{ "dataDir/objects/bridge/", "Forest of Hope bridges, created by its generators" },
 	{ "dataDir/objects/gate/", "Forest of Hope gates, created by its generators" },
 	{ "dataDir/objects/hinderrock/", "Forest of Hope push box, created by its generators" },
-	{ "dataDir/cinemas/", "Forest of Hope landing and Onion movies (STAGE_TESTMAP plays no landing); no cinema stand-ins" },
 	// Silent when missing: CoreNode::load and the null-checked opens keep the
 	// code defaults (see standin-open-allowlist.txt for each).
 	{ "dataDir/tekipara/", "enemy parameters, CoreNode::load skips a missing file" },

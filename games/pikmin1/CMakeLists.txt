@@ -1382,6 +1382,20 @@ if(PIKMIN_BUILD_TESTS)
     target_compile_options(nectar_pcr_writer_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
     add_test(NAME nectar_pcr_writer_test COMMAND nectar_pcr_writer_test)
 
+    # Cutscene (.cin/.dsk) writers and the stand-in cinemas. The real CmdStream
+    # reads them back; loadCin and SceneData::parse cannot link, so their token
+    # loops are transcribed in the test. The boot manifest argument checks that
+    # every cinema path the disc boot opens is a stand-in.
+    add_executable(nectar_cinema_writer_test
+        ${NECTAR_ASSETS_DIR}/tests/cinema_writer_test.cpp
+        ${NECTAR_ASSETS_DIR}/tests/game_loader_stubs.cpp
+        ${NECTAR_ASSETS_DIR}/src/cinema.cpp
+        ${NECTAR_ASSETS_DIR}/src/standin_cinema.cpp
+        src/sysCommon/cmdStream.cpp src/sysCommon/stream.cpp src/sysCommon/string.cpp)
+    target_include_directories(nectar_cinema_writer_test PRIVATE pc_port include ${NECTAR_ASSETS_DIR}/include ${NECTAR_ASSETS_DIR}/src)
+    target_compile_options(nectar_cinema_writer_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME nectar_cinema_writer_test COMMAND nectar_cinema_writer_test ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/boot-manifest.txt)
+
     # DCA/DCK payload and AnimMgr table writers, and the stand-in animations (#66).
     # Parameters::read and the game's Stream/DataChunk/AnimKey types read the bytes
     # back; AnimDck::read, AnimInfo::doread and AnimMgr::read cannot link, so their

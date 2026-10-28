@@ -55,8 +55,6 @@ dataDir/objects/ufoparts/
 # Ghost replay record: gameCoreSection.cpp opens it and checks for null.
 dataDir/ghost/record.gst
 
-# The post-extinction explanation movie (DEMOID_Unk60Cat; on disc the Forest
-# of Hope plays demo61). finalSetup triggers it because the squad is spawned
-# after the stage is ready. With no cinema stand-in, MoviePlayer finds no file
-# and the movie ends at once; the runner's intro gate waits for it either way.
-dataDir/cinemas/demo60.cin
+# No cinema is allowlisted: the generator writes demo60 (the post-extinction
+# movie the sandbox plays on Day 1) and every cinema the disc boot opens
+# (standin-cinema.md).
