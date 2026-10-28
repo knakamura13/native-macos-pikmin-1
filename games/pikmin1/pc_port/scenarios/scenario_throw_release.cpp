@@ -30,6 +30,8 @@ namespace {
 constexpr int kPikminCount = 3;
 constexpr int kBlue        = 0;
 constexpr unsigned kAwaySeconds = 4;
+// NaviThrowWaitState::init picks the thrown Pikmin from the plate within 80.
+constexpr float kSelectDistance = 80.0f;
 
 class ThrowRelease : public PcScenario {
 public:
@@ -98,8 +100,11 @@ public:
 			}
 			break;
 		case Settle:
-			// Captain in Walk and at least one Pikmin in Normal in the plate.
-			if (cap == NAVISTATE_Walk && plateNormalCount(navi) > 0) {
+			// Captain in Walk and a Normal Pikmin in the plate within the distance
+			// NaviThrowWaitState::init selects from (80). The walk away can leave
+			// the squad behind on open ground; on the disc's Forest of Hope terrain
+			// stops the captain and they catch up during the walk.
+			if (cap == NAVISTATE_Walk && plateNormalCount(navi, kSelectDistance) > 0) {
 				mPress = t + 1;
 				mHoldA = true;
 				mPhase = Held;
@@ -109,7 +114,8 @@ public:
 				mThrownEvent = false;
 				mStepStart = t;
 			} else if (t - mStepStart > 2 * bound) {
-				scenarioFailf(t, "captain Walk with a Normal Pikmin in the plate", "captain state %d, %d in plate", cap, plateNormalCount(navi));
+				scenarioFailf(t, "captain Walk with a Normal Pikmin in the plate within reach", "captain state %d, %d in plate, %d within %.0f", cap,
+				              plateNormalCount(navi, 1e9f), plateNormalCount(navi, kSelectDistance), kSelectDistance);
 			}
 			break;
 		case Held: {
@@ -208,13 +214,16 @@ public:
 private:
 	enum Phase { Away, Settle, Held, WaitThrow, WaitFlying, WaitLanded, WaitWalk };
 
-	int plateNormalCount(Navi* navi)
+	// Normal Pikmin in the plate closer to the captain than `within`.
+	int plateNormalCount(Navi* navi, float within)
 	{
 		int n = 0;
 		CPlate* plate = navi->mPlateMgr;
 		for (int i = plate->getFirst(); !plate->isDone(i); i = plate->getNext(i)) {
 			Creature* c = plate->getCreature(i);
-			if (c != nullptr && c->mObjType == OBJTYPE_Piki && static_cast<Piki*>(c)->getState() == PIKISTATE_Normal) ++n;
+			if (c == nullptr || c->mObjType != OBJTYPE_Piki || static_cast<Piki*>(c)->getState() != PIKISTATE_Normal) continue;
+			Vector3f d = c->mSRT.t - navi->mSRT.t;
+			if (d.length() < within) ++n;
 		}
 		return n;
 	}
