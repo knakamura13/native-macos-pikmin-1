@@ -413,5 +413,13 @@ Unix Makefiles, `PIKMIN_NATIVE_JAUDIO=OFF`):
 - Exit codes 0, 1, 2 and 77, each rejected flag, the data-directory cases, the
   watchdog and `PIKMIN_SCENARIO_TRACE` were run. Exit 4 was not (no GL failure
   could be produced).
+- `nectar_cinema_writer_test`, `nectar_blo_writer_test`, `nectar_pcr_writer_test`,
+  `nectar_standin_objects_test` and `nectar_audio_writer_test` pass. Three rows of
+  `standin-texture-experiments.md` re-run on the current tree (delete
+  `consFont.bti`: exit 139; delete `effects/pcr/effects.bun`: exit 134 with
+  `Cannot open file.[effects/pcr/ore_rec.pcr]`; delete `intro/nintendo.bti`: exit
+  0) match.
+- Not run: the native JAudio configuration, the Linux and Windows builds, CI, and
+  `-G Ninja`.
 - `gl_probe.c`, built with the command above, printed `GL_PROBE_OK` (4.1 Metal,
   Apple M3 Max).
