@@ -58,4 +58,16 @@ void scenarioFail(unsigned tick, const char* expected, const char* observed);
 // printf-style: records failure with expected/observed text.
 void scenarioFailf(unsigned tick, const char* expected, const char* fmt, ...);
 
+// Scenario preconditions (issue #66), run against the game's own objects.
+// Both fail through scenarioFailf and return false on a violated precondition.
+// For every info in the shared Pikmin AnimMgr: the animation exists, has
+// mTotalFrameCount > 0 and is not the "Null Anim" dummy. The runner calls this
+// once when the stage is ready, before the scenario's onStageReady.
+bool scenarioCheckAnimMgrPreconditions(unsigned tick);
+// While the captain is in ThrowWait: the upper animator's motion is
+// PIKIANIM_ThrowWait and info 63 has a type-2 info key whose anim-key frame is
+// below the animator's frame count.
+class Navi;
+bool scenarioCheckThrowWaitPreconditions(unsigned tick, Navi* navi);
+
 #endif

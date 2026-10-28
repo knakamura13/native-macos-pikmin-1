@@ -89,6 +89,11 @@ public:
 		// While the grab is held, note the Pikmin in the hand and whether it was Hanged.
 		if (cap == NAVISTATE_ThrowWait) {
 			NaviThrowWaitState* wait = static_cast<NaviThrowWaitState*>(navi->getCurrState());
+			// The ThrowWait motion starts once a Pikmin is held (a pending pick waits for grab range).
+			if (!mCheckedWait && wait->mHeldThrowPiki) {
+				if (!scenarioCheckThrowWaitPreconditions(t, navi)) return;
+				mCheckedWait = true;
+			}
 			if (wait->mIsHoldingThrowPiki && wait->mHeldThrowPiki && wait->mHeldThrowPiki->getState() == PIKISTATE_Hanged) mSawHanged = true;
 		}
 		switch (mPhase) {
@@ -109,6 +114,7 @@ public:
 				mPhase = Held;
 				mThrown = nullptr;
 				mSawHanged = false;
+				mCheckedWait = false;
 				mSawFlying = false;
 				mThrownEvent = false;
 				mStepStart = t;
@@ -242,6 +248,7 @@ private:
 	unsigned mStepStart = 0;
 	bool mHoldA         = false;
 	bool mSawHanged     = false;
+	bool mCheckedWait   = false; // ThrowWait preconditions asserted for this hold
 	bool mSawFlying     = false;
 	bool mThrownEvent   = false;
 	Piki* mThrown       = nullptr;
