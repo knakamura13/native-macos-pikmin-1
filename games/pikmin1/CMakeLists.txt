@@ -1435,6 +1435,30 @@ if(PIKMIN_BUILD_TESTS)
     target_compile_options(nectar_audio_writer_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
     add_test(NAME nectar_audio_writer_test COMMAND nectar_audio_writer_test)
 
+    # The scenario sandbox's gate (#68): item generator and platform .mod writers
+    # and the gate files. The game's Stream and Parameters::read read the
+    # generator back in Generator::read's order; parseGen/parseMod and the game's
+    # CmdStream cover the rest.
+    add_executable(nectar_sandbox_writer_test
+        ${NECTAR_ASSETS_DIR}/tests/sandbox_writer_test.cpp
+        ${NECTAR_ASSETS_DIR}/tests/game_loader_stubs.cpp
+        ${NECTAR_ASSETS_DIR}/src/gen.cpp
+        ${NECTAR_ASSETS_DIR}/src/gen_item_writer.cpp
+        ${NECTAR_ASSETS_DIR}/src/mod_writer.cpp
+        ${NECTAR_ASSETS_DIR}/src/mod_platform_writer.cpp
+        ${NECTAR_ASSETS_DIR}/src/standin_sandbox.cpp
+        ${NECTAR_ASSETS_DIR}/src/anim.cpp
+        ${NECTAR_ASSETS_DIR}/src/parms.cpp
+        ${NECTAR_ASSETS_DIR}/src/bundle.cpp
+        ${NECTAR_ASSETS_DIR}/src/mod.cpp
+        ${NECTAR_ASSETS_DIR}/src/image.cpp
+        ${PC_PORT_DIR}/launcher/bti_decode.cpp
+        src/plugPikiColin/parameters.cpp src/sysCommon/cmdStream.cpp src/sysCommon/stream.cpp src/sysCommon/string.cpp)
+    target_include_directories(nectar_sandbox_writer_test PRIVATE pc_port include ${NECTAR_ASSETS_DIR}/include ${NECTAR_ASSETS_DIR}/src
+        ${NECTAR_ASSETS_DIR}/third_party ${PC_PORT_DIR}/launcher ${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb)
+    target_compile_options(nectar_sandbox_writer_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME nectar_sandbox_writer_test COMMAND nectar_sandbox_writer_test)
+
     # Photo mode camera convention (no stage needed)
     add_executable(pc_photo_mode_test pc_port/pc_photo_mode_test.cpp pc_port/pc_photo_mode.cpp)
     target_include_directories(pc_photo_mode_test PRIVATE ${SDL2_INCLUDE_DIRS} pc_port)

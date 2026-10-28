@@ -12,7 +12,8 @@ runs give the same K.
 
 At that point the stand-ins were unchanged, because the difference does not
 come from a stand-in parameter, animation or timing value. The sandbox walls
-were fitted later; see "Fitted sandbox walls" below.
+were fitted later ("Fitted sandbox walls" below), then replaced by a gate the
+squad works and gives up on, as on the disc ("The sandbox gate" below).
 
 ## What is the same on both trees
 
@@ -64,7 +65,114 @@ The disc's 13 and 14 are close only by chance. In seconds the two grabs take
   the #72 overlay result (disc tree with the stand-in `effects.bun`: K = 8 at
   30 Hz).
 
-## Fitted sandbox walls (after the particle RNG change)
+## The sandbox gate (replaces the fitted walls)
+
+The four fitted posts below are gone. The sandbox now has the mechanism the
+disc trace shows: a gate in the captain's way that the squad tries to break
+and gives up on (`standin_sandbox.h`, `standin_sandbox.cpp`).
+
+### What the disc does
+
+Temporary per-tick tracing of the disc run (Forest of Hope, 30 Hz, removed
+before commit) showed:
+
+1. The captain starts at (-528, 1974) and walks to -z at about 160 u/s for
+   1.2 s (about 185 units).
+2. He meets a reinforced gate (`sluice bomb`, init.gen, at 203 units ahead and
+   34 units to his left, turned 35 degrees), slides along it and stops against
+   it at tick 54, about 225 units from the start.
+3. The squad catches up. Each Pikmin in formation that touches the gate's
+   `gate` platform switches to `BreakwallMode` (Piki::collisionCallback).
+4. `ActBreakWall` attacks on `KEY_Action0` of Kuttuku. A bomb gate refuses
+   every hit (`InteractAttack::actItem`), so after 3 to 5 refused hits the
+   Pikmin gives up, `Sad`, and plays Gakkari in `PIKISTATE_Emotion`.
+5. The scenario presses A when the first Pikmin is Normal in the plate again:
+   tick 283, the Pikmin 59.5 units away (60 Hz: tick 544, 39 units).
+
+### What the sandbox now has
+
+- **The gate.** A `sluice bomb` item, born from an item generator in
+  `stages/sandbox/default.gen` (`writeItemGenerator`, gen.h). It stands where
+  the disc's gate stands relative to the captain (203 ahead, 34 left), turned
+  36 degrees (the disc's is 35; see below).
+- **Its files, ours.** `objects/gate/gt_hard.mod`: two posts on joint 0 and a
+  panel on joint 1, plain boxes (150 x 90 x 24 panel, 20-unit posts), with the
+  collinfo the game reads (`gate` and `side` platforms, `flag` sphere).
+  `centcoll.mod` and `sidecoll.mod`: the same boxes as collision
+  (`writePlatformMod`, mod_writer.h). `gate.bin` and `gt_hard.anm`: six static
+  motions, because `BuildingItem::startAI` starts motion 0 and BaseShape
+  panics ("no joint anim!!") without one. No disc geometry, texture or
+  animation curve is used.
+- **The work and give-up timing.** The stand-in Pikmin animations had no
+  `KEY_Action0` on Kuttuku, so the squad stood at the gate in `BreakwallMode`
+  forever. Kuttuku (info 71), Job2 (info 41) and Gakkari (info 6) now carry
+  the disc's anim keys, info keys (loop start, `KEY_Action0/1`, loop end), the
+  hit-effect event key, flags 5 and speed 30 (`standin_anims.h`). Only that
+  timing is read from the disc, as for ThrowWait and Throw.
+- **Terrain.** Still the flat floor. The disc's ground near the gate is close to
+  flat (the captain's y changes by 1 unit on the walk), so no slope was added.
+
+With the gate, the stand-in run follows the disc step by step: the captain
+walks about 185 units, slides, and stops at about 225 units (tick 54 at
+30 Hz, as on the disc); the squad enters `BreakwallMode`, gives up through
+`Emotion`, and A is pressed with a Pikmin standing still.
+
+### K
+
+RelWithDebInfo, macOS, `nectar --scenario throw_release`, 3 runs per cell.
+Each run is deterministic.
+
+| Tree | 30 Hz | 60 Hz |
+|---|---|---|
+| Disc (Forest of Hope) | 15, 15, 15 | 18, 18, 18 |
+| Stand-ins, gate turned 35 degrees (the disc's turn), one run | 13 | 16 |
+| Stand-ins, gate turned 36 degrees (committed) | 14, 14, 14 | 17, 17, 17 |
+
+Press state with the committed gate: 30 Hz tick 251, Pikmin 68.6 units away
+(disc 283, 59.5); 60 Hz tick 566, 34.9 units (disc 544, 39).
+
+### How 36 degrees was chosen, and how fragile it is
+
+The disc's own layout (35 degrees) gives 13 / 16. Moving one gate parameter
+at a time (about 40 layouts, each at both rates; all runs passed):
+
+| Change from the disc layout | K pairs (30 Hz / 60 Hz) |
+|---|---|
+| turn 25 to 45 degrees | 13/39, 9/19, 10/17, 10/24, 14/17 (36), 16/26, 8/18, 11/30 |
+| position along the walk, -195 to -212 | 12/33, 10/27, 11/29, 16/16, 16/16, 8/39 |
+| position across the walk, -24 to -44 | 8/16, 10/32, 12/46, 12/30, 7/34, 11/25 |
+| panel half-width 60 to 100 | 12/34, 19/38, 11/34, 15/26, 15/44 |
+| panel half-depth 8 to 20 | 10/25, 8/31, 10/72, 12/23 |
+| 36 degrees plus one 1-2 unit change | 7/17, 13/22, 8/19, 11/32, 15/41, 10/17, 8/26, 11/24 |
+
+Only 36 degrees put both rates within one tick of the disc. That is a search
+over legitimate gate parameters, not a derivation: K is a chaotic outcome of
+which Pikmin gives up first and where it stands, and a 1-unit move of the gate
+can change K60 by 20 ticks. The disc's K is presumably just as sensitive to
+its own layout and RNG draws. What the gate does buy over the posts:
+
+- the same sequence of states as the disc (stop against a wall, BreakwallMode,
+  Emotion, press from rest), so `throw_release` exercises the same code paths
+  on both trees;
+- the same press situation in kind (a Pikmin standing still 35 to 70 units
+  away), instead of a trailing, moving squad.
+
+### Limits
+
+- Matching K within one tick still depends on the 36-degree choice. A change to
+  the squad AI, collision, animations, or the sim RNG draws can move both trees'
+  K independently. Re-measure both after such a change.
+- The stand-in gate is not the disc's shape. Its panel is wider than the
+  disc's attack spheres suggest and has no break motions (they never play on a
+  bomb gate).
+- Only Kuttuku, Job2 and Gakkari have disc timing. The walk and turn motions
+  of the Pikmin are still plain 40-frame stand-ins, so the walk to the hand can
+  still differ in speed from the disc (the disc's Pikmin starts more slowly).
+
+## Fitted sandbox walls (after the particle RNG change, superseded)
+
+This section records the previous fit (`afb9c3cc`). The posts and
+`kSandboxWalls` were removed when the gate came in.
 
 With the particle draws on the cosmetic stream (`standin-particle-rng.md`), the
 disc K is 15 / 18. The stand-in generator now builds the sandbox with four

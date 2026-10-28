@@ -46,4 +46,17 @@ bool writeMod(const Model& model, std::vector<std::uint8_t>& out, std::string& e
 /// dropped (TEV infos, PVW materials) or an index is out of range.
 bool writeModTables(const Model& model, std::vector<std::uint8_t>& out, std::string& error);
 
+/// A platform .mod: what writeMod writes, plus the collision triangles
+/// (Model::collision) as a 0x100 chunk before the end chunk. An object's
+/// collinfo "type 2 / platform <path>" loads it (BaseShape importIni and the
+/// platform loop in shapeBase.cpp), and createCollisions(32) builds the grid,
+/// so no 0x110 chunk is written. Triangles index Model::positions, are in one
+/// room (0), and carry no neighbours (-1). Their plane is recomputed here with
+/// the game's rule, normal = (C - A) x (B - A), offset = normal . A; the
+/// normal and offset in the model are ignored. Written in
+/// mod_platform_writer.cpp for the scenario sandbox's gate (#68). false with
+/// the reason if writeMod refuses the model, there are no triangles, or a
+/// vertex index is out of range or a triangle is degenerate.
+bool writePlatformMod(const Model& model, std::vector<std::uint8_t>& out, std::string& error);
+
 } // namespace nectar

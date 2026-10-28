@@ -51,6 +51,34 @@ StandInAnimSet buildPikiSet()
 			a.measured       = true;
 			a.info.animKeys  = { 0, kThrowReleaseFrame, kThrowFrames - 1 };
 			a.info.infoKeys  = { actionKey(1) };
+		} else if (i == kAnimInfoKuttuku || i == kAnimInfoJob2 || i == kAnimInfoGakkari) {
+			// Disc timing (standin_anims.h): anim keys, then info keys as (anim-key
+			// index, type) with 0 loop start, 1 loop end, 2 KEY_Action0, 3 KEY_Action1.
+			struct Timing {
+				std::vector<std::int32_t> animKeys;
+				std::vector<std::pair<int, int>> infoKeys;
+				int effectFrame; ///< event key of type 1 (action: ActBreakWall's hit effect), or -1
+			};
+			const Timing t = i == kAnimInfoKuttuku ? Timing { { 0, 11, 17, 30, 34 }, { { 1, 0 }, { 1, 2 }, { 2, 3 }, { 3, 1 } }, 11 }
+			               : i == kAnimInfoJob2    ? Timing { { 0, 10, 12, 24 }, { { 0, 0 }, { 1, 2 }, { 2, 3 }, { 3, 1 } }, 11 }
+			                                       : Timing { { 0, 21, 38, 69 }, { { 1, 0 }, { 2, 1 } }, -1 };
+			a.frameCount    = t.animKeys.back() + 1;
+			a.measured      = true;
+			a.info.flags    = 5;
+			a.info.speed    = 30.0f;
+			a.info.animKeys = t.animKeys;
+			for (const auto& [key, type] : t.infoKeys) {
+				AnimKeyRecord k;
+				k.frame   = key;
+				k.keyType = std::uint8_t(type);
+				a.info.infoKeys.push_back(k);
+			}
+			if (t.effectFrame >= 0) {
+				AnimKeyRecord e;
+				e.frame     = t.effectFrame;
+				e.eventType = 1;
+				a.info.eventKeys.push_back(e);
+			}
 		} else {
 			a.frameCount    = kStandInDefaultFrames;
 			a.info.animKeys = { 0, kStandInDefaultFrames - 1 };

@@ -29,6 +29,7 @@
 #include "nectar_assets/standin_anims.h"
 #include "nectar_assets/standin_audio.h"
 #include "nectar_assets/standin_models.h"
+#include "nectar_assets/standin_sandbox.h"
 #include "nectar_assets/standin_textures.h"
 #include "nectar_assets/standin_ui.h"
 #include "nectar_mapcore/compile.h"
@@ -109,48 +110,8 @@ std::string sandboxBaseIni()
 	       "day_multiply\t1.0\n";
 }
 
-/// Sandbox walls, centre lines in map units (DocWall defaults: thickness 40,
-/// height 150). The captain starts at the origin and the throw_release walk
-/// away goes to -z (stick forward with the start camera).
-///
-/// These numbers are fitted, not derived. They make the stand-in
-/// throw_release calibration K equal the disc's (15 at 30 Hz, 18 at 60 Hz;
-/// standin-k-investigation.md). They are four short posts across the walk,
-/// 425 to 520 units from the start. The captain reaches them in the last
-/// second of the 4 s walk and is deflected between them. How far he gets
-/// depends on the tick rate (collision is resolved per tick): at the end of the
-/// walk he is at z = -510 at 30 Hz and z = -483 at 60 Hz. The trailing squad
-/// is then nearer at 60 Hz, so A is pressed with the nearest Pikmin at 76 units
-/// (30 Hz) or 52 units (60 Hz), and it walks to the hand around the posts. On
-/// the disc the presses are at 62 and 39 units, from a different situation (the
-/// squad works a Forest of Hope gate in BreakwallMode, then returns in
-/// Emotion); the sandbox does not copy that, only the resulting K.
-///
-/// The layout was found by a search: random layouts (one to three long walls,
-/// or a stopper with three to five posts), then small random moves around the
-/// closest ones, about 2,900 layouts measured at both rates. No single wall
-/// reached K >= 14 at 30 Hz with K <= 21 at 60 Hz, because on open ground the
-/// 60 Hz K is close to twice the 30 Hz K. The stopper of the found layout was
-/// dropped afterwards: the captain does not reach it, and K is the same
-/// without it. The match is sensitive: moving a post by 2 units can move K by
-/// several ticks, and a change to the squad or captain AI, to collision or to
-/// the sim RNG draws can break it. Re-measure K after such a change, and
-/// re-fit the posts if the stand-in K must match the disc again.
-///
-/// No other scenario moves the captain, so boot_smoke and day30_clock do not
-/// reach the posts. Before the fit the map had one wall at x = 700, off to the
-/// side, and K was 12 / 23.
-struct SandboxWall {
-	double ax, az, bx, bz;
-};
-constexpr SandboxWall kSandboxWalls[] = {
-	{ -20, -445, -2, -426 },
-	{ 60, -517, 42, -482 },
-	{ 21, -466, -4, -455 },
-	{ 73, -486, 45, -471 },
-};
-
-/// A flat floor with the walls above: compileMap with grid=false.
+/// A flat floor (compileMap with grid=false, no walls), the gate and default.gen
+/// (standin_sandbox.h).
 bool sandboxMap(Tree& tree, std::string& error)
 {
 	Bytes sourceMod;
@@ -167,14 +128,6 @@ bool sandboxMap(Tree& tree, std::string& error)
 	doc.sourceMod = kSourceMod;
 	doc.baseStage = kSourceIni;
 	doc.terrain.border.source = kSourceMod;
-	for (const SandboxWall& sw : kSandboxWalls) {
-		nectar::DocWall w;
-		w.ax = sw.ax;
-		w.az = sw.az;
-		w.bx = sw.bx;
-		w.bz = sw.bz;
-		doc.walls.push_back(w);
-	}
 
 	nectar::MapData data;
 	if (!nectar::expandMap(doc, data, error, /*validate=*/false)) return fail(error, "sandbox map: " + error);
@@ -198,10 +151,14 @@ bool sandboxMap(Tree& tree, std::string& error)
 
 	tree[std::string("dataDir/") + kSandboxMod] = compiled.mod;
 	tree[std::string("dataDir/") + kSandboxIni] = compiled.ini;
-	// The captain at the origin with no generators. Optional for the stage load,
-	// but explicit data; day, init and plants files are omitted because scenarios
-	// spawn their own Pikmin (#61).
-	tree[std::string("dataDir/") + kSandboxGenDir + "default.gen"] = nectar::writeGen({});
+	// The captain at the origin and the gate in his way (standin_sandbox.h); day,
+	// init and plants files are omitted because scenarios spawn their own Pikmin
+	// (#61).
+	std::vector<nectar::SandboxFile> files;
+	nectar::SandboxFile gen;
+	if (!nectar::writeSandboxGateFiles(files, error) || !nectar::writeSandboxDefaultGen(kSandboxGenDir, gen, error)) return fail(error, "sandbox: " + error);
+	files.push_back(std::move(gen));
+	for (nectar::SandboxFile& f : files) tree[f.path] = std::move(f.bytes);
 	return true;
 }
 
@@ -258,9 +215,8 @@ bool stagesIni(Tree& tree, std::string& error)
 // hand-over at 15 units, then ThrowWait's KEY_Action0 one frame later. K is set
 // by how far away the Pikmin is when the scenario presses A, and that comes
 // from the stage and the sim RNG, not from these files. These values stay the
-// disc's; the stand-in K (15 / 18 ticks at 30 / 60 Hz, as on the disc) comes
-// from the fitted sandbox walls (kSandboxWalls). Details are in
-// standin-k-investigation.md.
+// disc's; the stand-in K comes from the sandbox gate the walk runs into
+// (standin_sandbox.h). Details are in standin-k-investigation.md.
 bool parmFiles(Tree& tree, std::string& error)
 {
 	using nectar::parmFloat;
@@ -457,7 +413,7 @@ const Allowed kManifestAllowlist[] = {
 	{ "dataDir/bosses/", "Forest of Hope bosses, created by its generators" },
 	{ "dataDir/objects/plants/", "Forest of Hope plants, created by its generators" },
 	{ "dataDir/objects/bridge/", "Forest of Hope bridges, created by its generators" },
-	{ "dataDir/objects/gate/", "Forest of Hope gates, created by its generators" },
+	{ "dataDir/objects/gate/", "the soft and hard gates of the Forest of Hope (gt_soft.mod and .anm); the sandbox has only a bomb gate, whose files are in the tree" },
 	{ "dataDir/objects/hinderrock/", "Forest of Hope push box, created by its generators" },
 	// Silent when missing: CoreNode::load and the null-checked opens keep the
 	// code defaults (see standin-open-allowlist.txt for each).

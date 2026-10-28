@@ -586,7 +586,8 @@ void testStandInSet()
 		for (const AnimKey& k : info.infoKeys) check(k.mFrameIndex < int(info.animKeys.size()), label + ": info key points into the anim-key list");
 		check(info.infoKeys.size() <= 16, label + ": at most 16 info keys");
 		if (i == nectar::kAnimInfoNigeru) check(hit->anim.frames >= 11, label + ": long enough for the forced counter 10.0");
-		if (i != nectar::kAnimInfoThrow && i != nectar::kAnimInfoThrowWait) check(hit->anim.frames > 30, label + ": longer than the largest forced counter");
+		// Measured infos have the disc's length (checkStandInAnims exempts them too).
+		if (!set.anims[std::size_t(i)].measured) check(hit->anim.frames > 30, label + ": longer than the largest forced counter");
 	}
 
 	// ThrowWait and Throw: the type-2 info key and its frame.
