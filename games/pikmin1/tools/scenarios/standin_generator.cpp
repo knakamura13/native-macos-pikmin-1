@@ -29,14 +29,17 @@
 #include "nectar_assets/standin_anims.h"
 #include "nectar_assets/standin_audio.h"
 #include "nectar_assets/standin_models.h"
+#include "nectar_assets/standin_objects.h"
 #include "nectar_assets/standin_sandbox.h"
 #include "nectar_assets/standin_textures.h"
 #include "nectar_assets/standin_ui.h"
 #include "nectar_mapcore/compile.h"
 #include "nectar_mapcore/map.h"
+#include "standin_objects_stage.h"
 
 #include <cstdint>
 #include <cstdio>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <map>
@@ -186,6 +189,11 @@ bool stagesIni(Tree& tree, std::string& error)
 	sandbox.name    = "sandbox";
 	sandbox.file    = kSandboxIni;
 	entries.push_back(sandbox);
+	nectar::StagesEntry objects; // the opt-in object sandbox (standin_objects_stage.h), also hidden, also STAGE_TESTMAP
+	objects.visible = false;
+	objects.name    = "sandbox_objects";
+	objects.file    = standin::kObjectsStageIni;
+	entries.push_back(objects);
 
 	std::string text;
 	if (!nectar::writeStagesIni(entries, text, error)) return fail(error, "stages.ini: " + error);
@@ -326,6 +334,12 @@ bool siblingStandIns(Tree& tree, std::string& error)
 	if (!nectar::writeStandInAnimations(anims, error)) return fail(error, "stand-in animations: " + error);
 	for (auto& f : anims) tree[f.path] = std::move(f.bytes);
 
+	// Object, ship-part, plant, gate, boss and enemy animations, the extra models
+	// and the pellet tables (standin_objects.h).
+	std::vector<nectar::StandInAnimFile> objects;
+	if (!nectar::writeStandInObjectFiles(objects, error)) return fail(error, "stand-in objects: " + error);
+	for (auto& f : objects) tree[f.path] = std::move(f.bytes);
+
 	// Optional textures too: the game tolerates their absence, but the disc boot
 	// opens them, so writing them keeps the open log close to the disc's.
 	std::vector<nectar::StandInFile> textures;
@@ -375,7 +389,7 @@ bool buildTree(Tree& tree, std::string& error)
 {
 	tree.clear();
 	return parmFiles(tree, error) && archives(tree, error) && stagesIni(tree, error) && sandboxMap(tree, error) && siblingStandIns(tree, error)
-	    && standInCinemas(tree, error) && audioStandIns(tree, error);
+	    && standInCinemas(tree, error) && audioStandIns(tree, error) && standin::addObjectsStage(tree, error);
 }
 
 /// FNV-1a 64 over every path and its bytes, in path order.
@@ -403,17 +417,21 @@ std::uint64_t hashTree(const Tree& tree)
 struct Allowed {
 	const char* prefix;
 	const char* why;
+	const char* suffix = nullptr; ///< when set, only paths that also end with it
 };
 const Allowed kManifestAllowlist[] = {
 	// What the Forest of Hope loads and the sandbox (no generators) does not.
 	{ "dataDir/courses/stage1/", "the disc-mode stage's map; stand-ins boot the sandbox map" },
 	{ "dataDir/stages/stage1", "the disc-mode stage's .ini and generators; stand-ins boot stages/sandbox.ini" },
-	{ "dataDir/tekis/", "Forest of Hope enemies, created by its generators" },
-	{ "dataDir/tekikeys/", "Forest of Hope enemy key files, read with its enemies" },
-	{ "dataDir/bosses/", "Forest of Hope bosses, created by its generators" },
-	{ "dataDir/objects/plants/", "Forest of Hope plants, created by its generators" },
+	// Models, parameters and the like of Forest of Hope objects, created by its
+	// generators. The animation tables and bundles of these (.key, .anm, .bin
+	// tables) are written by standin_objects.cpp; chappy.mod too.
+	{ "dataDir/tekis/", "Forest of Hope enemy models", ".mod" },
+	{ "dataDir/bosses/", "Forest of Hope boss models", ".mod" },
+	{ "dataDir/bosses/", "Forest of Hope boss parameters", "parms.bin" },
+	{ "dataDir/objects/plants/", "Forest of Hope plant models", ".mod" },
 	{ "dataDir/objects/bridge/", "Forest of Hope bridges, created by its generators" },
-	{ "dataDir/objects/gate/", "the soft and hard gates of the Forest of Hope (gt_soft.mod and .anm); the sandbox has only a bomb gate, whose files are in the tree" },
+	{ "dataDir/objects/gate/", "gt_soft.mod: the sandbox has only a bomb gate, whose files are in the tree", ".mod" },
 	{ "dataDir/objects/hinderrock/", "Forest of Hope push box, created by its generators" },
 	// Silent when missing: CoreNode::load and the null-checked opens keep the
 	// code defaults (see standin-open-allowlist.txt for each).
@@ -421,27 +439,12 @@ const Allowed kManifestAllowlist[] = {
 	{ "dataDir/parms/demo.bin", "demo flag parameters, skipped when missing" },
 	{ "dataDir/parms/sound.bin", "sound constants, skipped when missing" },
 	{ "dataDir/parms/key.bin", "key config, skipped when missing; the throw key stays A" },
-	{ "dataDir/parms/pelMgr.bin", "pellet configs, skipped when missing; no scenario creates a pellet by config" },
 	{ "dataDir/camera/camepara.bin", "camera parameters, skipped when missing" },
 	{ "dataDir/ghost/record.gst", "ghost replay, null-checked" },
-	// Known gaps of the sibling stand-in lists (#65, #66): animation tables and
-	// bundles of objects other than the captain and Pikmin, and the three
-	// pelMgr-driven ship parts. A missing bundle or table is tolerated.
-	{ "dataDir/objects/pelAnim.bin", "pellet animation table (#66 gap)" },
-	{ "dataDir/objects/ufo/ufo0705.anm", "ship animations (#66 gap)" },
-	{ "dataDir/objects/ufo/ufo0705.bin", "ship animation table (#66 gap)" },
-	{ "dataDir/objects/ufoparts/", "ship part animations, and naka1/4/7 loaded through pelMgr.bin (#65, #66 gaps)" },
-	{ "dataDir/objects/pellets/", "pellet animations (#66 gap)" },
-	{ "dataDir/objects/pikihead/anims.bin", "sprout animations (#66 gap)" },
-	{ "dataDir/objects/pikihead/pikihead.anm", "sprout animations (#66 gap)" },
-	{ "dataDir/objects/bomb/anims.bin", "bomb animations (#66 gap)" },
-	{ "dataDir/objects/bomb/bomb.anm", "bomb animations (#66 gap)" },
-	{ "dataDir/objects/water/anims.bin", "water animations (#66 gap)" },
-	{ "dataDir/objects/water/water.anm", "water animations (#66 gap)" },
-	{ "dataDir/objects/fl_water/anims.bin", "flowing water animations (#66 gap)" },
-	{ "dataDir/objects/fl_water/fl_water.anm", "flowing water animations (#66 gap)" },
-	{ "dataDir/objects/goal/anims.bin", "Onion animations (#66 gap)" },
-	{ "dataDir/objects/goal/goal.anm", "Onion animations (#66 gap)" },
+	// The disc's naka1 table names three animations its bundle lacks, so the
+	// game opens loose .dck files that do not exist there either (FAILED in the
+	// manifest). The stand-in bundle has all five entries, so nothing is opened.
+	{ "dataDir/objects/ufoparts/mnaka1/", "loose animations the disc's naka1 bundle lacks (they fail on the disc too)" },
 };
 
 int checkManifest(const Tree& tree, const std::string& manifestPath)
@@ -464,7 +467,9 @@ int checkManifest(const Tree& tree, const std::string& manifestPath)
 		}
 		const Allowed* hit = nullptr;
 		for (const Allowed& a : kManifestAllowlist) {
-			if (path.rfind(a.prefix, 0) == 0) hit = &a;
+			if (path.rfind(a.prefix, 0) != 0) continue;
+			if (a.suffix && (path.size() < std::strlen(a.suffix) || path.compare(path.size() - std::strlen(a.suffix), std::string::npos, a.suffix) != 0)) continue;
+			hit = &a;
 		}
 		if (hit) {
 			allowed++;

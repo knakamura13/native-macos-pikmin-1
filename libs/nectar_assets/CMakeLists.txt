@@ -43,6 +43,8 @@ add_library(nectar_assets STATIC
     src/gen_item_writer.cpp
     src/mod_platform_writer.cpp
     src/standin_sandbox.cpp
+    src/standin_objects.cpp
+    src/standin_object_profiles.cpp
     # Decodificador de texturas del launcher, reutilizado tal cual.
     ${NECTAR_P1_DIR}/pc_port/launcher/bti_decode.cpp
 )
