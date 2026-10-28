@@ -560,6 +560,148 @@ void testPelletTables()
 	for (const std::string& shape : configShapes) check(shapeIds.count(shape) == 1, "config shape " + shape + " has a shape info");
 }
 
+// ------------------------------------------------------------------ tests: generators
+
+std::uint32_t readGenId(RamStream& in) { return __builtin_bswap32(static_cast<std::uint32_t>(in.readInt())); } // generator.cpp readID (PC port)
+
+std::string genIdText(std::uint32_t id)
+{
+	std::string s;
+	for (int i = 3; i >= 0; i--) s += char(id >> (8 * i));
+	return s;
+}
+
+// The Parm fields GenObjectItem, GenObjectPiki and GenTypeOne declare (genItem.cpp:33, generator.h:616, 811).
+struct GenParms : public Parameters {
+	GenParms()
+	    : Parameters("gen")
+	    , p00(this, 0, 0, 0, "p00", "a")
+	    , p01(this, 0, 0, 0, "p01", "b")
+	{
+	}
+	Parm<int> p00, p01;
+};
+
+struct ReadGen {
+	std::string name, kind, itemName;
+	std::uint32_t version = 0, objVersion = 0;
+	int carry = 0, tekiType = -1, p00 = 0, p01 = 0, typeP01 = 0;
+	std::string memo, pellet;
+	float pos[3] = {}, offset[3] = {}, areaOffset[3] = {};
+};
+
+// Generator::read (generator.cpp:727-822) with the part reads of GenBase::read (GenBase::readVersion,
+// doRead, Parameters::read), for the four object kinds and the point and one-shot parts.
+ReadGen readGenerator(RamStream& in)
+{
+	ReadGen g;
+	g.name    = genIdText(readGenId(in));
+	g.version = readGenId(in);
+	readGenId(in); // _70
+	g.carry = in.readInt();
+	char memo[32];
+	for (int i = 0; i < 32; i++) memo[i] = char(in.readByte());
+	g.memo = memo;
+	for (float& f : g.pos) f = in.readFloat();
+	for (float& f : g.offset) f = in.readFloat();
+
+	const std::uint32_t kindId = readGenId(in);
+	g.kind                     = genIdText(kindId);
+	g.objVersion               = readGenId(in);
+	GenParms objParms;
+	if (g.kind == "item") { // GenObjectItem::doRead
+		String s(0);
+		in.readString(s);
+		g.itemName = s.mString;
+		if (genIdText(g.objVersion) != "v0.0") {
+			for (int i = 0; i < 64; i++) in.readByte();
+		}
+	} else if (g.kind == "pelt") { // GenObjectPellet::doRead
+		g.pellet = genIdText(readGenId(in));
+	} else if (g.kind == "teki") { // GenObjectTeki::doRead, TekiPersonality::read (version 10)
+		g.tekiType = in.readByte();
+		in.readByte();
+		in.readByte();
+		readGenId(in);
+		for (int i = 0; i < 5; i++) in.readInt();
+		for (int i = 0; i < 5; i++) in.readFloat();
+	}
+	objParms.read(in);
+	g.p00 = objParms.p00();
+	g.p01 = objParms.p01();
+
+	check(genIdText(readGenId(in)) == "pint", "the area is a point");
+	readGenId(in); // version
+	for (float& f : g.areaOffset) f = in.readFloat(); // GenArea::doRead
+	GenParms areaParms;
+	areaParms.read(in);
+
+	check(genIdText(readGenId(in)) == "1one", "the type is one thing");
+	readGenId(in); // version
+	GenParms typeParms;
+	typeParms.read(in);
+	g.typeP01 = typeParms.p01();
+	return g;
+}
+
+void testGenerators()
+{
+	std::vector<nectar::ObjectGenSpec> specs(5);
+	specs[0].kind          = nectar::ObjectGenSpec::Item;
+	specs[0].generatorName = "next";
+	specs[0].memo          = "onion";
+	specs[0].name          = "goal";
+	specs[0].itemParam     = 1;
+	specs[0].pos           = { -150.0f, 0.0f, 80.0f };
+	specs[1].kind = nectar::ObjectGenSpec::Pellet;
+	specs[1].name = "pr01";
+	specs[1].pos  = { 10.0f, 2.0f, 30.0f };
+	specs[2].kind        = nectar::ObjectGenSpec::Piki;
+	specs[2].pikiState   = 0;
+	specs[2].pikiColour  = 2;
+	specs[2].faceDegrees = 90;
+	specs[2].pos         = { 1.0f, 2.0f, 3.0f };
+	specs[3].kind     = nectar::ObjectGenSpec::Teki;
+	specs[3].tekiType = 3;
+	specs[3].pos      = { 200.0f, 0.0f, -100.0f };
+	specs[4].kind = nectar::ObjectGenSpec::Item;
+	specs[4].name = "pikihead";
+
+	const Bytes file = nectar::writeObjectGenFile(specs);
+
+	// The game's side: header, then Generator::read per generator, ending exactly at the end of the file.
+	RamStream in = streamOf(file);
+	check(genIdText(readGenId(in)) == "v0.1", "GeneratorMgr::read: header version");
+	for (int i = 0; i < 3; i++) in.readFloat(); // the captain's position
+	in.readFloat();                              // his direction
+	const int count = in.readInt();
+	check(count == 5, "generator count");
+	std::vector<ReadGen> read;
+	for (int i = 0; i < count; i++) read.push_back(readGenerator(in));
+	check(in.getPending() == 0, "GeneratorMgr::read consumes every byte");
+	check(read.size() == 5 && read[0].name == "next" && read[0].kind == "item" && read[0].itemName == "goal" && read[0].p00 == 1, "Onion: item 'goal' colour 1, generator 'next'");
+	check(read[0].memo == "onion" && read[0].pos[0] == -150.0f && read[0].pos[2] == 80.0f, "Onion: memo and position");
+	check(read[1].kind == "pelt" && read[1].pellet == "pr01" && read[1].pos[0] == 10.0f, "pellet pr01");
+	check(read[2].kind == "piki" && read[2].p00 == 0 && read[2].p01 == 2 && read[2].typeP01 == 90, "sprout: buried, colour 2, facing 90");
+	check(read[3].kind == "teki" && read[3].tekiType == 3 && read[3].pos[0] == 200.0f && read[3].name == "    ", "Dwarf Bulborb");
+	check(read[4].kind == "item" && read[4].itemName == "pikihead", "item pikihead");
+
+	// nectar::parseGen agrees.
+	nectar::GenFile parsed;
+	std::string err;
+	check(nectar::parseGen(file.data(), file.size(), parsed, err), "parseGen: " + err);
+	check(parsed.generators.size() == 5, "parseGen: five generators");
+	if (parsed.generators.size() == 5) {
+		check(nectar::genIdString(parsed.generators[0].object.kind) == "item" && parsed.generators[0].object.name == "goal", "parseGen: Onion item");
+		check(parsed.generators[1].object.pellet == 0x70723031u, "parseGen: pellet id 'pr01'");
+		check(nectar::genIdString(parsed.generators[3].object.kind) == "teki" && parsed.generators[3].object.type == 3, "parseGen: teki 3");
+		check(parsed.generators[0].pos.x == -150.0f && parsed.generators[0].pos.z == 80.0f, "parseGen: position");
+		check(nectar::genIdString(parsed.generators[2].type.kind) == "1one" && parsed.generators[2].type.param(0x70303100u) && parsed.generators[2].type.param(0x70303100u)->asInt() == 90,
+		      "parseGen: one-shot facing");
+	}
+	check(nectar::writeObjectGenFile({}).size() == nectar::writeGen({}).size(), "an empty file is the empty .gen");
+}
+
 // ------------------------------------------------------------------ tests: boot manifest
 
 void testManifest(const std::string& path)
@@ -606,6 +748,7 @@ int main(int argc, char** argv)
 	testCheckRejects();
 	testModels();
 	testPelletTables();
+	testGenerators();
 	testManifest(argc > 1 ? argv[1] : "");
 	if (failures) {
 		std::printf("%d failure(s)\n", failures);

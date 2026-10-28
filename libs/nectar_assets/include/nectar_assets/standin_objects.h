@@ -85,6 +85,37 @@ bool writeStandInObjectModels(std::vector<StandInModelFile>& out, std::string& e
 /// objects/pelAnim.bin (the shape list, PelletMgr::readAnimInfos).
 bool writeStandInPelletTables(std::vector<StandInAnimFile>& out, std::string& error);
 
+// ---------------------------------------------------------------- .gen object generators
+
+/// One generator of a .gen file, as GeneratorMgr::read loads it (generator.cpp:727):
+/// name, position, an object part (what it makes), an area part (a point) and a
+/// type part (one thing, facing `faceDegrees`). Only what a sandbox needs.
+struct ObjectGenSpec {
+	enum Kind {
+		Item,   ///< 'item': `name` is the object type name ("goal" the Onion, "pikihead", "bomb gen"...), `itemParam` its 'p00' (an Onion's colour: 0 blue, 1 red, 2 yellow)
+		Pellet, ///< 'pelt': `name` is the 4-letter pellet id of parms/pelMgr.bin ("pr01")
+		Piki,   ///< 'piki': `pikiState` 0 a buried sprout, 1 a free Pikmin, 2 one in the party; `pikiColour` 0-2
+		Teki,   ///< 'teki': `tekiType` is the TEKI_* index (3 is the Dwarf Bulborb, chappy)
+	};
+	Kind kind = Item;
+	std::string generatorName = "    "; ///< four characters: an Onion the player does not own yet is only born by a generator named "next" (GenObjectItem::birth)
+	std::string memo;                   ///< up to 31 characters
+	Vec3 pos;
+	int carryOver   = 0;
+	std::string name;
+	int itemParam   = 0;
+	int pikiState   = 0;
+	int pikiColour  = 0;
+	int tekiType    = 3;
+	int faceDegrees = 0;
+};
+
+/// The bytes of one generator, as a Generator::raw for writeGen.
+std::vector<std::uint8_t> writeObjectGen(const ObjectGenSpec& spec);
+
+/// A whole .gen file (nectar::writeGen over the generators), the captain at the origin.
+std::vector<std::uint8_t> writeObjectGenFile(const std::vector<ObjectGenSpec>& specs);
+
 // ---------------------------------------------------------------- everything
 
 /// Every file this header writes (animations, extra models, pellet tables), each

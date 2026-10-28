@@ -3,6 +3,7 @@
 #include "be_writer.h"
 #include "nectar_assets/anim.h"
 #include "nectar_assets/bundle.h"
+#include "nectar_assets/gen.h"
 #include "nectar_assets/mod_writer.h"
 #include "nectar_assets/parms.h"
 
@@ -349,6 +350,117 @@ bool writeStandInPelletTables(std::vector<StandInAnimFile>& out, std::string& er
 	}
 	out.push_back({ "dataDir/objects/pelAnim.bin", anim.b });
 	return true;
+}
+
+// ---------------------------------------------------------------- .gen object generators
+
+namespace {
+
+/// Ids in a .gen are stored reversed ("1.0v" is 'v0.1'): Generator::read's readID.
+void putGenId(BeWriter& w, const std::string& id)
+{
+	for (int i = 3; i >= 0; i--) w.u8(i < int(id.size()) ? std::uint8_t(id[std::size_t(i)]) : std::uint8_t(' '));
+}
+
+/// A version stored the same way: Factory::registerMember's number (the Teki
+/// generator is version 10), read with readID, so its bytes are little-endian.
+void putGenVersionNumber(BeWriter& w, std::uint32_t v)
+{
+	for (int i = 0; i < 4; i++) w.u8(std::uint8_t(v >> (8 * i)));
+}
+
+/// Stream::writeString: the length, then the bytes, NUL-padded to a multiple of four.
+void putGenString(BeWriter& w, const std::string& s)
+{
+	const std::size_t padded = (s.size() + 3) / 4 * 4;
+	w.u32(std::uint32_t(padded));
+	w.b.insert(w.b.end(), s.begin(), s.end());
+	for (std::size_t i = s.size(); i < padded; i++) w.u8(0);
+}
+
+/// A Parameters block: tagged entries, then -1 (Parameters::write).
+void putGenParams(BeWriter& w, std::vector<ParmEntry> list)
+{
+	ParmFile f;
+	f.lists.push_back(std::move(list));
+	std::vector<std::uint8_t> bytes;
+	std::string error;
+	writeParmFile(f, bytes, error); // three-letter ids and four-byte values: cannot fail
+	w.bytes(bytes);
+}
+
+} // namespace
+
+std::vector<std::uint8_t> writeObjectGen(const ObjectGenSpec& g)
+{
+	BeWriter w;
+	putGenId(w, g.generatorName);
+	putGenId(w, "v0.0"); // the generator's version
+	putGenId(w, "    "); // _70, read and kept
+	w.s32(g.carryOver);
+	for (int i = 0; i < 32; i++) w.u8(i < int(g.memo.size()) && i < 31 ? std::uint8_t(g.memo[std::size_t(i)]) : std::uint8_t(0));
+	w.f32(g.pos.x);
+	w.f32(g.pos.y);
+	w.f32(g.pos.z);
+	w.f32(0.0f); // the offset
+	w.f32(0.0f);
+	w.f32(0.0f);
+
+	switch (g.kind) {
+	case ObjectGenSpec::Item: { // GenObjectItem::doRead, version v0.1: the name, then the stage and print names (doors only)
+		putGenId(w, "item");
+		putGenId(w, "v0.1");
+		putGenString(w, g.name);
+		for (int i = 0; i < 64; i++) w.u8(0);
+		putGenParams(w, { parmInt("p00", g.itemParam) });
+		break;
+	}
+	case ObjectGenSpec::Pellet: // GenObjectPellet::doRead: the pellet id
+		putGenId(w, "pelt");
+		putGenId(w, "v0.0");
+		putGenId(w, g.name);
+		putGenParams(w, {});
+		break;
+	case ObjectGenSpec::Piki: // GenObjectPiki: no data of its own, 'p00' state and 'p01' colour
+		putGenId(w, "piki");
+		putGenId(w, "v0.0");
+		putGenParams(w, { parmInt("p00", g.pikiState), parmInt("p01", g.pikiColour) });
+		break;
+	case ObjectGenSpec::Teki: { // GenObjectTeki::doRead and TekiPersonality::read, version 10
+		putGenId(w, "teki");
+		putGenVersionNumber(w, 10);
+		w.u8(std::uint8_t(g.tekiType));
+		w.u8(0); // pellet kind
+		w.u8(0); // pellet colour
+		putGenId(w, "none"); // the pellet it drops
+		for (int i = 0; i < 5; i++) w.s32(0); // pellet and nectar counts, parameter 0
+		const float floats[5] = { 1.0f, 1.0f, 0.0f, 0.0f, 0.0f }; // size, strength, territory, pellet chance, nectar chance (TekiPersonality::reset)
+		for (float f : floats) w.f32(f);
+		putGenParams(w, {});
+		break;
+	}
+	}
+
+	// GenAreaPoint ('pint'): version, an offset, parameters.
+	putGenId(w, "pint");
+	putGenId(w, "v0.0");
+	w.f32(0.0f);
+	w.f32(0.0f);
+	w.f32(0.0f);
+	putGenParams(w, {});
+
+	// GenTypeOne ('1one'): version, parameters. 'p01' is the rotation about y.
+	putGenId(w, "1one");
+	putGenId(w, "v0.0");
+	putGenParams(w, { parmInt("p01", g.faceDegrees) });
+	return w.b;
+}
+
+std::vector<std::uint8_t> writeObjectGenFile(const std::vector<ObjectGenSpec>& specs)
+{
+	std::vector<std::vector<std::uint8_t>> raw;
+	for (const ObjectGenSpec& s : specs) raw.push_back(writeObjectGen(s));
+	return writeGen(raw);
 }
 
 bool writeStandInObjectFiles(std::vector<StandInAnimFile>& out, std::string& error)
