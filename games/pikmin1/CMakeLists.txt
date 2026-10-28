@@ -443,7 +443,8 @@ if (PIKMIN_BUILD_SCENARIOS)
         pc_port/scenarios/scenario_onion_skip.cpp
         pc_port/scenarios/scenario_objects_smoke.cpp
         pc_port/scenarios/scenario_container_menu.cpp
-        pc_port/scenarios/scenario_captain_death.cpp)
+        pc_port/scenarios/scenario_captain_death.cpp
+        pc_port/scenarios/scenario_ship_parts.cpp)
 endif()
 
 include_directories(
@@ -2033,7 +2034,7 @@ if(PIKMIN_BUILD_SCENARIOS)
         FIXTURES_SETUP scenario_standin_tree
         TIMEOUT 120)
     file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/scenario-logs")
-    foreach(scenario boot_smoke throw_release day30_clock extinction captain_death)
+    foreach(scenario boot_smoke throw_release day30_clock extinction captain_death ship_parts)
         foreach(rate 30 60)
             add_test(NAME scenario_${scenario}_${rate}
                 COMMAND ${CMAKE_COMMAND}

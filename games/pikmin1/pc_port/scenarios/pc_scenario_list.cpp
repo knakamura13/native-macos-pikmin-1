@@ -48,6 +48,7 @@ const std::vector<PcScenario*>& pc_scenario_all(void)
 		pc_scenario_make_extinction(),
 		pc_scenario_make_captain_death(),
 		[] { static GameStatCorrupt s; return static_cast<PcScenario*>(&s); }(),
+		pc_scenario_make_ship_parts(),
 		[] { static ExitZero s; return static_cast<PcScenario*>(&s); }(),
 	};
 	return all;
