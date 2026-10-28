@@ -93,8 +93,9 @@ before commit) showed:
 
 - **The gate.** A `sluice bomb` item, born from an item generator in
   `stages/sandbox/default.gen` (`writeItemGenerator`, gen.h). It stands where
-  the disc's gate stands relative to the captain (203 ahead, 34 left), turned
-  36 degrees (the disc's is 35; see below).
+  the disc's gate stands relative to the captain (34 units to his left), 201
+  units ahead and turned 34 degrees (the disc's: 203 and 35 degrees; see
+  "Re-fit on the merged tree" below).
 - **Its files, ours.** `objects/gate/gt_hard.mod`: two posts on joint 0 and a
   panel on joint 1, plain boxes (150 x 90 x 24 panel, 20-unit posts), with the
   collinfo the game reads (`gate` and `side` platforms, `flag` sphere).
@@ -117,10 +118,10 @@ walks about 185 units, slides, and stops at about 225 units (tick 54 at
 30 Hz, as on the disc); the squad enters `BreakwallMode`, gives up through
 `Emotion`, and A is pressed with a Pikmin standing still.
 
-### K
+### K before the cinema merge (`f9b3c0b4`)
 
 RelWithDebInfo, macOS, `nectar --scenario throw_release`, 3 runs per cell.
-Each run is deterministic.
+Each run is deterministic. Superseded by "Re-fit on the merged tree".
 
 | Tree | 30 Hz | 60 Hz |
 |---|---|---|
@@ -131,7 +132,7 @@ Each run is deterministic.
 Press state with the committed gate: 30 Hz tick 251, Pikmin 68.6 units away
 (disc 283, 59.5); 60 Hz tick 566, 34.9 units (disc 544, 39).
 
-### How 36 degrees was chosen, and how fragile it is
+### How 36 degrees was chosen then, and how fragile it is
 
 The disc's own layout (35 degrees) gives 13 / 16. Moving one gate parameter
 at a time (about 40 layouts, each at both rates; all runs passed):
@@ -157,9 +158,62 @@ its own layout and RNG draws. What the gate does buy over the posts:
 - the same press situation in kind (a Pikmin standing still 35 to 70 units
   away), instead of a trailing, moving squad.
 
+### Re-fit on the merged tree (stand-in cinemas and audio)
+
+The stand-in cinema branch made the intro gate end on its first START press:
+a stand-in tree's intro is now 15 ticks. The disc's landing movie on the same
+merged tree ends on the third press, 45 ticks at both rates (it was 92 / 182
+before the merge). With the gate unchanged (36 degrees) the stand-in K went to
+11 / 35; the disc K stayed 15 / 18 (3 runs each).
+
+**No plateau.** A grid of the gate's turn (30 to 42 degrees) and position
+along the walk (-201, -203, -205), 39 layouts at both rates, gave K30 from 7
+to 15 and K60 from 16 to 100, with neighbours one degree or two units apart
+differing by up to 60 ticks. Only one layout was within one tick at both
+rates (36 degrees, -205: 15 / 17), and its neighbours were not.
+
+**Same start tick on both trees.** `throw_release` now holds neutral input
+until 45 ticks after the stage is ready before the squad is born and the walk
+away starts (`kWalkStartTicks`, `scenario_throw_release.cpp`; the runner gives
+the intro length through `pc_scenario_intro_ticks`). On the disc the intro
+already takes 45 ticks, so the hold is 0 ticks and the run is unchanged:
+disc K 15, 15, 15 / 18, 18, 18 and the 6 disc tests pass. On the stand-ins
+the hold is 30 ticks. The assertions are unchanged. This removes the
+intro-length difference between the trees, but it does not remove the
+layout sensitivity: the same 39-layout grid with the hold gave K30 7 to 16 and
+K60 13 to 77, again with no plateau.
+
+**Chosen point.** Of the gate layouts tried with the hold (39-layout grid and
+the 27-layout neighbourhood below), one is within one tick of the disc at both
+rates: z -201, x -34, 34 degrees. It is committed. Its neighbourhood, gate
+moved 1 unit (x, z) or 1 degree:
+
+| turn | z | x -33 | x -34 | x -35 |
+|---|---|---|---|---|
+| 33 | -200 | 12/22 | 10/23 | 12/17 |
+| 33 | -201 | 13/20 | 12/21 | 12/19 |
+| 33 | -202 | 8/19 | 8/18 | 11/22 |
+| 34 | -200 | 12/21 | 12/18 | 12/19 |
+| 34 | -201 | 12/20 | **16/18** | 10/16 |
+| 34 | -202 | 9/30 | 9/80 | 8/31 |
+| 35 | -200 | 8/20 | 12/17 | 10/68 |
+| 35 | -201 | 8/19 | 8/77 | 8/34 |
+| 35 | -202 | 14/64 | 13/27 | 10/21 |
+
+The block turn 33 to 34, z -200 to -201 is the calmest region found (K30 10
+to 13, K60 16 to 23), but its typical value is about 12 / 19, three ticks short
+of the disc at 30 Hz. The committed point is an outlier in it.
+
+| Tree (merged tree, 3 runs per cell) | 30 Hz | 60 Hz |
+|---|---|---|
+| Disc (Forest of Hope) | 15, 15, 15 | 18, 18, 18 |
+| Stand-ins, gate 36 degrees, no hold (as merged) | 11, 11, 11 | 35, 35, 35 |
+| Stand-ins, gate 34 degrees at z -201, 45-tick walk start (committed) | 16, 16, 16 | 18, 18, 18 |
+
 ### Limits
 
-- Matching K within one tick still depends on the 36-degree choice. A change to
+- Matching K within one tick depends on the chosen layout, which is a lucky
+  point, not a plateau (above). A change to
   the squad AI, collision, animations, or the sim RNG draws can move both trees'
   K independently. Re-measure both after such a change.
 - The stand-in gate is not the disc's shape. Its panel is wider than the
@@ -168,6 +222,12 @@ its own layout and RNG draws. What the gate does buy over the posts:
 - Only Kuttuku, Job2 and Gakkari have disc timing. The walk and turn motions
   of the Pikmin are still plain 40-frame stand-ins, so the walk to the hand can
   still differ in speed from the disc (the disc's Pikmin starts more slowly).
+  This is a likely reason the stand-in K30 sits about 3 ticks below the disc's
+  across most layouts. Not checked.
+- The 45-tick walk start is the disc's intro length on this tree. If the disc
+  intro changes (for example the intro gate's START cadence), re-measure: a
+  longer disc intro keeps the hold at 0, a shorter one would hold the disc
+  run too and change its K.
 
 ## Fitted sandbox walls (after the particle RNG change, superseded)
 
