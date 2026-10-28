@@ -17,7 +17,11 @@
 
 #include "FlowController.h"
 #include "MoviePlayer.h"
+#include "Animator.h"
 #include "Navi.h"
+#include "PaniAnimator.h"
+#include "PaniPikiAnimator.h"
+#include "Piki.h"
 #include "NaviMgr.h"
 #include "gameflow.h"
 #include "netplay/pc_netplay_det.h"
@@ -364,6 +368,7 @@ void pc_scenario_on_tick_end(void)
 			sIntroDone = true;
 			sTick      = 0;
 			std::printf("[scenario] intro done after %u ticks\n", sIntroTicks);
+			if (!scenarioCheckAnimMgrPreconditions(0)) return;
 			sScenario->onStageReady();
 			return;
 		}
@@ -410,6 +415,79 @@ void scenarioFailf(unsigned tick, const char* expected, const char* fmt, ...)
 	std::vsnprintf(buf, sizeof buf, fmt, ap);
 	va_end(ap);
 	scenarioFail(tick, expected, buf);
+}
+
+bool scenarioCheckAnimMgrPreconditions(unsigned tick)
+{
+	AnimMgr* mgr = PikiShapeObject::getAnimMgr();
+	if (mgr == nullptr) {
+		scenarioFailf(tick, "the Pikmin AnimMgr exists", "PikiShapeObject::getAnimMgr() returned null");
+		return false;
+	}
+	int index = 0;
+	FOREACH_NODE(AnimInfo, mgr->mAnimList.mChild, info)
+	{
+		const char* infoName = info->mName ? info->mName : "(null)";
+		if (info->mData == nullptr) {
+			scenarioFailf(tick, "every AnimMgr info has an animation", "info %d '%s' has no animation data", index, infoName);
+			return false;
+		}
+		if (info->mData->mTotalFrameCount <= 0) {
+			scenarioFailf(tick, "every AnimMgr animation has mTotalFrameCount > 0", "info %d '%s' has mTotalFrameCount %d", index, infoName,
+			              info->mData->mTotalFrameCount);
+			return false;
+		}
+		const char* dataName = info->mData->mName ? info->mData->mName : "";
+		if (std::strcmp(dataName, "Null Anim") == 0) {
+			scenarioFailf(tick, "no AnimMgr animation is the Null Anim dummy", "info %d '%s' fell back to the Null Anim dummy", index, infoName);
+			return false;
+		}
+		++index;
+	}
+	if (index == 0) {
+		scenarioFailf(tick, "the Pikmin AnimMgr has infos", "zero infos");
+		return false;
+	}
+	std::printf("[scenario] AnimMgr preconditions ok: %d infos, all with frames and not Null Anim\n", index);
+	return true;
+}
+
+bool scenarioCheckThrowWaitPreconditions(unsigned tick, Navi* navi)
+{
+	constexpr int kThrowWaitInfo = 63; // setMotion(PIKIANIM_ThrowWait, new PaniMotion(63))
+	PaniAnimator& upper          = navi->mNaviAnimMgr.getUpperAnimator();
+	if (upper.getCurrentMotionIndex() != PIKIANIM_ThrowWait) {
+		scenarioFailf(tick, "upper animator motion is ThrowWait", "motion index %d (ThrowWait is %d)", upper.getCurrentMotionIndex(),
+		              (int)PIKIANIM_ThrowWait);
+		return false;
+	}
+	AnimInfo* info = upper.mAnimInfo;
+	AnimMgr* mgr   = PikiShapeObject::getAnimMgr();
+	if (info == nullptr || mgr == nullptr || info != mgr->findAnim(kThrowWaitInfo)) {
+		scenarioFailf(tick, "the ThrowWait animation is AnimMgr info 63", "upper animator info %p, info 63 %p", (void*)info,
+		              mgr ? (void*)mgr->findAnim(kThrowWaitInfo) : nullptr);
+		return false;
+	}
+	const int frames = upper.getFrameCount();
+	const int aKeys  = info->countAKeys();
+	const int iKeys  = info->countIKeys();
+	for (int i = 0; i < iKeys; ++i) {
+		AnimKey* key = info->getInfoKey(i);
+		if (key->mKeyType != 2) continue;
+		if (key->mFrameIndex < 0 || key->mFrameIndex >= aKeys) {
+			scenarioFailf(tick, "the type-2 info key indexes an anim key", "info key %d refers to anim key %d of %d", i, key->mFrameIndex, aKeys);
+			return false;
+		}
+		const int frame = info->getKeyValue(key->mFrameIndex);
+		if (frame < 0 || frame >= frames) {
+			scenarioFailf(tick, "the type-2 info key's anim-key frame is below the frame count", "frame %d, frame count %d", frame, frames);
+			return false;
+		}
+		std::printf("[scenario] ThrowWait preconditions ok: info 63 type-2 key at frame %d of %d\n", frame, frames);
+		return true;
+	}
+	scenarioFailf(tick, "info 63 has a type-2 info key", "%d info keys, none of type 2", iKeys);
+	return false;
 }
 
 #endif
