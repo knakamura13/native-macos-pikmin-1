@@ -42,6 +42,9 @@ int pc_scenario_parse_argv(int argc, char** argv);
 bool pc_scenario_active(void);
 // Exit code for pc_main to return once the game loop ends.
 int pc_scenario_exit_code(void);
+// Called by pc_main when the window or GL context failed: records exit 4 as the
+// verdict so the exit handler (which main's return also runs) reports it.
+void pc_scenario_on_no_gl(void);
 
 // Hooks in the boot path.
 void pc_scenario_pre_stage(void);      // OnePlayerSection, before NewPikiGameSection is built

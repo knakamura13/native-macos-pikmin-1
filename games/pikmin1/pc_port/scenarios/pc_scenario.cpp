@@ -12,6 +12,8 @@
 #include <cstring>
 #include <filesystem>
 #include <string>
+#include <thread>
+#include <chrono>
 
 #include "FlowController.h"
 #include "MoviePlayer.h"
@@ -58,7 +60,6 @@ constexpr unsigned kIntroSeconds = 90;
 unsigned sBootTicks        = 0;
 unsigned sTick             = 0; // ticks since the stage became ready
 std::string sStageFile     = kDefaultStageFile;
-bool sPreStageRan          = false;
 std::filesystem::path sScratchDir; // NECTAR_SAVE_DIR for this run, removed at exit
 
 // Environment variables the game reads that change the sim, the input or the
@@ -97,6 +98,30 @@ void clearEnv(const char* name)
 #endif
 }
 
+// Boot flags that change the boot path, the sim or the exit path. --scenario
+// is refused with any of them (exit 2) so a scenario run cannot take another
+// route into the game. --input-record is deliberately absent: the provider runs
+// inside pc_input_log_tick, so a recording of a scenario run is supported.
+const char* const kRejectedFlags[] = {
+	"--coop-direct",
+	"--coop",
+	"--vs-map",
+	"--mission-map",
+	"--campaign",
+	"--netplay-host",
+	"--netplay-join",
+	"--netplay-host-ice",
+	"--netplay-join-ice",
+	"--netplay-exit-after-ticks",
+	"--input-replay",
+};
+
+// Wall-clock watchdog. The default (540 s) is shorter than the CTest TIMEOUT of
+// 600 s so the in-binary FAIL line wins over a bare CTest timeout. The slowest
+// stand-in scenario takes about 85 s on software GL. PIKMIN_SCENARIO_WATCHDOG_SECONDS
+// overrides it for slow CI runners. The thread only ever leaves through _Exit.
+constexpr long kDefaultWatchdogSeconds = 540;
+
 void removeScratch()
 {
 	if (sScratchDir.empty()) return;
@@ -114,16 +139,26 @@ void removeScratch()
 }
 
 // Runs on every exit() and on main's return. System::halt (Windows) and PPCHalt
-// call exit(0), which must not read as a pass: once the stage hooks have been
-// reached, any exit without a verdict is a failure. Before that, main's own
-// return code stands (a failed window or GL context is exit 4, not a failure).
-void onExit()
+// call exit(0), which must not read as a pass: from the moment it is registered
+// (a scenario is active and its argument and data checks passed), any exit
+// without a verdict is a failure. A missing window or GL context records its
+// verdict (4) through pc_scenario_on_no_gl before main returns.
+void onExit() { terminate(sVerdict ? sExitCode : PC_SCENARIO_EXIT_FAIL); }
+
+void startWatchdog(const char* name)
 {
-	if (!sPreStageRan && !sVerdict) {
-		removeScratch();
-		return;
+	long seconds = kDefaultWatchdogSeconds;
+	if (const char* env = std::getenv("PIKMIN_SCENARIO_WATCHDOG_SECONDS")) {
+		char* end = nullptr;
+		long v    = std::strtol(env, &end, 10);
+		if (end != env && *end == '\0' && v > 0) seconds = v;
 	}
-	terminate(sVerdict ? sExitCode : PC_SCENARIO_EXIT_FAIL);
+	std::string scenarioName = name;
+	std::thread([scenarioName, seconds]() {
+		std::this_thread::sleep_for(std::chrono::seconds(seconds));
+		std::fprintf(stderr, "[scenario] FAIL %s: wall-clock watchdog after %ld s\n", scenarioName.c_str(), seconds);
+		terminate(PC_SCENARIO_EXIT_FAIL); // flushes, then _Exit; no atexit handlers
+	}).detach();
 }
 
 void usage(const char* msg)
@@ -170,7 +205,7 @@ int pc_scenario_parse_argv(int argc, char** argv)
 	const char* name   = nullptr;
 	bool visible       = false;
 	int rate           = 30;
-	bool replay        = false;
+	const char* rejected = nullptr;
 	for (int i = 1; i < argc; ++i) {
 		if (std::strcmp(argv[i], "--scenario") == 0) {
 			if (i + 1 >= argc) {
@@ -190,13 +225,15 @@ int pc_scenario_parse_argv(int argc, char** argv)
 			}
 		} else if (std::strcmp(argv[i], "--scenario-visible") == 0) {
 			visible = true;
-		} else if (std::strcmp(argv[i], "--input-replay") == 0) {
-			replay = true;
+		} else {
+			for (const char* flag : kRejectedFlags) {
+				if (rejected == nullptr && std::strcmp(argv[i], flag) == 0) rejected = flag;
+			}
 		}
 	}
 	if (name == nullptr) return -1;
-	if (replay) {
-		usage("--scenario cannot be combined with --input-replay");
+	if (rejected != nullptr) {
+		usage((std::string("--scenario cannot be combined with ") + rejected).c_str());
 		return PC_SCENARIO_EXIT_USAGE;
 	}
 	if (const char* envReplay = std::getenv("PIKMIN_INPUT_REPLAY"); envReplay != nullptr && *envReplay != '\0') {
@@ -252,6 +289,7 @@ int pc_scenario_parse_argv(int argc, char** argv)
 		setEnv("NECTAR_SAVE_DIR", sScratchDir.string().c_str());
 	}
 	std::atexit(onExit);
+	startWatchdog(name);
 	pc_netplay_det_scenario_enable();
 	pc_settings_scenario_enable();
 	pc_settings_scenario_set_fps_mode(rate == 60 ? 1 : 0);
@@ -267,12 +305,19 @@ int pc_scenario_exit_code(void) { return sExitCode; }
 
 int pc_scenario_ticks_per_second(void) { return sTicksPerSecond; }
 
+void pc_scenario_on_no_gl(void)
+{
+	// No window exists, so no close request; main returns right after this and
+	// the exit handler reports the code.
+	sVerdict  = true;
+	sExitCode = PC_SCENARIO_EXIT_NO_GL;
+}
+
 void pc_scenario_pre_stage(void)
 {
 	static bool sRan = false;
 	if (sRan) return;
-	sRan         = true;
-	sPreStageRan = true;
+	sRan = true;
 
 	// What CardSelect would have done on its no-save new-game path, without
 	// writing a save (#61, skip-path equivalence).

@@ -207,7 +207,10 @@ int main(int argc, char* argv[])
         fflush(stdout);
 #if PIKI_SCENARIOS
         // A missing GL context must never read as a failed scenario.
-        if (pc_scenario_active()) return PC_SCENARIO_EXIT_NO_GL;
+        if (pc_scenario_active()) {
+            pc_scenario_on_no_gl();
+            return PC_SCENARIO_EXIT_NO_GL;
+        }
 #endif
         return 1;
     }
