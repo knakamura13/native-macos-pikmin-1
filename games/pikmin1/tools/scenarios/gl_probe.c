@@ -9,6 +9,8 @@
  *
  * Build: cc gl_probe.c $(sdl2-config --cflags --libs) -o gl_probe
  */
+/* The game owns main() (SDL_MAIN_HANDLED); SDL_main.h would redefine it on Windows. */
+#define SDL_MAIN_HANDLED
 #include <SDL.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -78,6 +80,7 @@ static int compile(GLenum type, const char *src) {
 }
 
 int main(void) {
+    SDL_SetMainReady();
     SDL_setenv("SDL_AUDIODRIVER", "dummy", 0);
     if (SDL_Init(SDL_INIT_VIDEO) != 0) return fail("SDL_Init");
 
