@@ -20,6 +20,10 @@ add_library(nectar_assets STATIC
     src/catalog.cpp
     src/mesh_mod.cpp
     src/charpack.cpp
+    # Escritores de los ficheros de relleno de los tests de escenarios.
+    src/parms.cpp
+    src/archive.cpp
+    src/stages_ini.cpp
     # Decodificador de texturas del launcher, reutilizado tal cual.
     ${NECTAR_P1_DIR}/pc_port/launcher/bti_decode.cpp
 )

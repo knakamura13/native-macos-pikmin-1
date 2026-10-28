@@ -1295,6 +1295,29 @@ if(PIKMIN_BUILD_TESTS)
     target_compile_options(pc_permadeath_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
     add_test(NAME pc_permadeath_test COMMAND pc_permadeath_test)
 
+    # Stand-in asset writers (libs/nectar_assets), checked against the game's own
+    # loaders: Parameters::read and CmdStream are compiled in with a System::halt
+    # and sysCon stub (tests/game_loader_stubs.cpp) instead of linking the engine.
+    set(NECTAR_ASSETS_DIR ${NECTAR_LIBS_DIR}/nectar_assets)
+    add_executable(nectar_parms_writer_test
+        ${NECTAR_ASSETS_DIR}/tests/parms_writer_test.cpp
+        ${NECTAR_ASSETS_DIR}/tests/game_loader_stubs.cpp
+        ${NECTAR_ASSETS_DIR}/src/parms.cpp
+        src/plugPikiColin/parameters.cpp src/sysCommon/stream.cpp src/sysCommon/string.cpp)
+    target_include_directories(nectar_parms_writer_test PRIVATE pc_port include ${NECTAR_ASSETS_DIR}/include ${NECTAR_ASSETS_DIR}/src)
+    target_compile_options(nectar_parms_writer_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME nectar_parms_writer_test COMMAND nectar_parms_writer_test)
+
+    add_executable(nectar_archive_stages_writer_test
+        ${NECTAR_ASSETS_DIR}/tests/archive_stages_writer_test.cpp
+        ${NECTAR_ASSETS_DIR}/tests/game_loader_stubs.cpp
+        ${NECTAR_ASSETS_DIR}/src/archive.cpp
+        ${NECTAR_ASSETS_DIR}/src/stages_ini.cpp
+        src/sysCommon/cmdStream.cpp src/sysCommon/stream.cpp src/sysCommon/string.cpp)
+    target_include_directories(nectar_archive_stages_writer_test PRIVATE pc_port include ${NECTAR_ASSETS_DIR}/include ${NECTAR_ASSETS_DIR}/src)
+    target_compile_options(nectar_archive_stages_writer_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME nectar_archive_stages_writer_test COMMAND nectar_archive_stages_writer_test)
+
     # Photo mode camera convention (no stage needed)
     add_executable(pc_photo_mode_test pc_port/pc_photo_mode_test.cpp pc_port/pc_photo_mode.cpp)
     target_include_directories(pc_photo_mode_test PRIVATE ${SDL2_INCLUDE_DIRS} pc_port)
