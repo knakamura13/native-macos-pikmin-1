@@ -27,11 +27,14 @@
 
 #if defined(_WIN32)
 #include <direct.h>
+#include <process.h>
 #include <stdlib.h>
 #define PC_SCENARIO_CHDIR _chdir
+#define PC_SCENARIO_GETPID _getpid
 #else
 #include <unistd.h>
 #define PC_SCENARIO_CHDIR chdir
+#define PC_SCENARIO_GETPID getpid
 #endif
 
 namespace {
@@ -55,6 +58,73 @@ constexpr unsigned kIntroSeconds = 90;
 unsigned sBootTicks        = 0;
 unsigned sTick             = 0; // ticks since the stage became ready
 std::string sStageFile     = kDefaultStageFile;
+bool sPreStageRan          = false;
+std::filesystem::path sScratchDir; // NECTAR_SAVE_DIR for this run, removed at exit
+
+// Environment variables the game reads that change the sim, the input or the
+// exit path. A scenario run starts without them (PIKMIN_INPUT_REPLAY is
+// rejected instead, in pc_scenario_parse_argv).
+const char* const kClearedEnv[] = {
+	"PIKMIN_INPUT_RECORD",
+	"PIKMIN_UNLOCK_ALL",
+	"PIKMIN_COOP",
+	"PIKMIN_COOP_CAPTAINS",
+	"PIKMIN_REPLAY_TEST",
+	"PIKMIN_NO_H4M",
+	"PIKMIN_NETPLAY_EXIT_AFTER_TICKS",
+	"PIKMIN_NETPLAY_TEST_PREROLL_RAND",
+	"PIKMIN_NETPLAY_TEST_NAVI_TO_BOSS",
+	"PIKMIN_NETPLAY_TEST_CAMERA_WOBBLE",
+};
+
+// The game reads these with the CRT getenv. SDL_setenv on Windows only sets the
+// process environment block, which the MinGW CRT copy does not see.
+void setEnv(const char* name, const char* value)
+{
+#if defined(_WIN32)
+	_putenv_s(name, value);
+#else
+	setenv(name, value, 1);
+#endif
+}
+
+void clearEnv(const char* name)
+{
+#if defined(_WIN32)
+	_putenv_s(name, ""); // an empty value removes the variable
+#else
+	unsetenv(name);
+#endif
+}
+
+void removeScratch()
+{
+	if (sScratchDir.empty()) return;
+	std::error_code ec;
+	std::filesystem::remove_all(sScratchDir, ec);
+	sScratchDir.clear();
+}
+
+[[noreturn]] void terminate(int code)
+{
+	std::fflush(stdout);
+	std::fflush(stderr);
+	removeScratch();
+	std::_Exit(code);
+}
+
+// Runs on every exit() and on main's return. System::halt (Windows) and PPCHalt
+// call exit(0), which must not read as a pass: once the stage hooks have been
+// reached, any exit without a verdict is a failure. Before that, main's own
+// return code stands (a failed window or GL context is exit 4, not a failure).
+void onExit()
+{
+	if (!sPreStageRan && !sVerdict) {
+		removeScratch();
+		return;
+	}
+	terminate(sVerdict ? sExitCode : PC_SCENARIO_EXIT_FAIL);
+}
 
 void usage(const char* msg)
 {
@@ -71,7 +141,13 @@ void providerThunk(PcInputPad pads[4])
 	// Pad 0 is the captain's. Before the stage is ready the pad stays neutral.
 	if (!sStageReady || sVerdict) return;
 	if (!sIntroDone) {
-		pads[0].button = (sIntroTicks % 15 == 0) ? (PAD_BUTTON_START | PAD_BUTTON_A) : 0;
+		// START skips a movie and would open the pause menu otherwise; A closes ship text.
+		u32 buttons = 0;
+		if (sIntroTicks % 15 == 0) {
+			if (gameflow.mMoviePlayer && gameflow.mMoviePlayer->mIsActive) buttons |= PAD_BUTTON_START;
+			if (gameflow.mIsUIOverlayActive) buttons |= PAD_BUTTON_A;
+		}
+		pads[0].button = buttons;
 		return;
 	}
 	sScenario->providePads(sTick, pads[0]);
@@ -123,6 +199,10 @@ int pc_scenario_parse_argv(int argc, char** argv)
 		usage("--scenario cannot be combined with --input-replay");
 		return PC_SCENARIO_EXIT_USAGE;
 	}
+	if (const char* envReplay = std::getenv("PIKMIN_INPUT_REPLAY"); envReplay != nullptr && *envReplay != '\0') {
+		usage("--scenario cannot be combined with PIKMIN_INPUT_REPLAY");
+		return PC_SCENARIO_EXIT_USAGE;
+	}
 	for (PcScenario* s : pc_scenario_all()) {
 		if (std::strcmp(s->name(), name) == 0) sScenario = s;
 	}
@@ -143,8 +223,9 @@ int pc_scenario_parse_argv(int argc, char** argv)
 		return PC_SCENARIO_EXIT_SKIP;
 	}
 	if (PC_SCENARIO_CHDIR(dataDir) != 0) {
-		std::printf("[scenario] cannot enter %s; skipping\n", dataDir);
-		return PC_SCENARIO_EXIT_SKIP;
+		std::string msg = std::string("PIKMIN_SCENARIO_DATA_DIR is set but cannot be entered: ") + dataDir;
+		usage(msg.c_str());
+		return PC_SCENARIO_EXIT_USAGE;
 	}
 	if (!std::filesystem::exists("assets/dataDir/parms/gamePrms.bin")) {
 		std::printf("[scenario] no assets/dataDir/parms/gamePrms.bin in %s; skipping\n", dataDir);
@@ -159,18 +240,18 @@ int pc_scenario_parse_argv(int argc, char** argv)
 
 	// Everything a scenario run must not inherit from the machine.
 	SDL_setenv("SDL_AUDIODRIVER", "dummy", 1);
-	if (std::getenv("NECTAR_SAVE_DIR") == nullptr) {
+	for (const char* var : kClearedEnv) clearEnv(var);
+	{
+		// Always a fresh save dir (an ambient NECTAR_SAVE_DIR is not kept). SDL_GetTicks
+		// is about 0 before SDL_Init, so the process id keeps concurrent runs apart.
 		std::error_code ec;
-		std::filesystem::path scratch = std::filesystem::temp_directory_path(ec) / ("nectar-scenario-" + std::string(name) + "-" + std::to_string(SDL_GetTicks()));
-		std::filesystem::create_directories(scratch, ec);
-		// The game reads this with the CRT getenv. SDL_setenv on Windows only sets
-		// the process environment block, which the MinGW CRT copy does not see.
-#if defined(_WIN32)
-		_putenv_s("NECTAR_SAVE_DIR", scratch.string().c_str());
-#else
-		setenv("NECTAR_SAVE_DIR", scratch.string().c_str(), 1);
-#endif
+		sScratchDir = std::filesystem::temp_directory_path(ec) / ("nectar-scenario-" + std::string(name) + "-" + std::to_string(rate) + "-"
+		                                                          + std::to_string((long)PC_SCENARIO_GETPID()));
+		std::filesystem::remove_all(sScratchDir, ec);
+		std::filesystem::create_directories(sScratchDir, ec);
+		setEnv("NECTAR_SAVE_DIR", sScratchDir.string().c_str());
 	}
+	std::atexit(onExit);
 	pc_netplay_det_scenario_enable();
 	pc_settings_scenario_enable();
 	pc_settings_scenario_set_fps_mode(rate == 60 ? 1 : 0);
@@ -188,6 +269,11 @@ int pc_scenario_ticks_per_second(void) { return sTicksPerSecond; }
 
 void pc_scenario_pre_stage(void)
 {
+	static bool sRan = false;
+	if (sRan) return;
+	sRan         = true;
+	sPreStageRan = true;
+
 	// What CardSelect would have done on its no-save new-game path, without
 	// writing a save (#61, skip-path equivalence).
 	pc_permadeath_begin_new_run();
@@ -199,7 +285,8 @@ void pc_scenario_pre_stage(void)
 	flowCont.setStage(sStageFile.c_str());
 	if (flowCont.mCurrentStage == nullptr || std::strcmp(flowCont.mCurrentStage->mFileName, sStageFile.c_str()) != 0) {
 		scenarioFailf(0, "stage in stages.ini", "no stage with file '%s'", sStageFile.c_str());
-		return;
+		// Booting on with no stage would dereference it; the verdict is already set.
+		terminate(PC_SCENARIO_EXIT_FAIL);
 	}
 	// The day is consumed by GameCoreSection's constructor (generator file and
 	// RNG reseed), so it is set here and not in the stage-ready hook.

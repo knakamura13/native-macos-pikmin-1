@@ -28,7 +28,7 @@ constexpr unsigned kControlTicks = 300;
 constexpr unsigned kHoldTicks    = 300;
 // Sunset is 19:00. Disc stages stretch the day (about 6,750 ticks per game hour
 // at 30 Hz on Forest of Hope), so the run starts 12 game minutes before it.
-constexpr float kDay30StartHour  = 18.8f; // sunset (19:00) is 30 game minutes, about 33.75 s, away
+constexpr float kDay30StartHour  = 18.8f; // 12 game minutes (0.2 h) before sunset, about 1,350 ticks at 30 Hz
 constexpr int kLastDay           = 30;    // MAX_DAYS
 
 class Day30Clock : public PcScenario {
@@ -71,7 +71,13 @@ public:
 			mPhase = Control;
 			break;
 		case Control:
-			if (tick - mStartTick + 1 >= kControlTicks) {
+			// Ticks with a text window or movie open do not count: they hold the clock.
+			if (!blocked()) ++mOpenTicks;
+			if (tick - mStartTick > 4 * kControlTicks * ticksPerSecond() / 30u) {
+				scenarioFailf(tick, "enough overlay-free ticks", "%u of %u in %u ticks", mOpenTicks, kControlTicks, tick - mStartTick);
+				return;
+			}
+			if (mOpenTicks >= kControlTicks) {
 				if (!(clock.mTimeOfDay > mTimeOfDay)) {
 					scenarioFailf(tick, "clock advances with Infinite Day off", "mTimeOfDay %.4f unchanged", clock.mTimeOfDay);
 					return;
@@ -86,7 +92,12 @@ public:
 				scenarioFailf(tick, "clock held on day 2", "mTimeOfDay %.4f -> %.4f", mTimeOfDay, clock.mTimeOfDay);
 				return;
 			}
-			if (tick - mStartTick + 1 >= kHoldTicks) {
+			if (!blocked()) ++mOpenTicks;
+			if (tick - mStartTick > 4 * kHoldTicks * ticksPerSecond() / 30u) {
+				scenarioFailf(tick, "enough overlay-free ticks", "%u of %u in %u ticks", mOpenTicks, kHoldTicks, tick - mStartTick);
+				return;
+			}
+			if (mOpenTicks >= kHoldTicks) {
 				clock.mCurrentDay = kLastDay;
 				clock.setTime(kDay30StartHour);
 				begin(tick, clock);
@@ -108,8 +119,8 @@ public:
 				scenarioPass();
 				return;
 			}
-			// Ticks with a text window open do not count: the window holds the clock.
-			if (!gameflow.mIsUIOverlayActive && ++mOpenTicks == kHoldTicks && !(clock.mTimeOfDay > mTimeOfDay)) {
+			// Ticks with a text window or movie open do not count: they hold the clock.
+			if (!blocked() && ++mOpenTicks == kHoldTicks && !(clock.mTimeOfDay > mTimeOfDay)) {
 				scenarioFailf(tick, "clock advances on day 30", "clock held on day 30 at %.4f", clock.mTimeOfDay);
 				return;
 			}
@@ -126,6 +137,7 @@ private:
 	static constexpr unsigned kSettleTicks = 10;
 
 	static int ticksPerSecond() { return pc_scenario_ticks_per_second(); }
+	static bool blocked() { return gameflow.mIsUIOverlayActive || (gameflow.mMoviePlayer && gameflow.mMoviePlayer->mIsActive); }
 
 	void begin(unsigned tick, const WorldClock& clock)
 	{

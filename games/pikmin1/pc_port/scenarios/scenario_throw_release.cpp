@@ -11,7 +11,6 @@
 
 #include <cmath>
 #include <cstdio>
-#include <vector>
 
 #include "CPlate.h"
 #include "Dolphin/pad.h"
@@ -32,6 +31,8 @@ constexpr int kBlue        = 0;
 constexpr unsigned kAwaySeconds = 4;
 // NaviThrowWaitState::init picks the thrown Pikmin from the plate within 80.
 constexpr float kSelectDistance = 80.0f;
+// The thrown Pikmin must end up at least this far from where it hung when Throw began.
+constexpr float kMinThrowMove = 5.0f;
 
 class ThrowRelease : public PcScenario {
 public:
@@ -48,8 +49,7 @@ public:
 			scenarioFailf(0, "a captain", "none");
 			return;
 		}
-		// Skip the ship walk-out: Walk holds before the first scripted input.
-		navi->mStateMachine->transit(navi, NAVISTATE_Walk);
+		// The intro gate hands tick 0 over with the captain in Walk.
 		// About 45 units from the captain on a circle, so selection finds them
 		// (grab range is 80) and they do not sit on each other.
 		for (int i = 0; i < kPikminCount; ++i) {
@@ -68,7 +68,6 @@ public:
 			piki->Creature::init(at);
 			piki->initColor(kBlue);
 			piki->changeMode(PikiMode::FormationMode, navi);
-			mPikis.push_back(piki);
 		}
 		GameStat::update();
 	}
@@ -168,6 +167,7 @@ public:
 					scenarioFailf(t, "Pikmin not yet Flying when Throw begins", "Flying");
 					return;
 				}
+				mThrowFrom = mThrown->mSRT.t;
 				mPhase     = WaitFlying;
 				mStepStart = t;
 			} else if (t - mStepStart > bound) {
@@ -189,6 +189,13 @@ public:
 			break;
 		case WaitLanded:
 			if (mThrown->getState() == PIKISTATE_Normal) {
+				// Normal alone is not a throw: the Pikmin must have left the hand.
+				const float moved = (mThrown->mSRT.t - mThrowFrom).length();
+				std::printf("[scenario] throw_release case %d: thrown Pikmin moved %.1f units\n", mCase, moved);
+				if (moved < kMinThrowMove) {
+					scenarioFailf(t, "the thrown Pikmin leaves the hand", "moved %.2f units (< %.1f) before landing", moved, kMinThrowMove);
+					return;
+				}
 				mPhase     = WaitWalk;
 				mStepStart = t;
 			} else if (t - mStepStart > 2 * bound) {
@@ -238,7 +245,7 @@ private:
 	bool mSawFlying     = false;
 	bool mThrownEvent   = false;
 	Piki* mThrown       = nullptr;
-	std::vector<Piki*> mPikis;
+	Vector3f mThrowFrom;
 };
 
 } // namespace
