@@ -1,0 +1,366 @@
+#include "nectar_assets/standin_objects.h"
+
+#include "be_writer.h"
+#include "nectar_assets/anim.h"
+#include "nectar_assets/bundle.h"
+#include "nectar_assets/mod_writer.h"
+#include "nectar_assets/parms.h"
+
+#include <cstdio>
+#include <iterator>
+#include <set>
+
+namespace nectar {
+
+namespace {
+
+constexpr int kMaxInfoKeys = 16; // PaniAnimator::checkConstantKeys errors above 16
+
+std::string modPathOf(const std::string& bundlePath)
+{
+	// AnimMgr::loadAnims derives the bundle from the model by swapping the
+	// extension (animMgr.cpp:353-367); this is the same rule backwards.
+	const std::string ext = ".anm";
+	if (bundlePath.size() <= ext.size() || bundlePath.compare(bundlePath.size() - ext.size(), ext.size(), ext) != 0) return {};
+	return bundlePath.substr(0, bundlePath.size() - ext.size()) + ".mod";
+}
+
+const StandInModelSpec* findAnyModel(const std::string& path)
+{
+	if (const StandInModelSpec* s = findStandInModel(path)) return s;
+	for (const StandInModelSpec& s : standInObjectModelSpecs()) {
+		if (s.path == path) return &s;
+	}
+	return nullptr;
+}
+
+/// A joint list for a set whose model is not written: the root and a flat fan.
+/// Only the count is the disc's. The parents are never read back by the game
+/// (AnimDck::read stores them), and a model written later brings its own.
+std::vector<int> flatParents(int joints)
+{
+	std::vector<int> p(std::size_t(joints), 0);
+	p[0] = -1;
+	return p;
+}
+
+StandInAnimSet buildSet(const ObjectAnimProfile& p)
+{
+	StandInAnimSet s;
+	s.tablePath  = p.tablePath;
+	s.bundlePath = p.bundlePath;
+	s.baseDir    = p.baseDir;
+	const StandInModelSpec* model = findAnyModel(modPathOf(p.bundlePath));
+	s.parents = model ? model->parents : flatParents(p.joints);
+	for (std::size_t i = 0; i < p.infos.size(); i++) {
+		const ObjectAnimInfoProfile& in = p.infos[i];
+		StandInAnim a;
+		char name[64];
+		std::snprintf(name, sizeof name, "%s_%02d.dck", p.id, int(i)); // unique: the bundle lookup is by name
+		a.info.name     = name;
+		a.info.flags    = in.flags;
+		a.info.speed    = in.speed;
+		a.info.animKeys.assign(in.keys.begin(), in.keys.end());
+		// checkConstantKeys walks the info keys in order and stops at the first
+		// one not yet reached. The disc has one info whose list is not ascending
+		// by frame (goal info 0: loop start, loop end, then an Action0 on an
+		// earlier frame), so that key fires on the same animate call as the one
+		// before it. The writer wants ascending lists, so such a key is pointed at
+		// the previous key's frame, which fires on the same tick.
+		int previousKey = -1;
+		for (const auto& k : in.infoKeys) {
+			AnimKeyRecord r;
+			r.frame   = k.first;
+			r.keyType = std::uint8_t(k.second);
+			if (previousKey >= 0 && in.keys[std::size_t(r.frame)] < in.keys[std::size_t(previousKey)]) r.frame = previousKey;
+			previousKey = r.frame;
+			a.info.infoKeys.push_back(r);
+		}
+		a.frameCount = in.frames;
+		a.measured   = true; // length and keys come from the disc
+		s.anims.push_back(std::move(a));
+	}
+	return s;
+}
+
+} // namespace
+
+const std::vector<StandInAnimSet>& standInObjectAnims()
+{
+	static const std::vector<StandInAnimSet> sets = [] {
+		std::vector<StandInAnimSet> v;
+		for (const ObjectAnimProfile& p : objectAnimProfiles()) v.push_back(buildSet(p));
+		return v;
+	}();
+	return sets;
+}
+
+bool checkObjectAnimSet(const StandInAnimSet& set, std::string& error)
+{
+	auto fail = [&](int i, const std::string& why) {
+		error = set.tablePath + " info " + std::to_string(i) + (i >= 0 ? " '" + set.anims[std::size_t(i)].info.name + "'" : std::string()) + ": " + why;
+		return false;
+	};
+	if (set.anims.empty()) return fail(-1, "no infos");
+	if (set.parents.empty() || set.parents[0] != -1) return fail(-1, "the first joint is not the root");
+	for (std::size_t j = 1; j < set.parents.size(); j++) {
+		if (set.parents[j] < 0 || set.parents[j] >= int(j)) return fail(-1, "joint " + std::to_string(j) + " has no earlier parent");
+	}
+	if (const StandInModelSpec* m = findAnyModel(modPathOf(set.bundlePath))) {
+		if (m->parents != set.parents) return fail(-1, "the joints differ from the stand-in model " + m->path);
+	}
+	std::set<std::string> names;
+	for (int i = 0; i < int(set.anims.size()); i++) {
+		const StandInAnim& a = set.anims[std::size_t(i)];
+		if (!names.insert(a.info.name).second) return fail(i, "name is not unique");
+		if (a.frameCount < 1) return fail(i, "frame count below 1 (startAnim errors on counter >= N)");
+		if (a.info.animKeys.size() < 2) return fail(i, "needs a start and an end anim key");
+		for (std::int32_t f : a.info.animKeys) {
+			if (f < 0 || f >= a.frameCount) return fail(i, "anim key frame " + std::to_string(f) + " is not inside the frame count (checkAnimData would clamp it)");
+		}
+		if (a.info.infoKeys.size() > std::size_t(kMaxInfoKeys)) return fail(i, "more than 16 info keys");
+		std::int32_t previous = -1;
+		for (const AnimKeyRecord& k : a.info.infoKeys) {
+			if (k.frame < 0 || k.frame >= std::int32_t(a.info.animKeys.size())) return fail(i, "info key points past the anim-key list");
+			const std::int32_t at = a.info.animKeys[std::size_t(k.frame)];
+			if (at < previous) return fail(i, "info keys are not ascending by frame");
+			previous = at;
+		}
+	}
+	return true;
+}
+
+bool writeObjectAnimSet(const StandInAnimSet& set, std::vector<StandInAnimFile>& out, std::string& error)
+{
+	if (!checkObjectAnimSet(set, error)) return false;
+
+	StandInAnimFile table;
+	table.path = set.tablePath;
+	if (!writeAnimMgrTable(set.table(), table.bytes, error)) return false;
+
+	std::vector<BundleEntry> entries;
+	for (std::size_t i = 0; i < set.anims.size(); i++) {
+		BundleEntry e;
+		e.type = BUNDLE_DCK;
+		e.name = set.entryName(int(i));
+		if (!writeDckPayload(makeStaticAnim(set.parents, set.anims[i].frameCount), e.payload, error)) {
+			error = e.name + ": " + error;
+			return false;
+		}
+		entries.push_back(std::move(e));
+	}
+	StandInAnimFile bundle;
+	bundle.path = set.bundlePath;
+	if (!writeBundle(entries, bundle.bytes, error)) return false;
+	out.push_back(std::move(table));
+	out.push_back(std::move(bundle));
+	return true;
+}
+
+bool writeStandInObjectAnimations(std::vector<StandInAnimFile>& out, std::string& error)
+{
+	out.clear();
+	for (const StandInAnimSet& s : standInObjectAnims()) {
+		if (!writeObjectAnimSet(s, out, error)) return false;
+	}
+	return true;
+}
+
+// ---------------------------------------------------------------- extra models
+
+namespace {
+
+std::string objCollText(const char* id, const char* code, int joint, float radius, Vec3 c, const char* comment, int depth)
+{
+	const std::string ind(std::size_t(depth), '\t');
+	char buf[400];
+	std::snprintf(buf, sizeof buf, "%scollinfo %d {\t\t// %s\n%s\tid\t\t%s\n%s\tcode\t\t%s\n%s\ttype\t1\n%s\tradius\t%f\n%s\tcentre\t%f %f %f\n", ind.c_str(), joint, comment,
+	              ind.c_str(), id, ind.c_str(), code, ind.c_str(), ind.c_str(), double(radius), ind.c_str(), double(c.x), double(c.y), double(c.z));
+	return buf;
+}
+
+std::vector<StandInModelSpec> buildObjectModelSpecs()
+{
+	std::vector<StandInModelSpec> s;
+	const Rgba8 grey { 160, 160, 160, 255 };
+
+	// The three ship parts the pellet tables load by id on the disc (un01, un04,
+	// un07): one joint, one collision sphere 'cent' at the part's centre. Radius
+	// 35 and centre (0, 3, 0) are the disc's, the same on all three.
+	for (const char* n : { "naka1", "naka4", "naka7" }) {
+		StandInModelSpec m;
+		m.path     = std::string("dataDir/objects/ufoparts/") + n + ".mod";
+		m.parents  = { -1 };
+		m.colour   = grey;
+		m.halfSize = 8.0f;
+		m.collInfo = objCollText("cent", "none", 0, 35.0f, { 0.0f, 3.0f, 0.0f }, n, 0) + "\t}\n\n";
+		s.push_back(std::move(m));
+	}
+
+	// chappy (the Bulborb of the Forest of Hope): 17 joints and these parents
+	// are the disc's, as are the collision parts (id, code, joint, radius,
+	// centre). The code 'stik' marks where a Pikmin sticks while it attacks.
+	{
+		StandInModelSpec m;
+		m.path     = "dataDir/tekis/chappy/chappy.mod";
+		m.parents  = { -1, 0, 1, 0, 3, 3, 3, 0, 7, 8, 0, 10, 11, 0, 13, 14, 15 };
+		m.colour   = { 200, 70, 60, 255 };
+		m.halfSize = 12.0f;
+		std::string t;
+		t += objCollText("none", "none", 1, 20.0f, { -1.0f, -5.0f, 0.0f }, "body", 0);
+		t += "\n" + objCollText("cent", "none", 0, 10.0f, { 0.0f, 0.0f, 0.0f }, "kosi", 1) + "\t\t}\n";
+		t += "\n" + objCollText("head", "stik", 4, 9.0f, { 2.0f, 0.0f, 0.0f }, "hana", 1) + "\t\t}\n";
+		t += "\n" + objCollText("body", "stik", 1, 10.0f, { 1.0f, 0.0f, 0.0f }, "body", 1) + "\t\t}\n\t}\n\n";
+		t += objCollText("slot", "none", 4, 10.0f, { 0.0f, 0.0f, 0.0f }, "hana", 0);
+		t += "\n" + objCollText("none", "none", 16, 10.0f, { 0.0f, 0.0f, 0.0f }, "kamu_eff", 1) + "\t\t}\n\t}\n\n";
+		t += objCollText("lleg", "none", 11, 5.0f, { 0.0f, 0.0f, 0.0f }, "regL_sune", 0) + "\t}\n\n";
+		t += objCollText("rleg", "none", 8, 5.0f, { 0.0f, 0.0f, 0.0f }, "regR_sune", 0) + "\t}\n";
+		m.collInfo = t;
+		s.push_back(std::move(m));
+	}
+	return s;
+}
+
+} // namespace
+
+const std::vector<StandInModelSpec>& standInObjectModelSpecs()
+{
+	static const std::vector<StandInModelSpec> specs = buildObjectModelSpecs();
+	return specs;
+}
+
+bool writeStandInObjectModels(std::vector<StandInModelFile>& out, std::string& error)
+{
+	out.clear();
+	for (const StandInModelSpec& spec : standInObjectModelSpecs()) {
+		StandInModelFile f;
+		f.path = spec.path;
+		std::string err;
+		if (!writeMod(buildStandInModel(spec), f.bytes, err)) {
+			error = spec.path + ": " + err;
+			return false;
+		}
+		out.push_back(std::move(f));
+	}
+	return true;
+}
+
+// ---------------------------------------------------------------- pellet tables
+
+namespace {
+
+/// ID32::read keeps the byte layout of the PowerPC build and PelletConfig::read
+/// byte-swaps it back, so the file holds the four characters reversed.
+void putReversedId(BeWriter& w, const char (&id)[5])
+{
+	for (int i = 3; i >= 0; i--) w.u8(std::uint8_t(id[i]));
+}
+
+bool putParams(BeWriter& w, std::vector<ParmEntry> list, std::string& error)
+{
+	ParmFile f;
+	f.lists.push_back(std::move(list));
+	std::vector<std::uint8_t> bytes;
+	if (!writeParmFile(f, bytes, error)) return false;
+	w.bytes(bytes);
+	return true;
+}
+
+} // namespace
+
+bool writeStandInPelletTables(std::vector<StandInAnimFile>& out, std::string& error)
+{
+	// parms/pelMgr.bin: int count, then per config (PelletConfig::read) its
+	// Parameters block, the model id, the shape id, the split id and the ship
+	// joint to repair (-1). The twelve coloured pellets of the game: blue, red and
+	// yellow at 1, 5, 10 and 20. The carry numbers below are this file's own
+	// (the fewest carriers are the pellet's number, the most twice that), not
+	// the disc's: a scenario that needs the disc's balance reads the disc.
+	// 'p00' is the type (0 blue, 1 red, 2 yellow) and 'p09' the colour, the same.
+	struct Kind {
+		const char* name;
+		int colour;
+		char letter;
+	};
+	const Kind kinds[] = { { "blue", 0, 'b' }, { "red", 1, 'r' }, { "yellow", 2, 'y' } };
+	struct Size {
+		int number;
+		const char* digits;
+		const char* shape;
+	};
+	const Size sizes[] = { { 1, "01", "pe01" }, { 5, "05", "pe05" }, { 10, "10", "pe10" }, { 20, "20", "pe20" } };
+
+	BeWriter cfg;
+	cfg.s32(int(std::size(kinds) * std::size(sizes)));
+	for (const Kind& k : kinds) {
+		for (const Size& z : sizes) {
+			const std::string name = std::string(k.name) + " pellet " + std::to_string(z.number);
+			const int carryMax     = z.number == 1 ? 2 : z.number * 2;
+			if (!putParams(cfg,
+			               { parmString("x99", name), parmInt("p00", k.colour), parmInt("p09", k.colour), parmInt("p01", z.number),
+			                 parmInt("p02", carryMax) },
+			               error)) {
+				return false;
+			}
+			const std::string model = std::string("p") + k.letter + z.digits;
+			char id[5]              = { model[0], model[1], model[2], model[3], 0 };
+			putReversedId(cfg, id);
+			char shape[5] = { z.shape[0], z.shape[1], z.shape[2], z.shape[3], 0 };
+			putReversedId(cfg, shape);
+			putReversedId(cfg, "none");
+			cfg.s32(-1);
+		}
+	}
+	out.push_back({ "dataDir/parms/pelMgr.bin", cfg.b });
+
+	// objects/pelAnim.bin: int count, then per info (PelletAnimInfo::read) the
+	// id, creation type (0 resident, 1 loaded when used), teki type (-1), the
+	// joint to override (-1 or a joint index of the model) and the Parameters
+	// 'x00' folder and 'x01' file (objects/<folder>/<file>.mod). Only the shapes
+	// this tree has models for: the four pellets, the 16 ship parts the game
+	// always loads, and naka1, naka4 and naka7. The override joints are the
+	// disc's (they index the model's joints; 1 or none).
+	struct Shape {
+		const char* id;
+		int creation;
+		int overrideJoint;
+		const char* folder;
+		const char* file;
+	};
+	const Shape shapes[] = {
+		{ "ust1", 0, 1, "ufoparts", "soto1" },   { "ust2", 0, 1, "ufoparts", "soto2" },   { "ust3", 0, -1, "ufoparts", "soto3" },
+		{ "ust4", 0, -1, "ufoparts", "soto4" },  { "ust5", 0, 1, "ufoparts", "soto5" },   { "pe01", 0, -1, "pellets", "white1" },
+		{ "pe05", 0, -1, "pellets", "white2" },  { "pe10", 0, -1, "pellets", "white3" },  { "pe20", 0, -1, "pellets", "white4" },
+		{ "uf01", 0, 1, "ufoparts", "fuzoku1" }, { "uf02", 0, 1, "ufoparts", "fuzoku2" }, { "uf03", 0, 1, "ufoparts", "fuzoku3" },
+		{ "uf04", 0, -1, "ufoparts", "fuzoku4" }, { "uf05", 0, -1, "ufoparts", "fuzoku5" }, { "uf06", 0, 1, "ufoparts", "fuzoku6" },
+		{ "uf07", 0, -1, "ufoparts", "fuzoku7" }, { "uf08", 0, -1, "ufoparts", "fuzoku8" }, { "uf09", 0, -1, "ufoparts", "fuzoku9" },
+		{ "un01", 1, -1, "ufoparts", "naka1" },  { "uf11", 0, -1, "ufoparts", "fuzoku11" }, { "uf10", 0, -1, "ufoparts", "fuzoku10" },
+		{ "un04", 1, -1, "ufoparts", "naka4" },  { "un07", 1, -1, "ufoparts", "naka7" },
+	};
+	BeWriter anim;
+	anim.s32(int(std::size(shapes)));
+	for (const Shape& s : shapes) {
+		char id[5] = { s.id[0], s.id[1], s.id[2], s.id[3], 0 };
+		putReversedId(anim, id);
+		anim.s32(s.creation);
+		anim.s32(-1);
+		anim.s32(s.overrideJoint);
+		if (!putParams(anim, { parmString("x00", s.folder), parmString("x01", s.file) }, error)) return false;
+	}
+	out.push_back({ "dataDir/objects/pelAnim.bin", anim.b });
+	return true;
+}
+
+bool writeStandInObjectFiles(std::vector<StandInAnimFile>& out, std::string& error)
+{
+	out.clear();
+	std::vector<StandInAnimFile> anims;
+	if (!writeStandInObjectAnimations(anims, error)) return false;
+	for (StandInAnimFile& f : anims) out.push_back(std::move(f));
+	std::vector<StandInModelFile> models;
+	if (!writeStandInObjectModels(models, error)) return false;
+	for (StandInModelFile& f : models) out.push_back({ f.path, std::move(f.bytes) });
+	return writeStandInPelletTables(out, error);
+}
+
+} // namespace nectar

@@ -5,10 +5,10 @@
 # needs the file. Collected from boot_smoke, throw_release and day30_clock at
 # 30 and 60 ticks per second on macOS, 2026-10-27.
 
-# No texture (.bti, .txe) or .bun bundle is allowlisted: the generator writes
-# every one the disc boot opens (#67). The only allowlisted .anm files are the
-# per-model animation bundles of #66. standin-texture-experiments.md records
-# what happens when a texture or bundle is missing or malformed.
+# No texture (.bti, .txe), .bun or .anm bundle and no AnimMgr table is
+# allowlisted: the generator writes every one the disc boot opens (#67, #66 and
+# standin_objects.cpp). standin-texture-experiments.md records what happens when
+# a texture or bundle is missing or malformed.
 
 # Sandbox generator files. Every .gen read is guarded (gameCoreSection.cpp
 # initStage): the day file prints NOT FOUND, init and plants are skipped.
@@ -20,37 +20,20 @@ dataDir/stages/sandbox/plants.gen
 
 # Parameter files CoreNode::load skips silently when missing (node.cpp); every
 # value keeps its code default. key.bin: the throw key stays A, which
-# throw_release asserts. demo, sound, pelMgr: no demo flags, sound constants
-# or pellet configs are read by a v1 scenario.
+# throw_release asserts. demo, sound: no demo flags or sound constants are read
+# by a v1 scenario. tekipara: the enemy parameters, read per enemy type.
 dataDir/parms/demo.bin
 dataDir/parms/sound.bin
 dataDir/parms/key.bin
-dataDir/parms/pelMgr.bin
 dataDir/camera/camepara.bin
 dataDir/tekipara/
 
-# Animation tables and bundles of objects other than the captain and Pikmin
-# (the other AnimMgrs, the known gap from #66). A missing bundle is ignored by
-# StdSystem::loadBundle and a missing AnimMgr table loads no infos; nothing a
-# v1 scenario asserts on animates them.
-dataDir/objects/ufo/ufo0705.anm
-dataDir/objects/ufo/ufo0705.bin
-dataDir/objects/pelAnim.bin
-dataDir/objects/pikihead/anims.bin
-dataDir/objects/pikihead/pikihead.anm
-dataDir/objects/bomb/anims.bin
-dataDir/objects/bomb/bomb.anm
-dataDir/objects/water/anims.bin
-dataDir/objects/water/water.anm
-dataDir/objects/fl_water/anims.bin
-dataDir/objects/fl_water/fl_water.anm
-dataDir/objects/goal/anims.bin
-dataDir/objects/goal/goal.anm
-dataDir/objects/pellets/white1.anm
-dataDir/objects/pellets/white2.anm
-dataDir/objects/pellets/white3.anm
-dataDir/objects/pellets/white4.anm
-dataDir/objects/ufoparts/
+# The disc's naka1 table names three animations its bundle lacks, so the game
+# opens loose .dck files that do not exist there either (FAILED in the boot
+# manifest). The stand-in naka1 bundle holds all five entries, so these open
+# nothing; the line stays so a future bundle change cannot turn them into
+# failures unnoticed.
+dataDir/objects/ufoparts/mnaka1/
 
 # Ghost replay record: gameCoreSection.cpp opens it and checks for null.
 dataDir/ghost/record.gst
