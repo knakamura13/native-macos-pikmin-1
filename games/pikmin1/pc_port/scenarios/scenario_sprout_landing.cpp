@@ -19,7 +19,7 @@
 //  - every seed plants (Wait) within a bound, so none is lost in the air or
 //    pushed back and forth forever;
 //  - a planted seed's ground triangle is not a steep face (normal y >= 0.5):
-//    the push off a wall that upstream #65 added stays at every frame rate;
+//    the push off a wall that fixed upstream issue #65 stays at every frame rate;
 //  - it is not below the ground at its position, and not floating above it by
 //    more than a bounce's worth: the "planted in mid-air on the cliff" bug.
 // What #208 changes (the height and speed at the start of Bury at 30 Hz) is
@@ -28,7 +28,7 @@
 // Known limit: on this stage the 76 degree face is a wall to a flying seed, so
 // the seeds stop about 13 units short of it (x = 37), bounce and drop to the
 // floor, and BuryExec's push off a steep face never runs ("pushed off 0"). The
-// edge case of upstream #65, a seed landing on a triangle whose collision normal
+// edge case of upstream issue #65, a seed landing on a triangle whose collision normal
 // says ground and whose face normal says wall, needs a surface built for it;
 // the stage does not have one yet.
 #include "scenarios/pc_scenario_list.h"
