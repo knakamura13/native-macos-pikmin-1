@@ -65,6 +65,9 @@ enum {
     PC_KEY_ACT_BOMB          = 24,
     // Modo Speedrun: mantener 1 s reinicia la run (pc_speedrun.cpp).
     PC_KEY_ACT_SPEEDRUN_RESET = 25,
+    // Quick Save (experimental, pc_quicksave.h): save the day here, load it back.
+    PC_KEY_ACT_QUICKSAVE = 26,
+    PC_KEY_ACT_QUICKLOAD = 27,
     PC_KEY_ACT_COUNT
 };
 void pc_window_set_key_binding(int action, SDL_Scancode scancode);
@@ -85,8 +88,6 @@ static inline bool pc_bind_is_valid(int binding) { return binding >= 0 && bindin
 // Whether the swarm binding (keyboard, mouse or gamepad) is held right now.
 bool pc_window_swarm_held(void);
 bool pc_window_swarm_held_p2(void);
-/// D-pad Down on that player's pad: the pad's swarm button, so it must not
-/// also trigger the original D-pad Down action (Olimar lying down).
 /// Eje vertical del stick derecho con Free Camera activo (zoom del radar).
 float pc_window_free_camera_sub_y(void);
 /// Flanco de subida del Lock-On de ese jugador (0/1): true una vez por
