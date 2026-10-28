@@ -18,13 +18,21 @@ install (the `_disc` tests) when you have one.
 ## Build
 
 Scenarios are off by default. Configure with the scenario option and native
-JAudio off (the legacy audio facade needs no sound data):
+JAudio off (the legacy audio facade needs no sound data). Run these from the
+repository root. `-G Ninja` needs Ninja installed; leave it out to use the
+default generator (the commands in this note were run with Unix Makefiles;
+`-G Ninja` was not run, because Ninja is not installed on that Mac):
 
 ```sh
 cmake -S games/pikmin1 -B build/pikmin1-scenarios -G Ninja \
     -DPIKMIN_NATIVE_JAUDIO=OFF -DPIKMIN_BUILD_SCENARIOS=ON
 cmake --build build/pikmin1-scenarios --target pikmin_pc nectar_standin_generator
 ```
+
+`PIKMIN_BUILD_TESTS` defaults to ON, so this configure also registers the unit
+tests: `ctest -N` lists 97 entries, 19 of them scenario entries. Most test
+executables are not built by the two targets above; CTest reports them as missing
+and `-R ^scenario_` leaves them out.
 
 The same scenarios also run with the original audio engine: configure a second
 build with `-DPIKMIN_NATIVE_JAUDIO=ON`. The generator writes a stand-in
@@ -38,15 +46,22 @@ ships it. `PIKMIN_BUILD_SCENARIOS` also calls `enable_testing()` and defines
 
 ## Run
 
-Through CTest (builds the stand-in tree first):
+Through CTest. CTest does not build: build the two targets above first. The
+`scenario_standin_generate` entry then writes the stand-in tree and the scenario
+entries run on it:
 
 ```sh
 ctest --test-dir build/pikmin1-scenarios --output-on-failure -R ^scenario_ -LE game-assets
 ```
 
-Directly, from the directory that holds `assets/`:
+Directly, from the repository root. `PIKMIN_SCENARIO_DATA_DIR` is resolved
+against the directory the command starts in (the process then changes into it), so
+a relative path like this one works only from the root. Write the stand-in tree
+first, for example with the generator (see
+[Stand-in assets](#stand-in-assets)):
 
 ```sh
+build/pikmin1-scenarios/nectar_standin_generator build/pikmin1-scenarios/scenario-data
 PIKMIN_SCENARIO_DATA_DIR=build/pikmin1-scenarios/scenario-data \
 PIKMIN_SCENARIO_STAGE=stages/sandbox.ini \
     build/pikmin1-scenarios/bin/nectar --scenario boot_smoke --scenario-tick-rate 30
@@ -54,32 +69,54 @@ PIKMIN_SCENARIO_STAGE=stages/sandbox.ini \
 
 | Argument | Meaning |
 |----------|---------|
-| `--scenario <name>` | Scenario to run: `boot_smoke`, `throw_release`, `day30_clock`, `sprout_landing` or `onion_skip` (the last two need the object stage, below). |
-| `--scenario-tick-rate 30\|60` | Ticks per second. Default `30`. Any other value exits 2. |
-| `--scenario-visible` | Show the window. Default is hidden. |
+| `--scenario <name>` | Scenario to run: `boot_smoke`, `throw_release`, `day30_clock`, `sprout_landing`, `onion_skip` or `objects_smoke`. The last three need an object stage (`PIKMIN_SCENARIO_STAGE`, see the table below). |
+| `--scenario-tick-rate 30\|60` | Ticks per second. Default `30`. Any other value (or a missing one) exits 2. |
+| `--scenario-visible` | Show the window. Default is hidden. A visible window is also positioned and may move the real mouse pointer (see [Mouse pointer](#mouse-pointer)). |
 
 | Environment variable | Meaning |
 |----------------------|---------|
-| `PIKMIN_SCENARIO_DATA_DIR` | Folder that holds `assets/`. The process changes into it. Unset, the run exits 77. |
-| `PIKMIN_SCENARIO_STAGE` | Stage `.ini` to boot, as written in `stages.ini`. Default `stages/stage1.ini` (Forest of Hope on disc). The stand-in tree uses `stages/sandbox.ini`. |
-| `PIKMIN_SCENARIO_TRACE` | Number of ticks after tick 0 for which the runner logs captain state, movie and overlay flags. |
-| `PIKMIN_LOG_FILE_OPENS` | File path. Appends `<game path>\t<OK\|FAILED>` per `DVDOpen`. Works in any build, used to make the boot manifest. |
+| `PIKMIN_SCENARIO_DATA_DIR` | Folder that holds `assets/`. The process changes into it. Unset or empty, the run exits 77. Set to a folder that cannot be entered, it exits 2. |
+| `PIKMIN_SCENARIO_STAGE` | Stage `.ini` to boot, as written in `stages.ini`. Default `stages/stage1.ini` (Forest of Hope on disc). The stand-in tree uses `stages/sandbox.ini`, `stages/sandbox_objects.ini` or `stages/sandbox_all_objects.ini`. On the stand-in tree without it the run names `stage1.ini`, which has no files there, and hangs until the watchdog fails it (exit 1). An unknown stage name fails with exit 1 and `no stage with file ...`. |
+| `PIKMIN_SCENARIO_TRACE` | Number of ticks, from tick 0, for which the runner logs captain state, movie and overlay flags, day and time (`[scenario-trace]` lines). |
+| `PIKMIN_SCENARIO_WATCHDOG_SECONDS` | Wall-clock limit in seconds, default 540. A value that is not a positive integer is ignored. |
+| `PIKMIN_LOG_FILE_OPENS` | File path. Appends `<game path>\t<OK\|FAILED>` per `DVDOpen`. Works in any build, used to make the boot manifest. The file is appended to, so use a fresh path per run. |
 
-A scenario run forces its own conditions: dummy SDL audio, the netplay
-deterministic mode, settings that are neither read nor written (640x360 window,
-no vsync), a fresh `NECTAR_SAVE_DIR` in the temp folder removed at exit, and a
-cleared list of environment variables that change the sim or the input
-(`kClearedEnv` in `pc_scenario.cpp`).
+There is no `PIKMIN_SCENARIO_WINDOW` variable. Window visibility is the
+`--scenario-visible` flag.
+
+A scenario run forces its own conditions:
+
+- Dummy SDL audio (`SDL_AUDIODRIVER=dummy`).
+- Netplay deterministic mode, forced in code (`pc_netplay_det_scenario_enable`):
+  deterministic fixed-step mode and unthrottled, so each loop runs one tick with
+  no vsync wait; the session seed is 0 and an ambient `PIKMIN_NETPLAY_*`
+  variable cannot change it; the sim RNG is reseeded from that seed, the day and
+  the stage at each new day; the floating-point environment is pinned every tick.
+  Two runs on one machine are identical, nothing more is claimed.
+- Settings that are neither read nor written: windowed 640x360, vsync off, the
+  frame rate set from `--scenario-tick-rate`, Infinite Day set by the scenario.
+- A fresh `NECTAR_SAVE_DIR` under the system temp folder, named
+  `nectar-scenario-<name>-<rate>-<pid>`. An ambient `NECTAR_SAVE_DIR` is not
+  used. The folder is removed on every normal exit, on a watchdog failure and
+  when a stage cannot be found, but a process killed by a signal (an abort, a
+  crash, CTest's timeout) leaves it behind.
+- A cleared list of environment variables that change the sim or the input
+  (`kClearedEnv` in `pc_scenario.cpp`: `PIKMIN_INPUT_RECORD`, `PIKMIN_UNLOCK_ALL`,
+  `PIKMIN_COOP`, `PIKMIN_COOP_CAPTAINS`, `PIKMIN_REPLAY_TEST`, `PIKMIN_NO_H4M`,
+  `PIKMIN_NETPLAY_EXIT_AFTER_TICKS` and three `PIKMIN_NETPLAY_TEST_*` variables).
 
 ### Exit codes
 
 | Code | Meaning |
 |------|---------|
 | `0` | Pass. |
-| `1` | A check failed (one `[scenario] FAIL ...: expected ..., observed ...` line on stderr), the boot never reached the stage, or the process ended before a verdict. |
-| `2` | Unknown scenario or bad arguments, before any window exists. |
-| `4` | Window or GL context creation failed. |
-| `77` | Skip: no data directory, no `assets/dataDir/parms/gamePrms.bin`, or the scenario does not support the rate. |
+| `1` | A check failed (one `[scenario] FAIL ...: expected ..., observed ...` line on stderr), the boot never reached the stage, the stage name is not in `stages.ini`, the watchdog fired, or the process ended before a verdict. |
+| `2` | Unknown scenario, bad arguments or a rejected flag, or a data directory that is set but cannot be entered. Before any window exists. |
+| `4` | Window or GL context creation failed (from the code; not reproduced, because this Mac has a GL context). |
+| `77` | Skip: `PIKMIN_SCENARIO_DATA_DIR` unset or empty, no `assets/dataDir/parms/gamePrms.bin`, or the scenario does not support the rate (no scenario refuses a rate today). |
+
+Exit 77 only reaches CTest as a skip for the `_disc` entries (`SKIP_RETURN_CODE
+77`); a stand-in entry that exits 77 fails.
 
 Three rules keep an abnormal exit from reading as a pass:
 
@@ -89,8 +126,12 @@ Three rules keep an abnormal exit from reading as a pass:
   `--netplay-exit-after-ticks` and `--input-replay` (plus `PIKMIN_INPUT_REPLAY`).
   `--input-record` stays allowed and records the scripted pads. The list is
   `kRejectedFlags` in `pc_scenario.cpp`.
-- A wall-clock watchdog fails the run with exit 1 (default 540 s, override with
-  `PIKMIN_SCENARIO_WATCHDOG_SECONDS`). It sits under the CTest timeout of 600 s.
+- A wall-clock watchdog fails the run with exit 1 and prints
+  `[scenario] FAIL <name>: wall-clock watchdog after N s` (default 540 s,
+  override with `PIKMIN_SCENARIO_WATCHDOG_SECONDS`). It sits under the CTest
+  timeout of 600 s. On this Mac a stand-in scenario takes 1 to 2 s, so the
+  default is a bound for slow runners (the source comment says the slowest takes
+  about 85 s on software GL; that was not measured here).
 - Any `exit()` before a verdict is a failure. The exit handler is armed once
   argument and data checks pass. `System::halt` and `PPCHalt` call `exit(0)`,
   which would otherwise pass. A GL context failure records exit 4 first, so the
@@ -101,19 +142,26 @@ failure.
 
 ## CTest entries
 
-All names are `scenario_<name>_<rate>` for each scenario at 30 and 60.
+Registered in `games/pikmin1/CMakeLists.txt` under `if(PIKMIN_BUILD_SCENARIOS)`.
+`ctest -N` lists 13 stand-in entries (`-R ^scenario_ -LE game-assets`) and 6 disc
+entries (`-L game-assets`).
 
 | Entry | Data | Label | Notes |
 |-------|------|-------|-------|
-| `scenario_standin_generate` | writes `<build>/scenario-data` | | `FIXTURES_SETUP scenario_standin_tree`, 120 s timeout. Passes `--manifest boot-manifest.txt`. |
-| `scenario_<name>_<rate>` | stand-in tree | none | `FIXTURES_REQUIRED scenario_standin_tree`, runs with `PIKMIN_SCENARIO_STAGE=stages/sandbox.ini`, 600 s timeout. No skip code: a missing or broken tree fails. |
-| `scenario_<name>_<rate>_disc` | a real install | `game-assets` | Runs in `<build>/scenario-scratch`, 600 s timeout, `SKIP_RETURN_CODE 77`. Set `PIKMIN_SCENARIO_DATA_DIR` to run it; otherwise CTest reports a skip. |
+| `scenario_standin_generate` | writes `<build>/scenario-data` | | `FIXTURES_SETUP scenario_standin_tree`, 120 s timeout. Passes `--manifest tools/scenarios/boot-manifest.txt`. |
+| `scenario_<name>_<rate>` | stand-in tree | none | For `boot_smoke`, `throw_release`, `day30_clock`, `sprout_landing`, `onion_skip` and `objects_smoke`, each at 30 and 60. `FIXTURES_REQUIRED scenario_standin_tree`, 600 s timeout, `PIKMIN_SCENARIO_STAGE` as in the stage table below. No skip code: a missing or broken tree fails. |
+| `scenario_<name>_<rate>_disc` | a real install | `game-assets` | For `boot_smoke`, `throw_release` and `day30_clock` only, at 30 and 60 (6 entries). Runs in `<build>/scenario-scratch`, 600 s timeout, `SKIP_RETURN_CODE 77`. Set `PIKMIN_SCENARIO_DATA_DIR` to run it; otherwise CTest reports a skip. |
 
-`scenario_sprout_landing_<rate>` and `scenario_onion_skip_<rate>` (30 and 60) are stand-in only: they run with
-`PIKMIN_SCENARIO_STAGE=stages/sandbox_objects.ini`, the opt-in second stage
-with a cliff, an Onion, sprouts, a pellet and an enemy. See
-`standin-objects.md` for what the object stand-ins are, what was read from the
-disc and what remains, and `standin-cinema.md` for `onion_skip`.
+Which stage each stand-in entry boots:
+
+| Scenarios | `PIKMIN_SCENARIO_STAGE` |
+|-----------|-------------------------|
+| `boot_smoke`, `throw_release`, `day30_clock` | `stages/sandbox.ini` |
+| `sprout_landing`, `onion_skip` | `stages/sandbox_objects.ini`, the opt-in second stage with a cliff, an Onion, sprouts, a pellet and an enemy. See `standin-objects.md` for what the object stand-ins are, what was read from the disc and what remains, and `standin-cinema.md` for `onion_skip`. |
+| `objects_smoke` | `stages/sandbox_all_objects.ini`, one of each plant, bridge, gate, boss and eight enemies. |
+
+`sprout_landing`, `onion_skip` and `objects_smoke` have no `_disc` entry: their
+stages do not exist on a real install.
 
 The stand-in entries run through `run_standin_scenario.cmake`. It starts
 `nectar`, keeps the scenario's exit code, and additionally fails the test on any
@@ -121,35 +169,48 @@ The stand-in entries run through `run_standin_scenario.cmake`. It starts
 `standin-open-allowlist.txt` (one path relative to `assets/` per line, a trailing
 `/` covers a folder, `#` starts a comment). Every allowlisted file is one the
 game tolerates missing and no scenario depends on, with the reason beside it.
+Under CTest it also passes `--state-hash-log` and writes
+`<build>/scenario-logs/scenario_<name>_<rate>.hash.log` and `.log` (CI uploads
+that folder when a test fails).
 
 ### CI
 
-`.github/workflows/ci.yml` builds `build/pikmin1-scenarios` with the options
-above, builds the two targets, then runs
-`ctest -R ^scenario_ -LE game-assets --timeout 600`, so disc entries never run.
-The environment is `SDL_AUDIODRIVER=dummy`, `LIBGL_ALWAYS_SOFTWARE=1`,
-`GALLIUM_DRIVER=llvmpipe`.
+`.github/workflows/ci.yml` configures and builds `build/pikmin1` (Release,
+Ninja, `PIKMIN_BUILD_LAUNCHER=ON`, `PIKMIN_BUILD_TESTS=ON`,
+`PIKMIN_NATIVE_JAUDIO=OFF`, `PIKMIN_BUILD_SCENARIOS=ON`; the whole project, not
+only the two targets), then runs
+`ctest -R ^scenario_ -LE game-assets --timeout 600 -j 3`, so disc entries never
+run. The unit tests run in a later step with `-E ^scenario_`. The environment is
+`SDL_AUDIODRIVER=dummy`, `LIBGL_ALWAYS_SOFTWARE=1`, `GALLIUM_DRIVER=llvmpipe`.
 
 - **Linux**: wrapped in `xvfb-run -a`, with Mesa packages installed.
 - **macOS**: runs directly.
 - **Windows (MinGW-w64)**: copies `opengl32.dll` and `libgallium_wgl.dll` from
-  `/mingw64/bin` into `bin/` first. Without them Windows returns the GDI Generic
-  GL 1.1 renderer.
+  `/mingw64/bin` into `build/pikmin1/bin/` first. Without them Windows returns the
+  GDI Generic GL 1.1 renderer.
 - **`SCENARIO_SKIP_OS`** (an `env` entry in `ci.yml`, empty today): a list of
-  `runner.os` values whose GL probe failed. Listed OSes skip the scenario build
-  and test steps; their normal build and unit tests still run. Add an OS only
-  with a linked tracking issue.
+  `runner.os` values whose GL probe failed. Listed OSes skip the scenario test
+  step only; their build and unit tests still run. Add an OS only with a linked
+  tracking issue.
+- The native JAudio scenario run in `standin-audio.md` is a proposal and is not
+  in CI; the `jaudio-build` job only compiles that configuration.
 
 ## The scenarios
 
 | Scenario | Start | What it asserts |
 |----------|-------|-----------------|
 | `boot_smoke` | Day 1 | Boots into the stage and passes after 900 ticks. Fails if the stage-ready hook does not fire within 20,000 boot ticks. |
-| `throw_release` | Day 1 | One captain, three blue Pikmin in grab range, three cases: a calibration that holds A until the grab completes and measures K (ticks from the press to the grab), a release one tick after the press, a release K + 2 ticks after it. Each case checks that the Pikmin is Hanged before the captain enters Throw (except the early release), the captain enters Throw, the Pikmin leaves the hand, flies and lands (Normal), and the captain returns to Walk, all within 5 s bounds. Also asserts the throw key is bound to A. |
+| `throw_release` | Day 1 | The squad is born only after the stage has been ready for 45 ticks (a hold of neutral input; 0 on the disc, whose intro already takes 45), then the captain walks away for 4 s with three blue Pikmin following. Three cases follow, each starting when the captain is in Walk with a Normal Pikmin in the plate within 80 units: a calibration that holds A until the grab completes and measures K (ticks from the press to the grab), a case with A down for one tick only (the early release), and a case that releases 2 ticks after that Pikmin's own grab completes. Each case checks that the Pikmin is Hanged before the captain enters Throw (except the early release), the captain enters Throw, the Pikmin leaves the hand (moves at least 5 units), flies and lands (Normal), and the captain returns to Walk. The grab, Throw and flight steps are bounded at 5 s, landing and the Settle wait at 10 s. Also asserts the throw key is bound to A and, before the calibration, that the ThrowWait animation and the AnimMgr tables are sane. |
 | `day30_clock` | Day 2 | Infinite Day holds the world clock on Days 2 to 29 and not on Day 30 (regression test for upstream #100). Day 2 with the option off: the clock advances. Option on: it stays put. Then Day 30 at 18:48 with the option on: the clock advances to sunset and day end begins at or after the end hour. |
-| `onion_skip` | Day 1, object stage | The blue Onion discovery movie (upstream #205), started with `DEMOFLAG_DiscoverBlueOnyon`. Four cases: watched to the end, START before Boot, between Boot and the first seed, and between the seed and EmitCone. Each asserts that the movie plays and ends, the Onion boots and reaches Wait, and exactly one seed comes out. The between case is the regression test for #205 (0 seeds without the fix). See `standin-cinema.md`. |
+| `onion_skip` | Day 1, object stage | The blue Onion discovery movie (upstream #205), started with `DEMOFLAG_DiscoverBlueOnyon`. Four cases: watched to the end, START before Boot, between Boot and the first seed, and between the seed and EmitCone. Each asserts that the movie plays and ends, the Onion boots and reaches Wait, and exactly one seed comes out. The between case is the regression test for #205 (0 seeds without the fix). Upstream PR #205 is still open; the fix is in this tree through the kyle-develop merge. See `standin-cinema.md`. |
+| `sprout_landing` | Day 1, object stage | Six seeds launched at the cliff the way `GoalAI::BootEmit` launches them. Each must plant (Wait) within a bound, not on a steep face, not below the ground and not floating more than 30 units above it. Height and speed at the start of Bury are printed, not asserted (upstream #208, merged upstream 2026-10-28, changes them at 30 Hz). See `standin-objects.md`. |
+| `objects_smoke` | Day 1, every-object stage | Boots `stages/sandbox_all_objects.ini`, checks the eight enemies were born and passes after 300 ticks. A missing or malformed model, platform, table or parameter file aborts the run instead. |
 
-`throw_release` measures K at run time and never hard-codes it.
+`throw_release` measures K at run time and never hard-codes it. On this tree both
+the stand-in sandbox and a real install give K = 15 at 30 Hz and 18 at 60 Hz
+(measured 2026-10-28), but the stand-in gate is fitted to land there
+(`standin-k-investigation.md`), so a change to the squad AI, collision or the sim
+RNG can move the two apart.
 
 ## Writing a scenario
 
@@ -188,8 +249,11 @@ How a run flows:
 To add a scenario: write the class, add a `pc_scenario_make_<name>()` factory
 declaration in `pc_scenario_list.h`, return it from `pc_scenario_all()` in
 `pc_scenario_list.cpp`, add the source to the `PIKMIN_BUILD_SCENARIOS` block in
-`CMakeLists.txt`, and add the name to both `foreach(scenario ...)` lists at the
-end of that file (disc and stand-in). Then run it once on the stand-in tree.
+`CMakeLists.txt`, and add the name to a `foreach(scenario ...)` list in the
+scenario test block at the end of that file: the stand-in list for the stage it
+runs on (`sandbox.ini`, `sandbox_objects.ini` or `sandbox_all_objects.ini`) and,
+only if it works on a real install, the disc list. Then run it once on the
+stand-in tree.
 Expect a missing-file abort or null dereference if it needs something the tree
 lacks; see [Adding a stand-in file](#adding-a-stand-in-file).
 
@@ -289,7 +353,65 @@ Build it with `cc gl_probe.c $(sdl2-config --cflags --libs) -o gl_probe`.
   enemies, bosses, plants, gates or bridges.
 - Stand-in and disc runs can differ in timing. `throw_release` measures K, the
   press-to-grab delay, per run because the stand-in value need not equal the
-  disc's.
+  disc's. Today the two agree (15 at 30 Hz, 18 at 60 Hz), by a fitted sandbox
+  gate, not by construction.
 - A scenario needs a GL context, even hidden. Without one the run exits 4. On
   Windows, Mesa's `opengl32.dll` and `libgallium_wgl.dll` must sit beside the
   executable.
+
+## Mouse pointer
+
+A hidden window (`--scenario`, the default) must not move the real mouse
+pointer. `pc_window.cpp` skips `SDL_WarpMouseInWindow` when the window carries
+`SDL_WINDOW_HIDDEN`, in `warpMouseToCentre()` and in the startup centre warp
+(commit `3d1e66c0`). The cause had been inferred from the code. It was observed
+on macOS (Apple M3 Max, 2560x1080 main display) on 2026-10-28 with a read-only
+helper (`python3 -I` with pyobjc: `CGEventGetLocation` and
+`NSEvent.mouseLocation`, in CoreGraphics coordinates, origin top left). The
+helper never posts events. Each run is `boot_smoke` at 30 Hz on the stand-in tree.
+
+| Case | Pointer before | Pointer after |
+|------|----------------|---------------|
+| Current binary, hidden | (-417.8, 964.0) | (-417.8, 964.0), unchanged |
+| Both guards removed, hidden (one run) | (-417.8, 964.0) | (1280.0, 555.0), moved |
+| Current binary, `--scenario-visible`, killed at the warp call | (1280.0, 555.0) | (1280.0, 555.0), no information (see below) |
+
+Both guards removed moved the pointer to the centre of the 640x360 window (x
+1280 is the middle of the 2560-wide display; y 555 is the window's content
+centre, below the title bar; this reading of y is an inference). One run, so the
+pointer moving is one observation, but it moved from a far position to the window
+centre and the same binary with the guards did not move it. That confirms the
+startup warp as the cause on this Mac.
+
+For the visible case the pointer already sat at the warp target, so a position
+check could not tell a warp from no warp. The run was repeated under `lldb` with
+a breakpoint on `SDL_WarpMouseInWindow`, killed at the first hit so the warp never
+ran: the visible run reaches the call (it warps, as before) and the hidden run
+never reaches it (the whole scenario passed with the breakpoint armed). Pointer
+positions were unchanged by those two runs.
+
+Not covered: Linux and Windows (SDL's warp semantics differ; the guard is
+platform-neutral C++ but was not compiled there), and the other
+`SDL_SetRelativeMouseMode` call sites, which this change does not touch.
+
+## Verification of this note
+
+The commands in this note were run on 2026-10-28 on macOS arm64 (RelWithDebInfo,
+Unix Makefiles, `PIKMIN_NATIVE_JAUDIO=OFF`):
+
+- Configure and build of `pikmin_pc` and `nectar_standin_generator`: worked.
+- `ctest -R ^scenario_ -LE game-assets`: 13 of 13 passed (generator plus 12
+  scenario runs). `ctest -N -L game-assets` lists the 6 disc entries.
+- The generator with `--manifest`: 314 files, 294 manifest paths in the tree,
+  17 allowlisted, 0 missing. A manifest path that cannot be read exits 1; no
+  arguments exits 2.
+- The direct `nectar --scenario boot_smoke` command on the stand-in tree and
+  on a disc tree (a scratch folder whose `assets` is a symlink to an install):
+  both exit 0. The three disc scenarios pass at 30 Hz and `throw_release` at 60.
+- `make_boot_manifest.py` with fresh `PIKMIN_LOG_FILE_OPENS` logs from the three
+  disc runs reproduces `boot-manifest.txt` byte for byte.
+- Exit codes 0, 1, 2 and 77, each rejected flag, the data-directory cases, the
+  watchdog and `PIKMIN_SCENARIO_TRACE` were run. Exit 4 was not (no GL failure
+  could be produced).
+- `gl_probe.c`, built with the command above, printed `GL_PROBE_OK` (4.1 Metal,
+  Apple M3 Max).
