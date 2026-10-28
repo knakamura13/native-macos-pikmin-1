@@ -430,7 +430,8 @@ void pc_scenario_on_tick_end(void)
 
 void scenarioPass(void)
 {
-	std::printf("[scenario] PASS %s\n", sScenario ? sScenario->name() : "?");
+	// sTick is the tick being checked, counted from 0 after the intro gate.
+	std::printf("[scenario] PASS %s at tick %u (intro %u ticks)\n", sScenario ? sScenario->name() : "?", sTick, sIntroTicks);
 	finish(PC_SCENARIO_EXIT_PASS);
 }
 
