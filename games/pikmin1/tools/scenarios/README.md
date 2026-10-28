@@ -249,9 +249,12 @@ that folder when a test fails).
 Ninja, `PIKMIN_BUILD_LAUNCHER=ON`, `PIKMIN_BUILD_TESTS=ON`,
 `PIKMIN_NATIVE_JAUDIO=OFF`, `PIKMIN_BUILD_SCENARIOS=ON`; the whole project, not
 only the two targets), then runs
-`ctest -R ^scenario_ -LE game-assets --timeout 600 -j 3`, so disc entries never
-run. The unit tests run in a later step with `-E ^scenario_`. The environment is
-`SDL_AUDIODRIVER=dummy`, `LIBGL_ALWAYS_SOFTWARE=1`, `GALLIUM_DRIVER=llvmpipe`.
+`ctest -R ^scenario_ -LE game-assets --timeout 600 -j N`, so disc entries never
+run (N is 4 on Linux and Windows and 3 on macOS). The unit tests run in a later step
+with `-E ^scenario_`. The environment is `SDL_AUDIODRIVER=dummy`,
+`LIBGL_ALWAYS_SOFTWARE=1`, `GALLIUM_DRIVER=llvmpipe` and, on Linux and Windows,
+`LP_NUM_THREADS=1` (one llvmpipe rasteriser thread per process, so the four parallel
+scenarios do not compete for the same cores).
 
 - **Linux**: wrapped in `xvfb-run -a`, with Mesa packages installed.
 - **macOS**: runs directly.

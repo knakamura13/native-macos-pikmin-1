@@ -130,12 +130,18 @@ jobs:
           SDL_AUDIODRIVER: dummy
           LIBGL_ALWAYS_SOFTWARE: "1"
           GALLIUM_DRIVER: llvmpipe
+          # One llvmpipe thread per process: with 4 scenarios in parallel on a
+          # 4-core runner, the default (one rasteriser thread per core each) only
+          # adds contention. macOS uses Apple's renderer and keeps -j 3.
+          LP_NUM_THREADS: "1"
         run: |
           if [ "$RUNNER_OS" = "Windows" ]; then
             # Without Mesa beside the exe, Windows returns GDI Generic GL 1.1.
             cp /mingw64/bin/opengl32.dll /mingw64/bin/libgallium_wgl.dll build/pikmin1/bin/
           fi
-          RUN="ctest --test-dir build/pikmin1 --output-on-failure --timeout 600 -j 3 -R ^scenario_ -LE game-assets"
+          JOBS=4
+          if [ "$RUNNER_OS" = "macOS" ]; then JOBS=3; fi
+          RUN="ctest --test-dir build/pikmin1 --output-on-failure --timeout 600 -j $JOBS -R ^scenario_ -LE game-assets"
           if [ "$RUNNER_OS" = "Linux" ]; then xvfb-run -a $RUN; else $RUN; fi
 
       # The throw_release calibration K per rate (a tuned fit; printed, not asserted).
@@ -259,8 +265,9 @@ jobs:
           SDL_AUDIODRIVER: dummy
           LIBGL_ALWAYS_SOFTWARE: "1"
           GALLIUM_DRIVER: llvmpipe
+          LP_NUM_THREADS: "1"
         run: |
-          xvfb-run -a ctest --test-dir build/pikmin1 --output-on-failure --timeout 600 -j 3 \
+          xvfb-run -a ctest --test-dir build/pikmin1 --output-on-failure --timeout 600 -j 4 \
             -R '^scenario_(boot_smoke|throw_release|day30_clock)_' -E _disc
       - name: Scenario calibration summary
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
