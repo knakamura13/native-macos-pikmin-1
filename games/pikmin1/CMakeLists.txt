@@ -2046,4 +2046,43 @@ if(PIKMIN_BUILD_SCENARIOS)
                 TIMEOUT 600)
         endforeach()
     endforeach()
+
+    # Runner self-tests on the stand-in tree: the scratch save directory and the
+    # exit codes of the negative paths (pc_scenario.h). Each asserts its code in
+    # a cmake -P wrapper, so a pass means exactly that code.
+    set(PIKMIN_STANDIN_ENV "PIKMIN_SCENARIO_DATA_DIR=${PIKMIN_STANDIN_DATA};PIKMIN_SCENARIO_STAGE=stages/sandbox.ini")
+    add_test(NAME scenario_save_dir
+        COMMAND ${CMAKE_COMMAND}
+            -DGAME=$<TARGET_FILE:${NECTAR_GAME}>
+            -DCWD_DIR=${CMAKE_CURRENT_BINARY_DIR}/scenario-save-dir-cwd
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/check_scenario_save_dir.cmake)
+    set_tests_properties(scenario_save_dir PROPERTIES
+        FIXTURES_REQUIRED scenario_standin_tree
+        ENVIRONMENT "${PIKMIN_STANDIN_ENV}"
+        TIMEOUT 600)
+    # exit(0) before a verdict (System::halt, PPCHalt) must read as a failure.
+    add_test(NAME scenario_exit_atexit_fail
+        COMMAND ${CMAKE_COMMAND} -DGAME=$<TARGET_FILE:${NECTAR_GAME}> -DSCENARIO=exit_zero -DEXPECT=1
+            "-DEXPECT_OUTPUT=intro done after" "-DFORBID_OUTPUT=\\[scenario\\] (PASS|FAIL)"
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/check_scenario_exit.cmake)
+    # SDL_Init fails with an unknown video driver: no window, exit 4.
+    add_test(NAME scenario_exit_no_gl
+        COMMAND ${CMAKE_COMMAND} -DGAME=$<TARGET_FILE:${NECTAR_GAME}> -DSCENARIO=boot_smoke -DEXPECT=4
+            "-DEXPECT_OUTPUT=Could not initialize window"
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/check_scenario_exit.cmake)
+    # The usage list leaves out test-only scenarios.
+    add_test(NAME scenario_exit_unknown
+        COMMAND ${CMAKE_COMMAND} -DGAME=$<TARGET_FILE:${NECTAR_GAME}> -DSCENARIO=no_such_scenario -DEXPECT=2
+            "-DEXPECT_OUTPUT=scenarios: boot_smoke" "-DFORBID_OUTPUT=exit_zero"
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/check_scenario_exit.cmake)
+    add_test(NAME scenario_exit_no_data
+        COMMAND ${CMAKE_COMMAND} -DGAME=$<TARGET_FILE:${NECTAR_GAME}> -DSCENARIO=boot_smoke -DEXPECT=77
+            -DUNSET_ENV=PIKMIN_SCENARIO_DATA_DIR "-DEXPECT_OUTPUT=PIKMIN_SCENARIO_DATA_DIR is not set"
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/check_scenario_exit.cmake)
+    set_tests_properties(scenario_exit_atexit_fail scenario_exit_no_gl PROPERTIES
+        FIXTURES_REQUIRED scenario_standin_tree TIMEOUT 600)
+    set_tests_properties(scenario_exit_atexit_fail scenario_exit_unknown scenario_exit_no_data PROPERTIES
+        ENVIRONMENT "${PIKMIN_STANDIN_ENV}")
+    set_tests_properties(scenario_exit_no_gl PROPERTIES
+        ENVIRONMENT "${PIKMIN_STANDIN_ENV};SDL_VIDEODRIVER=bogus")
 endif()
