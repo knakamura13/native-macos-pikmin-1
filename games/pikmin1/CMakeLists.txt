@@ -439,6 +439,7 @@ if (PIKMIN_BUILD_SCENARIOS)
         pc_port/scenarios/scenario_throw_release.cpp
         pc_port/scenarios/scenario_day30_clock.cpp
         pc_port/scenarios/scenario_sprout_landing.cpp
+        pc_port/scenarios/scenario_extinction.cpp
         pc_port/scenarios/scenario_onion_skip.cpp
         pc_port/scenarios/scenario_objects_smoke.cpp
         pc_port/scenarios/scenario_container_menu.cpp)
@@ -2030,7 +2031,7 @@ if(PIKMIN_BUILD_SCENARIOS)
         FIXTURES_SETUP scenario_standin_tree
         TIMEOUT 120)
     file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/scenario-logs")
-    foreach(scenario boot_smoke throw_release day30_clock)
+    foreach(scenario boot_smoke throw_release day30_clock extinction)
         foreach(rate 30 60)
             add_test(NAME scenario_${scenario}_${rate}
                 COMMAND ${CMAKE_COMMAND}

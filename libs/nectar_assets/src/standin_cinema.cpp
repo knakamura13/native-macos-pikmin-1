@@ -148,6 +148,43 @@ std::vector<Movie> movies()
 			list.push_back(m);
 		}
 	}
+
+	// Pikmin extinction (DEMOID_Extinction, demo46), then the day end after it
+	// (DEMOID_ExtDayEnd, translated per stage: the sandbox plays demo47, Impact
+	// Site's). The keys are the disc movies' (read-only, 2026-10-28) on invented
+	// frames; the disc movies have one actor (nv3Model) and an animation, the
+	// stand-ins none. demo46 (Localized at the captain): FadeOut, then
+	// GameEndCondition (PikminZero) and CleanupDayEnd on one frame. The first
+	// GameEndCondition message starts demo46; this second one, with the end flag
+	// set, starts the day-end movie and sets the clock to the end hour
+	// (newPikiGame.cpp, GameMovieInterface::parse). demo47: FadeIn at 0, FadeOut
+	// and ForceResults near the end; ForceResults clears the end flag, which
+	// releases MessageModeState into the day end. The disc's demo47 also has two
+	// ship Actions (sender 1, events 5 and 6, the take-off); the stand-in leaves
+	// them out because it has no ship actor to move.
+	{
+		Movie ext;
+		ext.cin           = "dataDir/cinemas/demo46.cin";
+		ext.cinema.flags  = kCinLocalized | hideNavi;
+		ext.cinema.scenes = { "cinemas/demo46/dm_46_1.dsk" };
+		ext.sceneFrames   = { 60 };
+		CinCut cut;
+		cut.endFrame    = 60;
+		cut.keys        = { notify(kMovieCmdGameEndCondition, kEndCausePikminZero, 57), notify(kMovieCmdFadeOut, 0, 40), notify(kMovieCmdCleanupDayEnd, 0, 57) };
+		ext.cinema.cuts = { cut };
+		list.push_back(ext);
+
+		Movie end;
+		end.cin           = "dataDir/cinemas/demo47.cin";
+		end.cinema.flags  = hideNavi;
+		end.cinema.scenes = { "cinemas/demo47/de_ptd_00.dsk" };
+		end.sceneFrames   = { 60 };
+		CinCut endCut;
+		endCut.endFrame = 60;
+		endCut.keys     = { notify(kMovieCmdFadeIn, 0, 0), notify(kMovieCmdFadeOut, 0, 50), notify(kMovieCmdForceResults, 0, 57) };
+		end.cinema.cuts = { endCut };
+		list.push_back(end);
+	}
 	return list;
 }
 

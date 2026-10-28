@@ -35,6 +35,13 @@ constexpr int kDemoOnionBonusPiki = 6;
 
 /// MOVIECMD_TextDemo (Interface.h): the value is a zen::ogScrTutorialMgr::EnumTutorial.
 constexpr int kMovieCmdTextDemo = 0;
+/// More MOVIECMD_* values (Interface.h) that the extinction movies send.
+constexpr int kMovieCmdGameEndCondition = 5; ///< value: GameEndCause (FlowController.h)
+constexpr int kMovieCmdForceResults     = 6; ///< clears mGameEndFlag (newPikiGame.cpp)
+constexpr int kMovieCmdFadeOut          = 9;
+constexpr int kMovieCmdFadeIn           = 10;
+constexpr int kMovieCmdCleanupDayEnd    = 11;
+constexpr int kEndCausePikminZero       = 0; ///< ENDCAUSE_PikminZero
 
 /// CinePlayerFlags (CinematicPlayer.h).
 constexpr std::uint32_t kCinLocalized = 1u << 0;
