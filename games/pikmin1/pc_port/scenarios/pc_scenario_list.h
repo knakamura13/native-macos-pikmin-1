@@ -21,5 +21,8 @@ PcScenario* pc_scenario_make_ship_parts(void);
 PcScenario* pc_scenario_make_captain_damage(void);
 PcScenario* pc_scenario_make_onion_unlock(void);
 PcScenario* pc_scenario_make_onion_unlock_whistle(void);
+PcScenario* pc_scenario_make_day_end(void);
+PcScenario* pc_scenario_make_day_end_day29(void);
+PcScenario* pc_scenario_make_extinction_day30(void);
 
 #endif

@@ -472,7 +472,8 @@ int main(int argc, char** argv)
 			check(c.scene >= 0 && c.scene < int(r.scenes.size()), f.path + ": cut scene in range");
 			// demo36 (the results backdrop) ends with a looping cut on purpose: it keeps the results screen up
 			// until exitDayEnd drops it, as the disc's does. Every other stand-in ends on its own.
-			if (f.path == "dataDir/cinemas/demo36.cin" && &c == &r.cuts.back())
+			// demo73 (the bad ending's escape) does the same for the final results window.
+			if ((f.path == "dataDir/cinemas/demo36.cin" || f.path == "dataDir/cinemas/demo73.cin") && &c == &r.cuts.back())
 				check(c.flags == nectar::kCutLoop, f.path + ": the last cut loops until the results window closes it");
 			else
 				check(c.flags == nectar::kCutPlayOnce, f.path + ": every cut plays once, so the movie ends without a skip");
@@ -522,6 +523,17 @@ int main(int argc, char** argv)
 			if (k.type == nectar::kCinEventAction && k.value == nectar::kDemoOnionEmitCone) cone6 = k.frame;
 		}
 		check(boot6 >= 5 && boot6 + 60 + 10 <= cone6, "demo06: windows before Boot, between Boot and the seed, and between the seed and EmitCone");
+		// demo73 (scenario extinction_day30): StartTotalResults in the cut played once, before the loop.
+		int starts = 0;
+		for (const auto& f : files) {
+			if (f.path != "dataDir/cinemas/demo73.cin") continue;
+			const ReadCin r = loadCin(f.text);
+			check(r.cuts.size() == 2 && r.cuts[1].flags == nectar::kCutLoop, "demo73: a cut played once, then a loop");
+			for (std::size_t i = 0; i < r.cuts.size(); i++)
+				for (const ReadKey& k : r.cuts[i].keys)
+					if (k.type == nectar::kCinEventNotify && k.cmd == nectar::kMovieCmdStartTotalResults) starts += i == 0 ? 1 : 100;
+		}
+		check(starts == 1, "demo73 starts the final results window once, from its first cut");
 	}
 	std::vector<nectar::StandInCinemaFile> again;
 	check(nectar::writeStandInCinemas(again, err) && again.size() == files.size(), "second build");

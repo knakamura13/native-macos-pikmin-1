@@ -355,7 +355,7 @@ std::map<std::string, LayoutReq> requirements()
 	// with a leading NUL), each with text of at most 7 bytes (char[8] buffers).
 	m["wait_char.blo"].reqs = { { "maru", 'T' }, { std::string("\0ten", 4), 'T' }, { std::string("\0han", 4), 'T' } };
 	for (const char* f : { "tu_tx00.blo", "tu_tx26.blo", "tu_tx35.blo", "tu_tx37_00.blo", "tu_tx37_01.blo", "tu_tx37_02.blo", "tu_tx03.blo", "tu_tx20.blo",
-	                       "re_j_00.blo" })
+	                       "re_j_00.blo", "re_n1_00.blo", "re_g_00.blo" })
 		m[f].reqs = { { "tx00", 'A' } }; // tx00..tx19 are optional and any type (the disc has a picture in tu_tx37_01); the stand-in has one text box
 	m["tu_tx31.blo"].reqs = { { "tx00", 'A' } }; // captain_damage: TUT_APunchUFO's page
 
@@ -438,6 +438,27 @@ std::map<std::string, LayoutReq> requirements()
 		                             'A');
 		// getPane_CpyCurScreen.
 		m["data_i.blo"].reqs = list({ "i00u", "i00d", "i01u", "i01d", "i02u", "i02d", "z00l", "z00r" }, 'A');
+	}
+	{
+		// extinction_day30: DrawUfoParts::dataSet (ui01..30 pictures, un01..30 text boxes) and DrawCMbest's b_00.
+		std::vector<Req>& u = m["ufo_p.blo"].reqs;
+		u                   = run("ui%02d", 1, 30, 'P');
+		cat(u, run("un%02d", 1, 30, 'T'));
+		u.push_back({ "b_00", 'P' });
+		// DrawTotalScore::DrawTotalScore: every search(.., true), plus DrawCMbest's 'best' and b_00.
+		std::vector<Req>& f = m["f_result.blo"].reqs;
+		f                   = list({ "win1", "win2", "win3", "win4", "best" }, 'A');
+		cat(f, list({ "pa_l", "pa_r", "da_l", "da_r", "lp_4", "lp_3", "lp_2", "lp_1", "dp_4", "dp_3", "dp_2", "dp_1", "tp_8", "tp_7", "tp_6", "tp_5",
+		              "tp_4", "tp_3", "tp_2", "tp_1", "pd_s", "newd", "b_00" },
+		            'P'));
+		cat(f, list({ "pa_k", "pa_d", "lp_h", "dp_h" }, 'T'));
+		cat(f, run("pd%02d", 1, 5, 'T'));
+		cat(f, run("lp%02d", 1, 5, 'T'));
+		cat(f, run("dp%02d", 1, 5, 'T'));
+		// DrawSaveMes::DrawSaveMes (DrawFinalResult's DrawOptionSave).
+		m["cha_sav2.blo"].reqs = list({ "savk", "save", "sakc", "sa_c", "saks", "sa_s" }, 'T');
+		m["cha_sav2.blo"].reqs.push_back({ "abtn", 'P' });
+		m["ac_chui.blo"].reqs = list({ "back", "chui" }, 'P');
 	}
 	return m;
 }
@@ -687,7 +708,8 @@ int main()
 	{
 		std::vector<nectar::StandinLayout> layouts = nectar::standinBloLayouts();
 		std::map<std::string, LayoutReq> reqs      = requirements();
-		check(layouts.size() == 40, "40 layouts: 12 on the boot path, 8 for day30_clock, 2 for the stand-in cinema text keys, 17 for captain_death, 1 for captain_damage");
+		check(layouts.size() == 46, "46 layouts: 12 on the boot path, 8 for day30_clock, 2 for the stand-in cinema text keys, 17 for captain_death, "
+		                            "1 for captain_damage, 2 diary pages for day_end, 4 for extinction_day30");
 		const char* bootOrder[] = { "black.blo", "pause.blo", "pause_ok.blo", "gameover.blo", "gameove2.blo", "count.blo",
 			                        "con01.blo", "sund.blo",  "account.blo",  "play09.blo",   "play10.blo",   "play_day.blo" };
 		for (size_t i = 0; i < 12 && i < layouts.size(); i++) check(layouts[i].file == bootOrder[i], std::string("load order: ") + bootOrder[i]);
@@ -728,6 +750,14 @@ int main()
 			if (it != reqs.end()) {
 				int bad = checkReqs(l.file, back, it->second, "stand-in");
 				check(bad == 0, l.file + ": meets the tag and type table");
+			}
+			if (l.file == "f_result.blo") {
+				// DrawTotalScore::DrawTotalScore strcpy's each record row into a char[0x80] buffer.
+				for (const char* fmt : { "pd%02d", "lp%02d", "dp%02d" })
+					for (int i = 1; i <= 5; i++) {
+						const BloPane* p = nectar::findBloPane(back, run(fmt, i, 1, 'T')[0].tag);
+						check(p && p->text.size() < 0x80, l.file + ": record row fits char[0x80]");
+					}
 			}
 			if (l.file == "wait_char.blo") {
 				// The three strings are strcpy'd into char[8] buffers and must differ from the page text.

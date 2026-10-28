@@ -27,6 +27,10 @@ dataDir/stages/sandbox_all_objects/0.gen
 dataDir/stages/sandbox_all_objects/1.gen
 dataDir/stages/sandbox_all_objects/init.gen
 dataDir/stages/sandbox_all_objects/plants.gen
+# The day file is <day - 1>.gen: extinction_day30 starts on Day 30 (sandbox),
+# day_end_day29 on Day 29 (object stage). Guarded like the others.
+dataDir/stages/sandbox/29.gen
+dataDir/stages/sandbox_objects/28.gen
 
 # Parameter files CoreNode::load skips silently when missing (node.cpp); every
 # value keeps its code default. key.bin: the throw key stays A, which
@@ -71,6 +75,12 @@ dataDir/cinemas/demo84.cin
 dataDir/cinemas/demo09.cin
 dataDir/cinemas/demo10.cin
 dataDir/cinemas/demo11.cin
+# day_end, day_end_day29: the march-in movie (DEMOID_DayEnd, the sandbox stages'
+# translation). The disc's has one Notify key, FadeIn at frame 0; the chain needs it not.
+dataDir/cinemas/demo28.cin
+# extinction_day30: the bad ending's first movie (DEMOID_BadEnding, phase one).
+# The disc's has Action keys only (ship and Pikmin actors), no Notify key.
+dataDir/cinemas/demo69.cin
 
 # captain_death: the three textures EffectMgr2D registers that effects.bun does
 # not hold (the file-select and results screens build the 2D effect manager when

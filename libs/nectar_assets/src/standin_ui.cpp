@@ -356,6 +356,54 @@ std::vector<StandinLayout> standinBloLayouts()
 		out.push_back(layout("save_x.blo", k));
 	}
 
+	// day_end: the diary pages of an ordinary sunset (ResultFlags::getDocument, resultFlag.cpp
+	// flagTable). With no other flag on, the lowest priority wins: RESFLAG_Misc1 (re_n1_00) on
+	// Day 2, RESFLAG_FinalDay (re_g_00, set by cleanupDayEnd on Day 29) on Day 29. One page each.
+	for (const char* f : { "re_n1_00.blo", "re_g_00.blo" })
+		out.push_back(tutorialPage(f));
+
+	// extinction_day30: the final results window that DayOverModeState::makeTotalScoreWindow
+	// builds on Day 30 (bad ending). Constructed in phase two whether or not it is ever started
+	// (the disc's demo73 starts it with a StartTotalResults key; the stand-in tree has no demo73).
+	{ // drawUfoParts.cpp: ufo_p.blo. The constructor needs only the screen (DrawCMbest falls back to
+		// the screen's own 'root'); dataSet, run once the window is operated, looks up ui01..ui30
+		// pictures and un01..un30 text boxes. b_00 is one DrawCMbest picture (the count stops at the
+		// first missing b_NN).
+		Kids k;
+		k.pics("ui%02d", 1, 30).boxes("un%02d", 1, 30);
+		k.add(pic("b_00"));
+		out.push_back(layout("ufo_p.blo", k));
+	}
+	{ // drawFinalResult.cpp, DrawTotalScore::DrawTotalScore: f_result.blo. Every search(.., true) of
+		// the constructor: win1..win4 anchors, the digits (NumberPicCallBack on pictures), pd_s and
+		// newd pictures (setRankInColor reads their colours), the record rows pd/lp/dp01..05 (text
+		// boxes copied into 128-byte buffers) and pa_k, pa_d, lp_h, dp_h text boxes. 'best' anchors
+		// DrawCMbest with one b_NN picture.
+		Kids k;
+		for (const char* t : { "win1", "win2", "win3", "win4" }) k.add(pane(t));
+		digitTags(k, { "pa_l", "pa_r", "da_l", "da_r", "lp_4", "lp_3", "lp_2", "lp_1", "dp_4", "dp_3", "dp_2", "dp_1" });
+		digitTags(k, { "tp_8", "tp_7", "tp_6", "tp_5", "tp_4", "tp_3", "tp_2", "tp_1" });
+		k.add(pic("pd_s")).add(pic("newd"));
+		for (const char* t : { "pa_k", "pa_d", "lp_h", "dp_h" }) k.add(box(t, "00"));
+		for (const char* fmt : { "pd%02d", "lp%02d", "dp%02d" })
+			for (int i = 1; i <= 5; i++) k.add(box(tagf(fmt, i), "Stand-in text."));
+		k.add(with(pane("best"), { pic("b_00") }));
+		out.push_back(layout("f_result.blo", k));
+	}
+	// DrawFinalResult's save step (DrawOptionSave): DrawSaveMes::DrawSaveMes builds these two; its
+	// ogScrMemChkMgr reuses data_m.blo above.
+	{ // drawSaveMes.cpp: cha_sav2.blo (savk, save, sakc, sa_c, saks, sa_s text boxes, abtn picture).
+		Kids k;
+		for (const char* t : { "savk", "save", "sakc", "sa_c", "saks", "sa_s" }) k.add(box(t, "Stand-in text."));
+		k.add(pic("abtn"));
+		out.push_back(layout("cha_sav2.blo", k));
+	}
+	{ // drawSaveMes.cpp: ac_chui.blo (back and chui pictures).
+		Kids k;
+		k.add(pic("back")).add(pic("chui"));
+		out.push_back(layout("ac_chui.blo", k));
+	}
+
 	return out;
 }
 

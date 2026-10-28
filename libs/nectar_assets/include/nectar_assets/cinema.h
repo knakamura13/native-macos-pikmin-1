@@ -41,6 +41,7 @@ constexpr int kMovieCmdForceResults     = 6; ///< clears mGameEndFlag (newPikiGa
 constexpr int kMovieCmdFadeOut          = 9;
 constexpr int kMovieCmdFadeIn           = 10;
 constexpr int kMovieCmdCleanupDayEnd    = 11;
+constexpr int kMovieCmdStartTotalResults = 12; ///< starts the final results window (demo73, bad ending)
 constexpr int kEndCausePikminZero       = 0; ///< ENDCAUSE_PikminZero
 
 /// CinePlayerFlags (CinematicPlayer.h).
