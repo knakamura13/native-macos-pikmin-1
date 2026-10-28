@@ -69,7 +69,7 @@ PIKMIN_SCENARIO_STAGE=stages/sandbox.ini \
 
 | Argument | Meaning |
 |----------|---------|
-| `--scenario <name>` | Scenario to run: `boot_smoke`, `throw_release`, `day30_clock`, `extinction`, `captain_death`, `captain_damage`, `ship_parts`, `sprout_landing`, `onion_skip`, `container_menu` or `objects_smoke`. The last three need an object stage (`PIKMIN_SCENARIO_STAGE`, see the table below). |
+| `--scenario <name>` | Scenario to run: `boot_smoke`, `throw_release`, `day30_clock`, `extinction`, `captain_death`, `onion_unlock`, `onion_unlock_whistle`, `captain_damage`, `ship_parts`, `sprout_landing`, `onion_skip`, `container_menu` or `objects_smoke`. The last three need an object stage (`PIKMIN_SCENARIO_STAGE`, see the table below). |
 | `--scenario-tick-rate 30\|60` | Ticks per second. Default `30`. Any other value (or a missing one) exits 2. |
 | `--scenario-visible` | Show the window. Default is hidden. A visible window is also positioned and may move the real mouse pointer (see [Mouse pointer](#mouse-pointer)). |
 
@@ -93,7 +93,12 @@ A scenario run forces its own conditions:
   the stage at each new day; the floating-point environment is pinned every tick.
   Two runs on one machine are identical, nothing more is claimed.
 - Settings that are neither read nor written: windowed 64x36 (`PIKMIN_SCENARIO_WINDOW`), vsync off, the
-  frame rate set from `--scenario-tick-rate`, Infinite Day set by the scenario.
+  frame rate set from `--scenario-tick-rate`, Infinite Day and Whistle Pluck set by the scenario
+  (`pc_settings_scenario_set_infinite_day`, `pc_settings_scenario_set_whistle_pluck`).
+- Achievements (`pikmin_achievements.txt`) are read and written in that run's
+  `NECTAR_SAVE_DIR`, not in the data folder the process changes into
+  (`pc_achievements.cpp`), so a run starts with none unlocked and writes nothing
+  into the stand-in tree.
 - A fresh `NECTAR_SAVE_DIR` under the system temp folder, named
   `nectar-scenario-<name>-<rate>-<pid>`. An ambient `NECTAR_SAVE_DIR` is not
   used. The folder is removed on every normal exit, on a watchdog failure and
@@ -211,6 +216,7 @@ code or timing the 30 Hz run does not. The disc entries keep `boot_smoke`,
 | `sprout_landing` | 30, 60 | `BuryInit` snaps the seed to the ground only above 30 Hz (`pc_seed_landing_snaps_to_ground`); 60 Hz is the only run of that path. |
 | `onion_skip` | 30, 60 | The movie advances half a frame per tick at 60 Hz (330 ticks against 660), so the skip frames and the boot motion's key events land on different ticks. |
 | `container_menu` | 30, 60 | Rate-specific code runs on both paths. `Navi::updateWalkAnimation` (the captain walks to the Onion and back to Walk) scales its speed window and motion cooldown with `pc_anim_ticks_per_30hz(frame time)`, and `DrawContainer` keeps its phase timers as sums of `gsys->getFrameTime()` against fixed thresholds (0.1 s steps, 0.5 s ramps), so the tick on which each status changes differs per rate. The scenario scales its Operation hold and its bounds by rate. None of it is a branch on the rate like `BuryInit`'s, so both rates are kept for that arithmetic, not for a known failing path; read from code, not shown to fail at either rate. |
+| `onion_unlock`, `onion_unlock_whistle` | 30, 60 | Same reason as `container_menu`: the captain's walk to each sprout (`Navi::updateWalkAnimation`), `NaviNukuAdjustState`'s odometer window (0.4 s) and the 40-frame stand-in pluck motions run on frame-time arithmetic, so each pluck lands on different ticks per rate; read from code, not shown to fail at either rate. |
 | `objects_smoke` | 30 | Loads the every-object stage and counts the enemies born; neither depends on the tick rate. |
 | `ship_parts` | 30, 60 | Nothing in `getUfoParts` depends on the rate (it is direct calls, one part per tick); both rates are kept because the run costs half a second and the intro gate and the tick counter differ (intro 15 ticks on the stand-ins, 45 on the disc). Not shown to fail at either rate. |
 
@@ -239,7 +245,7 @@ Routes); the time left is per-tick rendering, which grows with the tick count.
 | Entry | Data | Label | Notes |
 |-------|------|-------|-------|
 | `scenario_standin_generate` | writes `<build>/scenario-data` | | `FIXTURES_SETUP scenario_standin_tree`, 120 s timeout. Passes `--manifest tools/scenarios/boot-manifest.txt`. |
-| `scenario_<name>_<rate>` | stand-in tree | none | For `boot_smoke`, `throw_release`, `day30_clock`, `extinction`, `captain_death`, `captain_damage`, `ship_parts`, `sprout_landing`, `onion_skip` and `container_menu` at 30 and 60, and `objects_smoke` at 30 (see Tick rates). `FIXTURES_REQUIRED scenario_standin_tree`, 600 s timeout, `PIKMIN_SCENARIO_STAGE` as in the stage table below. No skip code: a missing or broken tree fails. |
+| `scenario_<name>_<rate>` | stand-in tree | none | For `boot_smoke`, `throw_release`, `day30_clock`, `extinction`, `captain_death`, `onion_unlock`, `onion_unlock_whistle`, `captain_damage`, `ship_parts`, `sprout_landing`, `onion_skip` and `container_menu` at 30 and 60, and `objects_smoke` at 30 (see Tick rates). `FIXTURES_REQUIRED scenario_standin_tree`, 600 s timeout, `PIKMIN_SCENARIO_STAGE` as in the stage table below. No skip code: a missing or broken tree fails. |
 | `scenario_<name>_<rate>_disc` | a real install | `game-assets` | For `boot_smoke`, `throw_release` and `day30_clock` only, at 30 and 60 (6 entries). Runs in `<build>/scenario-scratch`, 600 s timeout, `SKIP_RETURN_CODE 77`. Set `PIKMIN_SCENARIO_DATA_DIR` to run it; otherwise CTest reports a skip. |
 | `scenario_determinism_<name>_<rate>` | stand-in tree | none | EC-60. `boot_smoke`, `throw_release` and `day30_clock` at 30 and 60 (6 entries). `check_scenario_determinism.cmake` runs the scenario twice with `--state-hash-log` and fails if the two per-tick hash logs differ (the first differing line is printed). No scenario change. 1200 s timeout, `stages/sandbox.ini`. |
 | `scenario_determinism_negative_boot_smoke_30` | stand-in tree | none | Negative control for the entry above: the second run boots `stages/sandbox_objects.ini`, and the test passes only if the logs differ (`-DEXPECT_DIFFER=1`, no `WILL_FAIL`). The runner clears `PIKMIN_NETPLAY_TEST_PREROLL_RAND`, so that variable cannot perturb a scenario run. |
@@ -249,11 +255,11 @@ Which stage each stand-in entry boots:
 
 | Scenarios | `PIKMIN_SCENARIO_STAGE` |
 |-----------|-------------------------|
-| `boot_smoke`, `throw_release`, `day30_clock`, `captain_death`, `captain_damage`, `ship_parts` | `stages/sandbox.ini` |
+| `boot_smoke`, `throw_release`, `day30_clock`, `captain_death`, `onion_unlock`, `onion_unlock_whistle`, `captain_damage`, `ship_parts` | `stages/sandbox.ini` |
 | `sprout_landing`, `onion_skip`, `container_menu` | `stages/sandbox_objects.ini`, the opt-in second stage with a cliff, an Onion, sprouts, a pellet and an enemy. See `standin-objects.md` for what the object stand-ins are, what was read from the disc and what remains, and `standin-cinema.md` for `onion_skip`. |
 | `objects_smoke` | `stages/sandbox_all_objects.ini`, one of each plant, bridge, gate, boss and eight enemies. |
 
-`sprout_landing`, `onion_skip`, `container_menu` and `objects_smoke` have no `_disc` entry: their
+`sprout_landing`, `onion_skip`, `container_menu`, `onion_unlock`, `onion_unlock_whistle` and `objects_smoke` have no `_disc` entry: their
 stages do not exist on a real install.
 
 The stand-in entries run through `run_standin_scenario.cmake`. It starts

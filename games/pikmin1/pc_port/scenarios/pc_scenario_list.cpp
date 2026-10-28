@@ -50,6 +50,8 @@ const std::vector<PcScenario*>& pc_scenario_all(void)
 		[] { static GameStatCorrupt s; return static_cast<PcScenario*>(&s); }(),
 		pc_scenario_make_ship_parts(),
 		pc_scenario_make_captain_damage(),
+		pc_scenario_make_onion_unlock(),
+		pc_scenario_make_onion_unlock_whistle(),
 		[] { static ExitZero s; return static_cast<PcScenario*>(&s); }(),
 	};
 	return all;

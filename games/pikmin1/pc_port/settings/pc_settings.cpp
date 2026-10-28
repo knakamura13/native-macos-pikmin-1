@@ -1229,11 +1229,12 @@ int netplayApplyConfigText(const char* text) {
 
 #if PIKI_SCENARIOS
 // --scenario: the settings file is neither read nor written, so a developer's
-// pikmin_settings.conf cannot change a run. fpsMode and infiniteDay are
-// overrides the scenario can switch at runtime.
+// pikmin_settings.conf cannot change a run. fpsMode, infiniteDay and
+// whistlePluck are overrides the scenario can switch at runtime.
 static bool sScenarioSettings   = false;
 static int sScenarioFpsMode     = 0;
 static int sScenarioInfiniteDay = 0;
+static int sScenarioWhistlePluck = 0;
 // The scenario window (PIKMIN_SCENARIO_WINDOW, see pc_scenario.cpp). Every tick
 // draws a frame, which under software GL costs per pixel, and no scenario reads
 // the picture.
@@ -9030,6 +9031,7 @@ int pc_settings_get_infinite_day(void) { if (pc_speedrun_active()) return 0;
 void pc_settings_scenario_enable(void) { sScenarioSettings = true; }
 void pc_settings_scenario_set_fps_mode(int fpsMode) { sScenarioFpsMode = fpsMode; }
 void pc_settings_scenario_set_infinite_day(int on) { sScenarioInfiniteDay = on; }
+void pc_settings_scenario_set_whistle_pluck(int on) { sScenarioWhistlePluck = on; }
 void pc_settings_scenario_set_window_size(int width, int height)
 {
     sScenarioWindowWidth  = width;
@@ -9062,6 +9064,9 @@ int pc_settings_get_no_trip(void) { if (pc_speedrun_active()) return 0;
 }
 
 int pc_settings_get_whistle_pluck(void) { if (pc_speedrun_active()) return 0;
+#if PIKI_SCENARIOS
+    if (sScenarioSettings) return sScenarioWhistlePluck;
+#endif
     return sConfig.whistlePluck;
 }
 

@@ -64,6 +64,13 @@ dataDir/cinemas/demo52.cin
 dataDir/cinemas/demo32.cin
 dataDir/cinemas/demo56.cin
 dataDir/cinemas/demo84.cin
+# onion_unlock, onion_unlock_whistle: the first-pluck movies (DEMOFLAG_Pluck*Pikmin,
+# movies 9-11) play as zero-length movies, as above. The scenarios assert the
+# state PikiNukareState::cleanup and pcUnlockColourFromAutoPluck write, which the
+# movies do not carry; the text windows their keys would open are not covered.
+dataDir/cinemas/demo09.cin
+dataDir/cinemas/demo10.cin
+dataDir/cinemas/demo11.cin
 
 # captain_death: the three textures EffectMgr2D registers that effects.bun does
 # not hold (the file-select and results screens build the 2D effect manager when

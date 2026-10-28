@@ -19,5 +19,7 @@ PcScenario* pc_scenario_make_container_menu(void);
 PcScenario* pc_scenario_make_captain_death(void);
 PcScenario* pc_scenario_make_ship_parts(void);
 PcScenario* pc_scenario_make_captain_damage(void);
+PcScenario* pc_scenario_make_onion_unlock(void);
+PcScenario* pc_scenario_make_onion_unlock_whistle(void);
 
 #endif
