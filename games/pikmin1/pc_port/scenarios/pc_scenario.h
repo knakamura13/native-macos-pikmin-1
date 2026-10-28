@@ -53,6 +53,8 @@ void pc_scenario_on_tick_end(void);    // System::run, after every tick includin
 
 // For scenarios.
 int pc_scenario_ticks_per_second(void); // 30 or 60
+// Ticks the intro gate waited after the stage was ready (cutscene and text), before tick 0.
+unsigned pc_scenario_intro_ticks(void);
 void scenarioPass(void);
 void scenarioFail(unsigned tick, const char* expected, const char* observed);
 // printf-style: records failure with expected/observed text.

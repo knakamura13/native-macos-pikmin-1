@@ -310,6 +310,8 @@ int pc_scenario_exit_code(void) { return sExitCode; }
 
 int pc_scenario_ticks_per_second(void) { return sTicksPerSecond; }
 
+unsigned pc_scenario_intro_ticks(void) { return sIntroTicks; }
+
 void pc_scenario_on_no_gl(void)
 {
 	// No window exists, so no close request; main returns right after this and
