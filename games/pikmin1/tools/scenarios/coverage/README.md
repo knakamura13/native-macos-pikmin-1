@@ -4,6 +4,7 @@ A read of the game code, with the open questions then checked in the scenario ha
 
 - [terminals.md](terminals.md): day end, extinction, captain death, endings, exit and save flows, and the port's mode terminals.
 - [milestones.md](milestones.md): first-of events and progression (Onion unlocks, ship parts, stage unlocks, demos, text, achievements).
+- [render-sim-coupling.md](render-sim-coupling.md): where the draw step feeds the sim (head look, camera culling, window aspect, co-op split screen), measured, with the decision not to change it.
 - [edge-cases.md](edge-cases.md): counts and caps, Pikmin and captain state machines, hazards, whistle and plate, settings interactions, determinism, plus five invariant checkers that could run in every scenario.
 
 Tracked in the fork issue "Scenario coverage plan". Written 2026-10-28 against `kyle-develop` rebuild v1 plus PR #73.
