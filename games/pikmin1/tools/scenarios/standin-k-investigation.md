@@ -180,7 +180,7 @@ already takes 45 ticks, so the hold is 0 ticks and the run is unchanged:
 disc K 15, 15, 15 / 18, 18, 18 and the 6 disc tests pass. On the stand-ins
 the hold is 30 ticks. The assertions are unchanged. This removes the
 intro-length difference between the trees, but it does not remove the
-layout sensitivity: the same 39-layout grid with the hold gave K30 7 to 16 and
+layout sensitivity: the same 39-layout grid with the hold gave K30 8 to 16 and
 K60 13 to 77, again with no plateau.
 
 **Chosen point.** Of the gate layouts tried with the hold (39-layout grid and
