@@ -91,9 +91,18 @@ boot are the ones listed in `boot-manifest.txt`.
 | `demo61.cin` + 2 scenes | The same for Forest of Hope (opened on the disc boot) | same | same |
 | `demo41.cin` + `demo40/ca_d_m01.dsk` (90) | Forest of Hope landing (`DEMOID_LandingForest`) | HideNavi, NaviNoAI | yellow Onion Land at 10, EmitCone at 70 |
 | `demo45.cin` + 2 scenes (40 + 40) | Pikmin into the Onion, Forest of Hope | HideNavi, NaviNoAI | none |
-| `demo04.cin` + 1 scene (120) | Red Onion discovery (`DEMOID_FindRedOnyon`; the sandbox translates `DEMOID_FindOnyon` to it) | Localized, HideNavi, NaviNoAI | red Onion Boot at 10, EmitCone at 80; `TextDemo` `TUT_RedOnion` (1) at 100 |
+| `demo04.cin` + 1 scene (330) | Red Onion discovery (`DEMOID_FindRedOnyon`; the sandbox translates `DEMOID_FindOnyon` to it) | Localized, HideNavi, NaviNoAI | red Onion Boot at 10, EmitCone at 300; `TextDemo` `TUT_RedOnion` (1) at 310 |
+| `demo06.cin` + 1 scene (330) | Blue Onion discovery (`DEMOID_FindBlueOnyon`, started untranslated by `DEMOFLAG_DiscoverBlueOnyon`); used by `onion_skip` | Localized, HideNavi, NaviNoAI | blue Onion Boot at 10, EmitCone at 300; no text key (its screen, `tu_tx22`, is not a stand-in) |
 
-On stand-ins only `demo60` plays: the sandbox plays no landing. The runner's
+The discovery key frames follow the Onion's boot motion. Boot starts the motion
+(info colour + 3), and its `KEY_Action0` emits the first seed at motion frame
+240 (blue) or 270 (red). These key frames are the disc's, kept in the stand-in
+Onion table (`standin_object_profiles.cpp`, `standin-objects.md`). So the seed
+comes out at movie frame 250 or 280, before EmitCone at 300, the same order as
+on the disc. This leaves three skip windows: before Boot, between Boot and the
+seed, and between the seed and EmitCone.
+
+On `stages/sandbox.ini` only `demo60` plays: the sandbox plays no landing. The runner's
 intro gate presses START on the first movie tick. The skip replays the
 BonusPiki keys, which do nothing because the player has no Onion. The text key
 is not replayed. `demo41`, `demo45` and `demo61` exist so that the generator's
@@ -123,55 +132,95 @@ tutorial pages, like `tu_tx00`.
   `boot_smoke` passed. Before `tu_tx20` was added, the same run panicked on
   the missing screen.
 
+- With `onion_skip` added on the merged tree (`aceb6995` plus this work), all
+  55 non-disc tests pass and the disc scenarios pass 6 of 6. `throw_release`
+  K is 16 / 18, the same as the merged tree before `onion_skip` was added. The
+  merged tree's gate re-fit, not the cinemas, set those values
+  (`standin-k-investigation.md`).
+
 ## Allowlist changes
 
 - `standin-open-allowlist.txt`: `dataDir/cinemas/demo60.cin` removed.
 - `kManifestAllowlist` in `standin_generator.cpp`: the `dataDir/cinemas/`
   prefix removed. Every cinema path that the disc boot opens is now in the tree.
 
-## Onion discovery skip scenario (upstream #205): not added
+## onion_skip: the Onion discovery skip (upstream #205)
 
-Upstream PR #205 is open and is not on this branch
-(`pc_cine_skip_order.h` is absent, and `EmitCone`'s skip branch still calls
-`pcSnapLanded()` without `finishOnionBootAfterSkip()` first). So on this branch
-the window between Boot and the seed still has the bug, and a regression
-scenario for it would fail until the fix is merged.
+`pc_port/scenarios/scenario_onion_skip.cpp`, CTest `scenario_onion_skip_30` and
+`_60`. Stand-in only. Runs on the object stage (`stages/sandbox_objects.ini`,
+`standin-objects.md`), whose `default.gen` places a blue Onion the player does
+not own yet, in `GOAL_BootInit`.
 
-The sandbox also cannot host it yet with stand-in assets:
+What it needs, and where each part comes from:
 
-1. **Onion animations.** `objects/goal/goal.anm` and `anims.bin` are missing
-   (an allowlisted #66 gap). `GOAL_BootInit` goes to `GOAL_BootEmit` only on the
-   boot motion's Action0 key (`itemAI.cpp:730`), so without the animations a
-   watched discovery never emits its seed. The "skip after the seed" window and
-   the watched-to-end control case cannot be reached.
-2. **Seed.** `BootEmit` emits a sprout. The sprout's animations
-   (`objects/pikihead/`) are another allowlisted #66 gap.
-3. **Route.** `GoalItem::startAI` calls `routeMgr->getWayPoint('test',
-   mWaypointIdx)->setFlag(...)` without a null check. The Onion needs a waypoint
-   in the sandbox route. This is untested on the sandbox map.
-4. **Trigger.** `DemoInvoker` (`demoInvoker.cpp:39`) starts the discovery only
-   on the story stages. On `STAGE_TESTMAP` the scenario must call
-   `playerState->mDemoFlags.setFlag(DEMOFLAG_DiscoverRedOnyon, onion)` itself.
-   Movie 4 is `DEMOID_FindRedOnyon`; the stand-in `demo04.cin` is written for it.
+- **Onion and seed animations:** the object stand-ins (`goal.anm` and
+  `anims.bin`, the `pikihead` set).
+- **Route:** `GoalItem::startAI` runs on the object stage without trouble, so
+  no extra waypoint data was needed.
+- **Trigger:** `DemoInvoker` starts the discovery only on story stages, so the
+  scenario calls `setFlag(DEMOFLAG_DiscoverBlueOnyon, onion)` itself. That
+  plays movie 6, the stand-in `demo06.cin`, targeted and localized at the
+  Onion, as `DemoInvoker` would.
 
-### Design, for when items 1 to 3 exist
+There are four cases in one run. Between cases the scenario puts the Onion back
+to undiscovered: it clears the boot bit, resets the demo flag, and repeats the
+`!hasBootContainer` branch of `GoalItem::startAI` (speed 0, `GOAL_BootInit`,
+cone shrink, colour animation) without creating the leg ropes again. Seeds are
+counted with `GameStat::bornPikis[blue]`, which only `GoalAI::BootEmit`
+increments.
 
-`scenario_onion_skip_seed`, Day 1, sandbox:
+| Case | START at movie frame | Asserted |
+|------|----------------------|----------|
+| `watch` | none | 1 seed |
+| `pre_boot` | 5 (before Boot) | 1 seed |
+| `mid_boot` | 100 (after Boot, before the seed) | at most 1 seed; the count is printed |
+| `post_seed` | 275 (after the seed, before EmitCone) | 1 seed |
 
-- `onStageReady`: `itemMgr->birth(OBJTYPE_Goal)` as red, placed about 300 units
-  in front of the captain, not booted (`hasBootContainer(Red)` false). Then
-  `startAI`, and `setFlag(DEMOFLAG_DiscoverRedOnyon, onion)`.
-- Cases, each a fresh run or a reset Onion. Each case presses START at a chosen
-  movie frame (`MoviePlayer::mCurrentFrame`), using the stand-in `demo04` key
-  frames:
-  - before Boot (frame < 10);
-  - after Boot, before the seed (frame 10 to 80, Onion in `GOAL_BootInit`);
-    this is the #205 bug window;
-  - after EmitCone (frame > 80);
-  - with the animations: after the seed, and watched to the end as the control.
-- Assert in every case: exactly one seed emitted (count `PikiHeadItem`s, or
-  `GameStat` seed counters, before and after), the Onion in `GOAL_Wait`,
-  `hasBootContainer(Red)`, the cone open, and the Onion's waypoint flag on.
-- The bug-window case is expected to fail until #205 merges. It goes in as a
-  separate test entry with `WILL_FAIL` (or with the fix) so that the suite
-  stays green.
+Every case also asserts the following:
+
+- The movie starts within 2 s of the flag.
+- The movie ends within 20 s.
+- The boot bit is set.
+- The Onion reaches `GOAL_Wait` within 10 s of the movie's end.
+- No second seed comes out in the 2 s after that.
+
+`mid_boot` is the #205 window. Without the fix, the replayed EmitCone snaps the
+Onion from `BootInit` to `Wait` before `finishOnionBootAfterSkip` runs, so no
+seed is born. With the fix, EmitCone first moves the Onion to `BootEmit`, so one
+seed is born. The scenario prints which of the two it saw and does not assert
+either.
+
+### Observed (macOS, 2026-10-28)
+
+On this branch (no #205), both rates:
+
+```
+onion_skip watch: movie ran 330 ticks; seeds 1; Onion Wait; boot bit 1          (660 at 60 Hz)
+onion_skip pre_boot: START at movie frame 5 (Onion BootInit, 0 seed(s) so far); seeds 1; Onion Wait
+onion_skip mid_boot: START at movie frame 100 (Onion BootInit, 0 seed(s) so far); seeds 0; Onion Wait
+onion_skip mid_boot: no seed: the upstream #205 bug (...)
+onion_skip post_seed: START at movie frame 275 (Onion BootEmit, 1 seed(s) so far); seeds 1; Onion Wait
+PASS onion_skip
+```
+
+With the game-code part of PR #205 applied locally (`cinePlayer.cpp`,
+`demoEvent.cpp`, `goalItem.cpp`, `pc_onion_skip.h`, `pc_cine_skip_order.h`;
+a one-off check, reverted and not committed), both rates pass. The other
+three lines are unchanged, and `mid_boot` prints:
+
+```
+onion_skip mid_boot: START at movie frame 100 (Onion BootInit, 0 seed(s) so far); seeds 1; Onion Wait
+onion_skip mid_boot: one seed: the upstream #205 behaviour (...)
+```
+
+So the scenario tells the two builds apart cleanly. When #205 lands, set
+`mid_boot`'s expected count in `kCases` to 1, and the case becomes an exact
+regression test.
+
+Not covered:
+
+- What #205 also restores on a skip: the cone size, the colour fade and the
+  Onion's route waypoint flag.
+- The frame-order sort of the skip replay. #205 tests it in
+  `pc_cine_skip_order_test`.
+- The red and yellow discovery movies.

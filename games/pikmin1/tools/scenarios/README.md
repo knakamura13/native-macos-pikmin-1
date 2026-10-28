@@ -54,7 +54,7 @@ PIKMIN_SCENARIO_STAGE=stages/sandbox.ini \
 
 | Argument | Meaning |
 |----------|---------|
-| `--scenario <name>` | Scenario to run: `boot_smoke`, `throw_release`, `day30_clock` or `sprout_landing` (needs the object stage, below). |
+| `--scenario <name>` | Scenario to run: `boot_smoke`, `throw_release`, `day30_clock`, `sprout_landing` or `onion_skip` (the last two need the object stage, below). |
 | `--scenario-tick-rate 30\|60` | Ticks per second. Default `30`. Any other value exits 2. |
 | `--scenario-visible` | Show the window. Default is hidden. |
 
@@ -109,11 +109,11 @@ All names are `scenario_<name>_<rate>` for each scenario at 30 and 60.
 | `scenario_<name>_<rate>` | stand-in tree | none | `FIXTURES_REQUIRED scenario_standin_tree`, runs with `PIKMIN_SCENARIO_STAGE=stages/sandbox.ini`, 600 s timeout. No skip code: a missing or broken tree fails. |
 | `scenario_<name>_<rate>_disc` | a real install | `game-assets` | Runs in `<build>/scenario-scratch`, 600 s timeout, `SKIP_RETURN_CODE 77`. Set `PIKMIN_SCENARIO_DATA_DIR` to run it; otherwise CTest reports a skip. |
 
-`scenario_sprout_landing_<rate>` (30 and 60) is stand-in only: it runs with
+`scenario_sprout_landing_<rate>` and `scenario_onion_skip_<rate>` (30 and 60) are stand-in only: they run with
 `PIKMIN_SCENARIO_STAGE=stages/sandbox_objects.ini`, the opt-in second stage
 with a cliff, an Onion, sprouts, a pellet and an enemy. See
 `standin-objects.md` for what the object stand-ins are, what was read from the
-disc and what remains.
+disc and what remains, and `standin-cinema.md` for `onion_skip`.
 
 The stand-in entries run through `run_standin_scenario.cmake`. It starts
 `nectar`, keeps the scenario's exit code, and additionally fails the test on any
@@ -147,6 +147,7 @@ The environment is `SDL_AUDIODRIVER=dummy`, `LIBGL_ALWAYS_SOFTWARE=1`,
 | `boot_smoke` | Day 1 | Boots into the stage and passes after 900 ticks. Fails if the stage-ready hook does not fire within 20,000 boot ticks. |
 | `throw_release` | Day 1 | One captain, three blue Pikmin in grab range, three cases: a calibration that holds A until the grab completes and measures K (ticks from the press to the grab), a release one tick after the press, a release K + 2 ticks after it. Each case checks that the Pikmin is Hanged before the captain enters Throw (except the early release), the captain enters Throw, the Pikmin leaves the hand, flies and lands (Normal), and the captain returns to Walk, all within 5 s bounds. Also asserts the throw key is bound to A. |
 | `day30_clock` | Day 2 | Infinite Day holds the world clock on Days 2 to 29 and not on Day 30 (regression test for upstream #100). Day 2 with the option off: the clock advances. Option on: it stays put. Then Day 30 at 18:48 with the option on: the clock advances to sunset and day end begins at or after the end hour. |
+| `onion_skip` | Day 1, object stage | The blue Onion discovery movie (upstream #205), started with `DEMOFLAG_DiscoverBlueOnyon`. Four cases: watched to the end, START before Boot, between Boot and the first seed, and between the seed and EmitCone. Each asserts that the movie plays and ends, the Onion boots and reaches Wait, and at most one seed comes out. The watched, before-Boot and after-seed cases assert exactly one. The between case prints its count (0 without #205, 1 with it). See `standin-cinema.md`. |
 
 `throw_release` measures K at run time and never hard-codes it.
 
@@ -283,8 +284,8 @@ Build it with `cc gl_probe.c $(sdl2-config --cflags --libs) -o gl_probe`.
   ([standin-audio.md](standin-audio.md)).
 - Cutscenes are stand-ins with no actors (`standin-cinema.md`). The sandbox
   plays no landing; it plays the stand-in post-extinction movie (demo60), which
-  the intro gate skips on its first tick. No scenario covers the Onion
-  discovery skip yet (design in `standin-cinema.md`). The sandbox has no
+  the intro gate skips on its first tick. `onion_skip` plays and skips the
+  stand-in blue Onion discovery (demo06) on the object stage. The sandbox has no
   enemies, bosses, plants, gates or bridges.
 - Stand-in and disc runs can differ in timing. `throw_release` measures K, the
   press-to-grab delay, per run because the stand-in value need not equal the
