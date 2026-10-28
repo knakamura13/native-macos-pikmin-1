@@ -12,6 +12,7 @@ PcScenario* pc_scenario_make_boot_smoke(void);
 PcScenario* pc_scenario_make_throw_release(void);
 PcScenario* pc_scenario_make_day30_clock(void);
 PcScenario* pc_scenario_make_sprout_landing(void);
+PcScenario* pc_scenario_make_extinction(void);
 PcScenario* pc_scenario_make_onion_skip(void);
 PcScenario* pc_scenario_make_objects_smoke(void);
 PcScenario* pc_scenario_make_container_menu(void);

@@ -69,7 +69,7 @@ PIKMIN_SCENARIO_STAGE=stages/sandbox.ini \
 
 | Argument | Meaning |
 |----------|---------|
-| `--scenario <name>` | Scenario to run: `boot_smoke`, `throw_release`, `day30_clock`, `sprout_landing`, `onion_skip`, `container_menu` or `objects_smoke`. The last three need an object stage (`PIKMIN_SCENARIO_STAGE`, see the table below). |
+| `--scenario <name>` | Scenario to run: `boot_smoke`, `throw_release`, `day30_clock`, `extinction`, `sprout_landing`, `onion_skip`, `container_menu` or `objects_smoke`. The last three need an object stage (`PIKMIN_SCENARIO_STAGE`, see the table below). |
 | `--scenario-tick-rate 30\|60` | Ticks per second. Default `30`. Any other value (or a missing one) exits 2. |
 | `--scenario-visible` | Show the window. Default is hidden. A visible window is also positioned and may move the real mouse pointer (see [Mouse pointer](#mouse-pointer)). |
 
@@ -188,6 +188,7 @@ code or timing the 30 Hz run does not. The disc entries keep `boot_smoke`,
 | `boot_smoke` | 30, 60 | The rate is boot configuration (`fpsMode`, the tick length); each rate must boot and run. |
 | `throw_release` | 30, 60 | K and the release timings are tick arithmetic and differ per rate (15 and 18). |
 | `day30_clock` | 30, 60 | The clock moves by one frame time per tick, so the hold and the sunset arithmetic differ per rate. |
+| `extinction` | 30, 60 | The captain's PikiZero countdown is 30 ticks at either rate, but a movie advances half a frame per tick at 60 Hz (the 60-frame stand-ins take 58 and 115 ticks against about 61 and 121), so the bounds in seconds and the run-once check run at both. |
 | `sprout_landing` | 30, 60 | `BuryInit` snaps the seed to the ground only above 30 Hz (`pc_seed_landing_snaps_to_ground`); 60 Hz is the only run of that path. |
 | `onion_skip` | 30, 60 | The movie advances half a frame per tick at 60 Hz (330 ticks against 660), so the skip frames and the boot motion's key events land on different ticks. |
 | `container_menu` | 30, 60 | Same object stage as `onion_skip`; both rates are registered, not yet measured for a rate-specific path. |
@@ -196,7 +197,7 @@ code or timing the 30 Hz run does not. The disc entries keep `boot_smoke`,
 | Entry | Data | Label | Notes |
 |-------|------|-------|-------|
 | `scenario_standin_generate` | writes `<build>/scenario-data` | | `FIXTURES_SETUP scenario_standin_tree`, 120 s timeout. Passes `--manifest tools/scenarios/boot-manifest.txt`. |
-| `scenario_<name>_<rate>` | stand-in tree | none | For `boot_smoke`, `throw_release`, `day30_clock`, `sprout_landing`, `onion_skip` and `container_menu` at 30 and 60, and `objects_smoke` at 30 (see Tick rates). `FIXTURES_REQUIRED scenario_standin_tree`, 600 s timeout, `PIKMIN_SCENARIO_STAGE` as in the stage table below. No skip code: a missing or broken tree fails. |
+| `scenario_<name>_<rate>` | stand-in tree | none | For `boot_smoke`, `throw_release`, `day30_clock`, `extinction`, `sprout_landing`, `onion_skip` and `container_menu` at 30 and 60, and `objects_smoke` at 30 (see Tick rates). `FIXTURES_REQUIRED scenario_standin_tree`, 600 s timeout, `PIKMIN_SCENARIO_STAGE` as in the stage table below. No skip code: a missing or broken tree fails. |
 | `scenario_<name>_<rate>_disc` | a real install | `game-assets` | For `boot_smoke`, `throw_release` and `day30_clock` only, at 30 and 60 (6 entries). Runs in `<build>/scenario-scratch`, 600 s timeout, `SKIP_RETURN_CODE 77`. Set `PIKMIN_SCENARIO_DATA_DIR` to run it; otherwise CTest reports a skip. |
 
 Which stage each stand-in entry boots:
@@ -294,6 +295,7 @@ that stay with the platform are exact by IEEE 754.
 | `boot_smoke` | Day 1 | Boots into the stage and passes after 900 ticks. Fails if the stage-ready hook does not fire within 20,000 boot ticks. |
 | `throw_release` | Day 1 | The squad is born only after the stage has been ready for 45 ticks (a hold of neutral input; 0 on the disc, whose intro already takes 45), then the captain walks away for 4 s with three blue Pikmin following. Three cases follow, each starting when the captain is in Walk with a Normal Pikmin in the plate within 80 units: a calibration that holds A until the grab completes and measures K (ticks from the press to the grab), a case with A down for one tick only (the early release), and a case that releases 2 ticks after that Pikmin's own grab completes. Each case checks that the Pikmin is Hanged before the captain enters Throw (except the early release), the captain enters Throw, the Pikmin leaves the hand (moves at least 5 units), flies and lands (Normal), and the captain returns to Walk. The grab, Throw and flight steps are bounded at 5 s, landing and the Settle wait at 10 s. Also asserts the throw key is bound to A and, before the calibration, that the ThrowWait animation and the AnimMgr tables are sane. |
 | `day30_clock` | Day 2 | Infinite Day holds the world clock on Days 2 to 29 and not on Day 30 (regression test for upstream #100). Day 2 with the option off: the clock advances. Option on: it stays put. Each phase is 30 open ticks. Then Day 30 with the option on, started 120 clock ticks before the end hour (the start is computed from `mRealSecsPerGameHour` and the frame time, so it is the same tick count on every tree and rate): the clock advances to sunset and day end begins at or after the end hour. A build without the Day 30 exemption fails with `clock held on day 30` 30 ticks into Day 30. Passes at tick 277 at 30 Hz and 298 at 60 Hz (was 1,146 and 1,584). |
+| `extinction` | Day 2 | Every Pikmin dies on a normal day and the extinction chain must end. Three blue Pikmin are born and killed with `InteractKill`. Asserts, each within a bound in seconds: the captain enters `NAVISTATE_PikiZero`; `mGameEndFlag` becomes `GAMEEND_PikminExtinction` with the extinction movie (demo46) playing; demo46's own `GameEndCondition` key sets the clock to the end hour; demo47's `ForceResults` key clears the flag and `DayOverModeState` starts (`mIsDayEndSeqStarted`). The captain must pass through PikiZero once and the flag must be set once: a missing movie replays the chain forever, which the bounds and that count catch. Passes before the day-end phases, which need results screens the stand-in tree lacks. See `standin-cinema.md` and `coverage/terminals.md` T04. |
 | `container_menu` | Day 1, object stage | The captain walks onto the Onion's `cont` spot and presses A; the container menu (`DrawContainer`, stand-in `con01.blo` with its `p264` window) opens, passes Wait, Start and Operation, stays in Operation for 4 s with one stick push, and closes, once with B and once with A. The captain returns to Walk and the Onion count is unchanged. |
 | `onion_skip` | Day 1, object stage | The blue Onion discovery movie (upstream #205), started with `DEMOFLAG_DiscoverBlueOnyon`. Four cases: watched to the end, START before Boot, between Boot and the first seed, and between the seed and EmitCone. Each asserts that the movie plays and ends, the Onion boots and reaches Wait, and exactly one seed comes out. The between case is the regression test for #205 (0 seeds without the fix). Upstream PR #205 is still open; the fix is in this tree through the kyle-develop merge. See `standin-cinema.md`. |
 | `sprout_landing` | Day 1, object stage | Six seeds launched at the cliff the way `GoalAI::BootEmit` launches them. Each must plant (Wait) within a bound, not on a steep face, not below the ground and not floating more than 30 units above it. Height and speed at the start of Bury are printed, not asserted (upstream #208, merged upstream 2026-10-28, changes them at 30 Hz). See `standin-objects.md`. |
@@ -372,7 +374,9 @@ The writers live in `libs/nectar_assets`: `mod_writer.h` and `standin_models.h`
 `texture.h`, `bundle.h` and `standin_textures.h` (`.bti`, `.txe`, bundles),
 `blo.h`, `pcr.h` and `standin_ui.h` (screens, particles), `cinema.h` (`.cin`
 and `.dsk` cutscenes, see `standin-cinema.md`), and `parms.h`, `archive.h`,
-`stages_ini.h` and `gen.h`.
+`stages_ini.h` and `gen.h`. The stand-in `parms/aiconst.bin` carries the
+disc's value for every ID that differs from the code default
+(`standin-aiconst.md`).
 
 Each writer is a pure function (a plain input struct, bytes out, an error
 string, no file I/O) with a write-then-read unit test registered in CTest, for
@@ -441,7 +445,8 @@ Build it with `cc gl_probe.c $(sdl2-config --cflags --libs) -o gl_probe`.
   ([standin-audio.md](standin-audio.md)).
 - Cutscenes are stand-ins with no actors (`standin-cinema.md`). The sandbox
   plays no landing; it plays the stand-in post-extinction movie (demo60), which
-  the intro gate skips on its first tick. `onion_skip` plays and skips the
+  the intro gate skips on its first tick. `extinction` plays the stand-in
+  extinction and day-end movies (demo46, demo47) to the end. `onion_skip` plays and skips the
   stand-in blue Onion discovery (demo06) on the object stage. The sandbox has no
   enemies, bosses, plants, gates or bridges.
 - Stand-in and disc runs can differ in timing. `throw_release` measures K, the

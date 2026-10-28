@@ -93,6 +93,8 @@ boot are the ones listed in `boot-manifest.txt`.
 | `demo45.cin` + 2 scenes (40 + 40) | Pikmin into the Onion, Forest of Hope | HideNavi, NaviNoAI | none |
 | `demo04.cin` + 1 scene (330) | Red Onion discovery (`DEMOID_FindRedOnyon`; the sandbox translates `DEMOID_FindOnyon` to it) | Localized, HideNavi, NaviNoAI | red Onion Boot at 10, EmitCone at 300; `TextDemo` `TUT_RedOnion` (1) at 310 |
 | `demo06.cin` + 1 scene (100) | Blue Onion discovery (`DEMOID_FindBlueOnyon`, started untranslated by `DEMOFLAG_DiscoverBlueOnyon`); used by `onion_skip` | Localized, HideNavi, NaviNoAI | blue Onion Boot at 10, EmitCone at 90; no text key (its screen, `tu_tx22`, is not a stand-in) |
+| `demo46.cin` + 1 scene (60) | Pikmin extinction (`DEMOID_Extinction`), Localized at the captain | Localized, HideNavi, NaviNoAI | FadeOut at 40; `GameEndCondition` (PikminZero) and `CleanupDayEnd` at 57 |
+| `demo47.cin` + 1 scene (60) | Day end after an extinction (`DEMOID_ExtDayEnd`, translated per stage; the sandbox falls back to Impact Site, demo47) | HideNavi, NaviNoAI | FadeIn at 0, FadeOut at 50, `ForceResults` at 57 |
 
 The discovery key frames follow the Onion's boot motion. Boot starts the motion
 (info colour + 3), and its `KEY_Action0` emits the first seed. Red keeps the
@@ -258,3 +260,37 @@ Total ticks of one `onion_skip` run, from its `ticks in all` line:
 The movie lines are now `watch` 100 ticks (200 at 60 Hz), `pre_boot` 6,
 `mid_boot` 41 and `post_seed` 81 (twice that at 60 Hz). Every case still
 reports exactly one seed.
+
+## Extinction chain: demo46 and demo47 (G1, 2026-10-28)
+
+`pc_port/scenarios/scenario_extinction.cpp`, CTest `scenario_extinction_30` and
+`_60`. Stand-in only (the sandbox, Day 2). The files the chain opens, and why
+the movies need their Notify keys:
+
+- `GameCoreSection::update` puts the captain in `NAVISTATE_PikiZero` when
+  `GameStat::allPikis == 0` and `maxPikis > 0`. `NaviPikiZeroState::exec`
+  counts 30 ticks and sends `MOVIECMD_GameEndCondition` (PikminZero).
+- The first message sets `mGameEndFlag` and starts `DEMOID_Extinction`
+  (`cinemas/demo46.cin`). The disc's demo46 sends the second message itself, from
+  a key at frame 167 (with FadeOut at 150 and CleanupDayEnd at 167). The second
+  message starts `DEMOID_ExtDayEnd` and sets the clock to the end hour.
+- `DEMOID_ExtDayEnd` is translated per stage (`movie47table`,
+  `moviePlayer.cpp`): demo47 Impact Site (and the sandbox), demo48 Forest of
+  Hope, demo49 Cave and Last, demo50 Yakushima. The disc's demo47 and demo48
+  differ only in flags (68 / 69), scene and model files. Each has a
+  `ForceResults` key at frame 397 that clears the end flag, which lets
+  `MessageModeState` queue `DayOverModeState`.
+- A missing `.cin` is tolerated (the movie finishes in one tick and drops its
+  keys), which is why the chain looped: the second message came only from the
+  first-message replay, 30 ticks apart, and `ForceResults` never ran.
+
+The stand-ins keep the disc's keys and key order on invented, shorter frames
+(60-frame scenes). The disc movies' actor (`nv3Model`, the Pikmin used for the
+death animation) and the ship Actions in demo47 (sender 1, events 5 and 6) are
+not written. The `.cin` files for the other three stages (demo48 to demo50) are
+not written: no stand-in stage translates to them.
+
+Files the chain opens besides the two movies and their two scenes: none that
+were missing. `gameover.blo` and `tu_tx20.blo` already exist. The scenario passes
+at `DayOverModeState`'s construction, before phase one opens the results
+screens.

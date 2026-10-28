@@ -258,14 +258,25 @@ bool stagesIni(Tree& tree, std::string& error)
 bool parmFiles(Tree& tree, std::string& error)
 {
 	using nectar::parmFloat;
+	using nectar::parmInt;
 	struct File {
 		const char* path;
 		std::vector<std::vector<nectar::ParmEntry>> lists;
 	};
 	const File files[] = {
 		{ "dataDir/parms/gamePrms.bin", { {} } },
-		// AIConstant (aiConstants.cpp): gravity shapes the throw's flight.
-		{ "dataDir/parms/aiconst.bin", { { parmFloat("p00", 560.0f) } } }, // mGravity (code 550)
+		// AIConstant (aiConstants.cpp). Every ID that differs from the code default carries the
+		// disc value (read-only, 2026-10-28); the full table is in standin-aiconst.md. The other
+		// 17 IDs equal the code default.
+		{ "dataDir/parms/aiconst.bin",
+		  { {
+		      parmFloat("p00", 560.0f), // mGravity (code 550): shapes the throw's flight
+		      parmInt("p01", 0),        // _34, Pikmin auto-attack (code 1)
+		      parmInt("p08", 0),        // _A4, return after attack (code 1)
+		      parmInt("p10", 0),        // _C4, attack once = 1, until death = 0 (code 1)
+		      parmInt("p13", 0),        // mDoPluckWithCursor (code 1)
+		      parmInt("p19", 5),        // _154, UFO level 2 part count (code 6)
+		  } } },
 		// CPlate (cPlate.cpp): where the squad stands behind the captain.
 		{ "dataDir/parms/cunit.bin",
 		  { {
