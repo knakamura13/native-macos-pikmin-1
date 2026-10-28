@@ -206,6 +206,7 @@ private:
 		}
 		if (++mCase == kCaseCount) {
 			mPhase = Done;
+			std::printf("[scenario] onion_skip: %u ticks in all\n", t + 1);
 			scenarioPass();
 			return;
 		}
