@@ -179,8 +179,7 @@ Decided by the fork owner on 2026-10-28.
   play out differently in windows of different aspect, because what counts as on
   screen decides which objects get the full AI update. The 4:3 Aspect setting gives
   GameCube's culling.
-- **Co-op:** the second view's double `updateLook` is fixed separately (see the
-  co-op note at the end of this file, when present).
+- **Co-op:** the second view's double `updateLook` is fixed separately (see "Co-op fix" below).
 - **Moving the look draws to the cosmetic stream:** not done. It changes the sim
   RNG sequence and therefore GameCube fidelity.
 
@@ -226,6 +225,25 @@ advances animation (`BaseShape::updateAnim` animates in the draw) nor writes
 collision or platform state, and such enemies would still stand frozen until
 they enter the 4:3 area. Co-op has the same coupling: taking the sim culling
 from view 1 would hide enemies in view 2. The owner decided not to ship it.
+## Co-op fix
+
+The double look update in split screen is fixed (2026-10-28); the culling is
+not changed. The view loop in `newPikiGame.cpp` records the view pass with
+`pc_coop_set_view_pass` (`pc_coop.h`), and `ViewPiki::refresh` and
+`Navi::updateHeadMatrix` call `updateLook()` only when
+`pc_coop_first_view_pass()` is true. Both views still apply the head-turn
+matrices, so the look timer and the end of a look run once per tick and the
+head turns at the single-player speed. The AI culling flag and `_528` still
+come from the last view drawn, as before.
+
+Single player and netplay always run pass 0. Against a base build of
+`57c9e1a4`: the same 122 stand-in and 6 disc `ctest` passes, all 44 stand-in
+hash logs that `ctest` writes are identical, K = 15 / 18, and the
+`boot_smoke`, `throw_release` and `day30_clock` logs at 30 and 60 Hz are
+identical on the stand-in and the disc tree at 64x36 and 640x480. A
+throwaway harness ran the view loop with the real `pc_coop.h` gate: a
+10-tick look ends at tick 5 with two ungated views and at tick 10 with the
+gate. Real co-op play was not run (scenarios reject `--coop`).
 
 ## Regression coverage
 

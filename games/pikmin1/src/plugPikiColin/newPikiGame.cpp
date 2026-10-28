@@ -2599,6 +2599,7 @@ public:
 		mSplitViews = splitScreen ? 2 : 1;
 		for (int view = 0; view < mSplitViews; view++) {
 			if (sGamecoreLive && gamecore) gamecore->mRenderPass = view;
+			pc_coop_set_view_pass(view);
 			if (splitScreen) {
 				beginSplitView(gfx, view);
 			}
@@ -2666,6 +2667,7 @@ public:
 			endSplitViews(gfx);
 		}
 		if (sGamecoreLive && gamecore) gamecore->mRenderPass = 0;
+		pc_coop_set_view_pass(0);
 #endif
 
 		// do any 2D post-rendering (for overlays and windows)
