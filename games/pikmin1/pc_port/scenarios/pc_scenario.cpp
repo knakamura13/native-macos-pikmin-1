@@ -27,6 +27,7 @@
 
 #if defined(_WIN32)
 #include <direct.h>
+#include <stdlib.h>
 #define PC_SCENARIO_CHDIR _chdir
 #else
 #include <unistd.h>
@@ -162,7 +163,13 @@ int pc_scenario_parse_argv(int argc, char** argv)
 		std::error_code ec;
 		std::filesystem::path scratch = std::filesystem::temp_directory_path(ec) / ("nectar-scenario-" + std::string(name) + "-" + std::to_string(SDL_GetTicks()));
 		std::filesystem::create_directories(scratch, ec);
-		SDL_setenv("NECTAR_SAVE_DIR", scratch.string().c_str(), 1);
+		// The game reads this with the CRT getenv. SDL_setenv on Windows only sets
+		// the process environment block, which the MinGW CRT copy does not see.
+#if defined(_WIN32)
+		_putenv_s("NECTAR_SAVE_DIR", scratch.string().c_str());
+#else
+		setenv("NECTAR_SAVE_DIR", scratch.string().c_str(), 1);
+#endif
 	}
 	pc_netplay_det_scenario_enable();
 	pc_settings_scenario_enable();

@@ -23,7 +23,7 @@
 #include "Piki.h"
 #include "PikiMgr.h"
 #include "PikiState.h"
-#include "keyconfig.h"
+#include "KeyConfig.h"
 
 namespace {
 
