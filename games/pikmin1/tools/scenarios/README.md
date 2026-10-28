@@ -54,7 +54,7 @@ PIKMIN_SCENARIO_STAGE=stages/sandbox.ini \
 
 | Argument | Meaning |
 |----------|---------|
-| `--scenario <name>` | Scenario to run: `boot_smoke`, `throw_release`, `day30_clock`, `sprout_landing` or `onion_skip` (the last two need the object stage, below). |
+| `--scenario <name>` | Scenario to run: `boot_smoke`, `throw_release`, `day30_clock`, `sprout_landing`, `onion_skip` or `container_menu` (the last three need the object stage, below), or `objects_smoke` (the every-object stage). |
 | `--scenario-tick-rate 30\|60` | Ticks per second. Default `30`. Any other value exits 2. |
 | `--scenario-visible` | Show the window. Default is hidden. |
 
@@ -63,6 +63,7 @@ PIKMIN_SCENARIO_STAGE=stages/sandbox.ini \
 | `PIKMIN_SCENARIO_DATA_DIR` | Folder that holds `assets/`. The process changes into it. Unset, the run exits 77. |
 | `PIKMIN_SCENARIO_STAGE` | Stage `.ini` to boot, as written in `stages.ini`. Default `stages/stage1.ini` (Forest of Hope on disc). The stand-in tree uses `stages/sandbox.ini`. |
 | `PIKMIN_SCENARIO_TRACE` | Number of ticks after tick 0 for which the runner logs captain state, movie and overlay flags. |
+| `PIKMIN_SCENARIO_STATE_STATS` | Any value. With the verdict, prints per state id of the captain and of the Pikmin the longest uninterrupted stay in ticks and the entry count (`[scenario-states]` lines). A state stuck on an animation key the stand-ins lack shows as a long stay. |
 | `PIKMIN_LOG_FILE_OPENS` | File path. Appends `<game path>\t<OK\|FAILED>` per `DVDOpen`. Works in any build, used to make the boot manifest. |
 
 A scenario run forces its own conditions: dummy SDL audio, the netplay
@@ -109,7 +110,7 @@ All names are `scenario_<name>_<rate>` for each scenario at 30 and 60.
 | `scenario_<name>_<rate>` | stand-in tree | none | `FIXTURES_REQUIRED scenario_standin_tree`, runs with `PIKMIN_SCENARIO_STAGE=stages/sandbox.ini`, 600 s timeout. No skip code: a missing or broken tree fails. |
 | `scenario_<name>_<rate>_disc` | a real install | `game-assets` | Runs in `<build>/scenario-scratch`, 600 s timeout, `SKIP_RETURN_CODE 77`. Set `PIKMIN_SCENARIO_DATA_DIR` to run it; otherwise CTest reports a skip. |
 
-`scenario_sprout_landing_<rate>` and `scenario_onion_skip_<rate>` (30 and 60) are stand-in only: they run with
+`scenario_sprout_landing_<rate>`, `scenario_onion_skip_<rate>` and `scenario_container_menu_<rate>` (30 and 60) are stand-in only: they run with
 `PIKMIN_SCENARIO_STAGE=stages/sandbox_objects.ini`, the opt-in second stage
 with a cliff, an Onion, sprouts, a pellet and an enemy. See
 `standin-objects.md` for what the object stand-ins are, what was read from the
@@ -147,6 +148,7 @@ The environment is `SDL_AUDIODRIVER=dummy`, `LIBGL_ALWAYS_SOFTWARE=1`,
 | `boot_smoke` | Day 1 | Boots into the stage and passes after 900 ticks. Fails if the stage-ready hook does not fire within 20,000 boot ticks. |
 | `throw_release` | Day 1 | One captain, three blue Pikmin in grab range, three cases: a calibration that holds A until the grab completes and measures K (ticks from the press to the grab), a release one tick after the press, a release K + 2 ticks after it. Each case checks that the Pikmin is Hanged before the captain enters Throw (except the early release), the captain enters Throw, the Pikmin leaves the hand, flies and lands (Normal), and the captain returns to Walk, all within 5 s bounds. Also asserts the throw key is bound to A. |
 | `day30_clock` | Day 2 | Infinite Day holds the world clock on Days 2 to 29 and not on Day 30 (regression test for upstream #100). Day 2 with the option off: the clock advances. Option on: it stays put. Then Day 30 at 18:48 with the option on: the clock advances to sunset and day end begins at or after the end hour. |
+| `container_menu` | Day 1, object stage | The captain walks onto the Onion's `cont` spot and presses A; the container menu (`DrawContainer`, stand-in `con01.blo` with its `p264` window) opens, passes Wait, Start and Operation, stays in Operation for 4 s with one stick push, and closes, once with B and once with A. The captain returns to Walk and the Onion count is unchanged. |
 | `onion_skip` | Day 1, object stage | The blue Onion discovery movie (upstream #205), started with `DEMOFLAG_DiscoverBlueOnyon`. Four cases: watched to the end, START before Boot, between Boot and the first seed, and between the seed and EmitCone. Each asserts that the movie plays and ends, the Onion boots and reaches Wait, and exactly one seed comes out. The between case is the regression test for #205 (0 seeds without the fix). See `standin-cinema.md`. |
 
 `throw_release` measures K at run time and never hard-codes it.

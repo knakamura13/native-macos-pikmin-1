@@ -78,10 +78,9 @@ paths absent from the tree are 46 of the 47 `.anm` per-model animation bundles. 
 textures, `intro/item_0_9.bti`, `intro/map1.bti`) stay because the disc boot opens them and the generator test
 requires every manifest texture to exist; deleting them is tolerated (rows above).
 
-## Not run
+## Since run
 
-- Comparison against a copy of the real install at `~/OpenNectar-launcher-fixes`: it has no `stages/sandbox.ini`, so
-  the scenario cannot run on it, and a 615 MB copy per run did not fit the 15 GB of free disk with other work in
-  flight. The real-disc crash locations rely on the issue's source reading plus the stand-in runs above.
-- Whether particle drawing tolerates a null child texture and null HUD textures generally (moot while every
-  texture has a stand-in).
+The comparison against the real install (APFS clones, one file or bundle entry removed per run), the `halowhit.txe`,
+`rootRing.txe` and `intro/map1.bti` checks and the glyph-width measurement are in `verification-log.md`, item 3.
+Still open: whether particle drawing tolerates a null child texture and null HUD textures generally (moot while every
+texture has a stand-in).
