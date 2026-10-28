@@ -101,39 +101,30 @@ jobs:
           key: ccache-${{ runner.os }}-${{ runner.arch }}-${{ github.sha }}
           restore-keys: ccache-${{ runner.os }}-${{ runner.arch }}-
 
+      # One build for the unit tests and the scenarios (#59): native JAudio off (the
+      # legacy audio facade needs no sound data) and the scenario option on. The
+      # scenario tests run on stand-in assets that a generator writes into the build
+      # directory (no game data), so they carry no game-assets label. Native
+      # JAudio is compiled by the separate jaudio-build job.
       - name: Configure Pikmin 1
         run: |
           cmake -S games/pikmin1 -B build/pikmin1 -G Ninja \
             -DCMAKE_BUILD_TYPE="$BUILD_TYPE" \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             -DPIKMIN_BUILD_LAUNCHER=ON -DPIKMIN_BUILD_TESTS=ON \
-            -DPIKMIN_NATIVE_JAUDIO=ON \
-            $PLATFORM_FLAGS
-
-      # Scenario builds (#59) use their own build directory: native JAudio off
-      # (the legacy audio facade needs no sound data) and the scenario option
-      # on. The scenario tests run on stand-in assets that a generator writes into
-      # the build directory (no game data), so they are in the default `ctest -LE
-      # game-assets` selection. Disc-mode entries carry the game-assets label.
-      - name: Configure Pikmin 1 scenarios
-        run: |
-          cmake -S games/pikmin1 -B build/pikmin1-scenarios -G Ninja \
-            -DCMAKE_BUILD_TYPE="$BUILD_TYPE" \
-            -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             -DPIKMIN_NATIVE_JAUDIO=OFF -DPIKMIN_BUILD_SCENARIOS=ON \
             $PLATFORM_FLAGS
 
-      # -k 0: report every compile error in one run, not only the first.
-      - name: Build Pikmin 1 scenarios
-        id: build-scen
-        if: ${{ !cancelled() && !contains(env.SCENARIO_SKIP_OS, runner.os) }}
-        run: cmake --build build/pikmin1-scenarios --parallel --target pikmin_pc nectar_standin_generator -- -k 0
+      - name: Build Pikmin 1
+        id: build-p1
+        run: cmake --build build/pikmin1 --parallel -- -k 0
 
       # Scenarios need a GL context (hidden window). A runner that cannot create
       # one is on SCENARIO_SKIP_OS with a tracking issue; the scenario binary exits
-      # 4 on a context failure, so it is never read as a failed scenario.
+      # 4 on a context failure, so it is never read as a failed scenario. Each test
+      # has its own scratch save directory and log names, so they run in parallel.
       - name: Test Pikmin 1 scenarios
-        if: ${{ !cancelled() && steps.build-scen.outcome == 'success' }}
+        if: ${{ !cancelled() && steps.build-p1.outcome == 'success' && !contains(env.SCENARIO_SKIP_OS, runner.os) }}
         env:
           SDL_AUDIODRIVER: dummy
           LIBGL_ALWAYS_SOFTWARE: "1"
@@ -141,14 +132,10 @@ jobs:
         run: |
           if [ "$RUNNER_OS" = "Windows" ]; then
             # Without Mesa beside the exe, Windows returns GDI Generic GL 1.1.
-            cp /mingw64/bin/opengl32.dll /mingw64/bin/libgallium_wgl.dll build/pikmin1-scenarios/bin/
+            cp /mingw64/bin/opengl32.dll /mingw64/bin/libgallium_wgl.dll build/pikmin1/bin/
           fi
-          RUN="ctest --test-dir build/pikmin1-scenarios --output-on-failure --timeout 600 -R ^scenario_ -LE game-assets"
+          RUN="ctest --test-dir build/pikmin1 --output-on-failure --timeout 600 -j 3 -R ^scenario_ -LE game-assets"
           if [ "$RUNNER_OS" = "Linux" ]; then xvfb-run -a $RUN; else $RUN; fi
-
-      - name: Build Pikmin 1
-        id: build-p1
-        run: cmake --build build/pikmin1 --parallel -- -k 0
 
       - name: Configure Pikmin 2
         if: ${{ !cancelled() }}
@@ -166,7 +153,7 @@ jobs:
 
       - name: Test Pikmin 1
         if: ${{ !cancelled() && steps.build-p1.outcome == 'success' }}
-        run: ctest --test-dir build/pikmin1 --output-on-failure --timeout 300 -LE "$CTEST_EXCLUDE_LABELS"
+        run: ctest --test-dir build/pikmin1 --output-on-failure --timeout 300 -LE "$CTEST_EXCLUDE_LABELS" -E ^scenario_
 
       - name: Test Pikmin 2
         if: ${{ !cancelled() && steps.build-p2.outcome == 'success' }}
@@ -186,6 +173,43 @@ jobs:
             build/*/scenario-logs/
             build/*/CMakeFiles/CMakeConfigureLog.yaml
           if-no-files-found: ignore
+
+  # Compile-only check of the native JAudio configuration (the one release
+  # builds use), which the main job no longer builds. Linux only: the engine code
+  # is platform-neutral and this runs in parallel with the other jobs.
+  jaudio-build:
+    name: Native JAudio build (Linux)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      BUILD_TYPE: Release
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_MAXSIZE: 300M
+      CCACHE_BASEDIR: ${{ github.workspace }}
+      CCACHE_NOHASHDIR: "true"
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            cmake ninja-build ccache pkg-config libsdl2-dev libgl1-mesa-dev libx11-dev
+      - name: Restore ccache
+        uses: actions/cache@v6
+        with:
+          path: .ccache
+          key: ccache-jaudio-${{ runner.os }}-${{ github.sha }}
+          restore-keys: ccache-jaudio-${{ runner.os }}-
+      - name: Configure
+        run: |
+          cmake -S games/pikmin1 -B build/jaudio -G Ninja \
+            -DCMAKE_BUILD_TYPE="$BUILD_TYPE" \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            -DPIKMIN_BUILD_LAUNCHER=OFF -DPIKMIN_BUILD_TESTS=ON \
+            -DPIKMIN_NATIVE_JAUDIO=ON
+      - name: Build
+        run: cmake --build build/jaudio --parallel -- -k 0
+
 
   # Reports, per OS, whether a hidden-window GL context of the kind the game
   # requests can be created (4.1 core on macOS, 3.3 compatibility elsewhere),
