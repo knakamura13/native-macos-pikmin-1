@@ -269,8 +269,9 @@ the exact 60 Hz match is still a chosen point, not a plateau.
 | Stand-ins, gate 34 degrees at z -201, 150-unit panel (as merged) | 16, 16, 16 | 18, 18, 18 |
 | Stand-ins, gate 36 degrees at z -197, 210-unit panel (committed) | 15, 15, 15 | 18, 18, 18 |
 
-After merging kyle-develop rebuild v1 (upstream #205, #206, #209, #211, #212
-and others, 2026-10-28), K did not move on either tree:
+After merging kyle-develop rebuild v1 (upstream PRs #205, #206, #209, #211 and
+#212, all still open upstream on 2026-10-28, and others), K did not move on either
+tree. Re-measured 2026-10-28 on this tree: stand-in 15 / 18, disc 15 / 18:
 
 | Tree (merged tree, 3 runs per cell) | 30 Hz | 60 Hz |
 |---|---|---|
@@ -386,9 +387,10 @@ generated, then run at 30 and 60 Hz (about 2,900 layouts):
   pass.
 - Moving particle draws to the cosmetic stream would remove the effect-content
   coupling. It is a game-code change, and it would change deterministic-mode
-  state hashes and replays. Nobody has decided whether to make it.
-- Case 2 releases at `K + 2`. The case-0 Pikmin calibrates K, so if the case-2
-  Pikmin starts farther away, the release comes before the grab. With a forced
+  state hashes and replays. It was made later (`standin-particle-rng.md`).
+- (Written when case 2 released at `K + 2` after the press; it now releases 2
+  ticks after that Pikmin's own grab completes.) The case-0 Pikmin calibrated K,
+  so if the case-2 Pikmin started farther away, the release came before the grab. With a forced
   short K (6 at 30 Hz, 11 at 60 Hz) on the stand-ins, case 2 failed with "never
   Hanged during ThrowWait". The same failure can happen on the disc when K gets
   shorter, which is consistent with the #72 overlay failure at 60 Hz.

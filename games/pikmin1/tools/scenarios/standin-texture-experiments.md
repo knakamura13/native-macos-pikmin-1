@@ -1,10 +1,10 @@
 # Stand-in texture and bundle experiments (#67)
 
-Each run copies the generated stand-in tree (`nectar_standin_generator`, 130 files) to a scratch directory,
+Each run copies the generated stand-in tree (`nectar_standin_generator`; 130 files when these runs were made, 314 on 2026-10-28) to a scratch directory,
 deletes or replaces exactly one file (or the stated set), and runs
 `SDL_AUDIODRIVER=dummy PIKMIN_SCENARIO_DATA_DIR=<copy> PIKMIN_SCENARIO_STAGE=stages/sandbox.ini nectar --scenario boot_smoke`
 from an empty scratch working directory (30 ticks per second, hidden window). Build: RelWithDebInfo, macOS arm64,
-2026-10-27. Baseline (nothing changed): exit 0, `PASS boot_smoke`, stage ready after 5 boot ticks, intro done after 92.
+2026-10-27. Baseline (nothing changed): exit 0, `PASS boot_smoke`, stage ready after 5 boot ticks, intro done after 92 (15 now that the stand-in cinemas exist; the rows below were not re-run).
 
 Exit 134 is `[PANIC]` then `abort()` (SIGABRT). Exit 139 is SIGSEGV; the scenario run prints no crash block, so the
 location below is from the open log (the last `DVDOpen` before the stop) plus the issue's reading.
@@ -72,7 +72,7 @@ boots" result: exit 0, no crash. The negative-glyph-width claim is not observabl
 All 65 `.bti`, `.txe`, `.bun` and `.anm` paths marked OK in `boot-manifest.txt` were compared with the generated
 tree. Every `.bti`, `.txe` and `.bun` path (18 files, including `effects/pcr/effects.bun`, `effects/tex/effects.bun`
 and `screen/eng_tex/screen.bun`) is written; none of them is on `standin-open-allowlist.txt`. The only manifest
-paths absent from the tree are 46 of the 47 `.anm` per-model animation bundles. They are #66's domain (animation bundles), a missing
+paths absent from the tree were then 46 of the 47 `.anm` per-model animation bundles (all 47 are in the tree on 2026-10-28). They are #66's domain (animation bundles), a missing
 `.bun`/`.anm` is skipped silently by `StdSystem::loadBundle`, and the allowlisted ones are tolerated by the green
 `scenario_*` runs, so no stand-in is added here. Stand-ins that boot_smoke does not need (the 10 loose HUD
 textures, `intro/item_0_9.bti`, `intro/map1.bti`) stay because the disc boot opens them and the generator test

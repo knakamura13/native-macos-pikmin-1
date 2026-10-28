@@ -116,7 +116,8 @@ tutorial pages, like `tu_tx00`.
 ## Results (macOS, 2026-10-28)
 
 - `nectar_cinema_writer_test` passes, along with every other `nectar_*`
-  writer test. `nectar_blo_writer_test` now expects 22 layouts.
+  writer test. `nectar_blo_writer_test` now expects 22 layouts (12 on the boot
+  path, 8 for `day30_clock`, 2 for the text keys).
 - Stand-in scenarios: 7 of 7 pass. `throw_release` K is unchanged (15 at
   30 Hz, 18 at 60 Hz). The intro now ends after 15 ticks; it was 92 at 30 Hz
   and 182 at 60 Hz. The START pulse now skips a real movie, and
@@ -187,12 +188,14 @@ Every case also asserts the following:
 `mid_boot` is the #205 window. Without the fix, the replayed EmitCone snaps the
 Onion from `BootInit` to `Wait` before `finishOnionBootAfterSkip` runs, so no
 seed is born. With the fix, EmitCone first moves the Onion to `BootEmit`, so one
-seed is born. #205 is merged, so the case asserts exactly one seed; a count of
-zero fails with a message that names the #205 bug.
+seed is born. The fix is in this tree through the kyle-develop merge (upstream
+PR #205 is still open, checked 2026-10-28), so the case asserts exactly one
+seed; a count of zero fails with a message that names the #205 bug.
 
 ### Observed (macOS, 2026-10-28)
 
-Before #205 was merged, both rates (`mid_boot` was then printed, not asserted):
+Before the #205 fix was in the tree, both rates (`mid_boot` was then printed,
+not asserted):
 
 ```
 onion_skip watch: movie ran 330 ticks; seeds 1; Onion Wait; boot bit 1          (660 at 60 Hz)
@@ -215,8 +218,9 @@ onion_skip mid_boot: one seed: the upstream #205 behaviour (...)
 
 So the scenario told the two builds apart cleanly.
 
-With #205 merged (kyle-develop rebuild v1), both rates pass with exactly one
-seed in every case, and `mid_boot` now asserts it:
+With the #205 fix merged into kyle-develop (rebuild v1), both rates pass with
+exactly one seed in every case, and `mid_boot` now asserts it (re-run on
+2026-10-28, the `movie ran N ticks` text is now printed for every case):
 
 ```
 onion_skip watch: movie ran 330 ticks; seeds 1; Onion Wait; boot bit 1          (660 at 60 Hz)

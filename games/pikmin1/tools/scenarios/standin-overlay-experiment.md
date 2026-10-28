@@ -1,7 +1,7 @@
 # Stand-in overlay experiment (#72)
 
 Question: does a scratch tree made from a disc install, with only the 20 stand-in
-layouts (`screen/eng_blo/*.blo`) and the 331 `.pcr` entries replaced, boot to the
+layouts then written (`screen/eng_blo/*.blo`; the generator writes 22 on 2026-10-28) and the 331 `.pcr` entries replaced, boot to the
 stage and run the scenarios?
 
 Method: copy the install's `dataDir` to a scratch directory, overwrite every

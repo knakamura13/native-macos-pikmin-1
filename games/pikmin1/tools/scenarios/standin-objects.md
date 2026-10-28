@@ -34,7 +34,7 @@ weights, the plants' light-flare groups and anything else.
 
 | Files | Notes |
 |-------|-------|
-| 47 `.anm` bundles and their AnimMgr tables (`anims.bin`, `.key`, `gate.bin`, `whiteN.bin`, `plants/*.bin`, `ufoparts/*.bin`, `ufo0705.bin`) | The 46 of the boot manifest (everything but the Pikmin one) and `gt_hard.anm`. Each info is a static identity DCK with the disc's frame count and keys, under invented names (`<id>_<nn>.dck`). |
+| 48 `.anm` bundles and their AnimMgr tables (`anims.bin`, `.key`, `gate.bin`, `whiteN.bin`, `plants/*.bin`, `ufoparts/*.bin`, `ufo0705.bin`) | The 47 of the boot manifest and `gt_hard.anm` (counted on the generated tree, 2026-10-28; this file's own writer covers the 46 object sets, the manifest's Pikmin set is not checked here). Each info is a static identity DCK with the disc's frame count and keys, under invented names (`<id>_<nn>.dck`). |
 | `ufoparts/naka1.mod`, `naka4.mod`, `naka7.mod` | One joint, one `cent` sphere. The disc's pellet table loads them by id. |
 | `tekis/chappy/chappy.mod` | 17 joints and the disc's collision parts (`cent`, `head`, `body`, `slot`, `lleg`, `rleg`). |
 | `parms/pelMgr.bin` | Twelve pellet configs: blue, red and yellow at 1, 5, 10 and 20. The carry numbers are this file's own, not the disc's. |
@@ -139,18 +139,21 @@ entries `scenario_sprout_landing_30` and `_60` do.
 `pc_port/scenarios/scenario_sprout_landing.cpp`. Asserts the stage's content, then
 launches six seeds the way `GoalAI::BootEmit` launches them, from the cliff's
 foot toward the face, and follows each through Flying, Bounce and Bury to Wait. It
-asserts only what holds with or without #208: every seed plants within 30 s, none
+asserts only what holds with or without #208 (written before it merged): every seed plants within 30 s, none
 on a steep face (ground normal y at least 0.5), none below the ground, none more
 than 30 units above it. The height and speed at the start of Bury, which #208
 changes at 30 Hz, are printed per seed, not asserted.
 
 Observed (macOS, both rates): all six seeds first bury at x = 37, about 13 units
 short of the face, and plant on the floor with gap 0; the push off a steep face
-never runs. On this 76 degree face the seeds bounce off the wall; the upstream #65
-case (a seed landing on an edge whose collision normal reads as ground while the
+never runs. On this 76 degree face the seeds bounce off the wall; the case of
+upstream issue #65 (blue Pikmin planted in the air; it is an issue, the fix's PR number is not recorded here) (a seed landing on an edge whose collision normal reads as ground while the
 face normal reads as wall) needs a surface built for it. At 30 Hz the branch still
-drops every seed to the ground at the start of Bury (speed 0.0, gap 0.0), which is
-the behaviour #208 changes, so the printed lines will differ once it lands.
+reaches Bury on the floor (gap 0.0). Upstream #208 (keep the GameCube sprout
+landing at 30 FPS) was merged upstream on 2026-10-28 and is in this tree. With it
+the printed speed at the start of Bury is 1.8 to 3.1 instead of 0.0 (30 Hz, re-run
+2026-10-28); the height gap is still 0.0 because the seeds first bury on the
+floor, so this stage cannot show the mid-air case.
 
 ## What remains
 
