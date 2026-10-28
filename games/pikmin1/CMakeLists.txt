@@ -427,7 +427,8 @@ if (PIKMIN_BUILD_SCENARIOS)
         pc_port/scenarios/scenario_boot_smoke.cpp
         pc_port/scenarios/scenario_throw_release.cpp
         pc_port/scenarios/scenario_day30_clock.cpp
-        pc_port/scenarios/scenario_sprout_landing.cpp)
+        pc_port/scenarios/scenario_sprout_landing.cpp
+        pc_port/scenarios/scenario_onion_skip.cpp)
 endif()
 
 include_directories(
@@ -1856,7 +1857,7 @@ if(PIKMIN_BUILD_SCENARIOS)
     # tools/scenarios/standin_objects_stage.h): Onion, cliff, sprouts, pellet and
     # an enemy, all stand-ins. No disc entry: the stage does not exist on a real
     # install.
-    foreach(scenario sprout_landing)
+    foreach(scenario sprout_landing onion_skip)
         foreach(rate 30 60)
             add_test(NAME scenario_${scenario}_${rate}
                 COMMAND ${CMAKE_COMMAND}

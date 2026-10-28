@@ -506,6 +506,17 @@ int main(int argc, char** argv)
 			if (k.type == nectar::kCinEventAction && k.value == nectar::kDemoOnionEmitCone) cone = k.frame;
 		}
 		check(boot >= 0 && cone > boot, "demo04: Boot comes before EmitCone, leaving a skip window between them");
+		// demo06 (blue, the object stage's Onion, scenario onion_skip): Boot, then the
+		// seed from the boot motion's KEY_Action0 at motion frame 240 (the stand-in
+		// Onion table), then EmitCone, each with room for a skip between.
+		const auto k06 = keysOf("dataDir/cinemas/demo06.cin");
+		int boot6 = -1, cone6 = -1;
+		for (const ReadKey& k : k06) {
+			check(k.type != nectar::kCinEventAction || k.cmd == nectar::kDemoSenderBluOnion, "demo06 acts on the blue Onion only");
+			if (k.type == nectar::kCinEventAction && k.value == nectar::kDemoOnionBoot) boot6 = k.frame;
+			if (k.type == nectar::kCinEventAction && k.value == nectar::kDemoOnionEmitCone) cone6 = k.frame;
+		}
+		check(boot6 >= 5 && boot6 + 240 + 20 <= cone6, "demo06: windows before Boot, between Boot and the seed, and between the seed and EmitCone");
 	}
 	std::vector<nectar::StandInCinemaFile> again;
 	check(nectar::writeStandInCinemas(again, err) && again.size() == files.size(), "second build");

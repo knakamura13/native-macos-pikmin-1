@@ -115,21 +115,34 @@ std::vector<Movie> movies()
 		list.push_back(m);
 	}
 
-	// Red Onion discovery (DEMOID_FindRedOnyon; the sandbox translates
-	// DEMOID_FindOnyon to it). Localized at the Onion. Boot, then EmitCone, then
-	// the discovery text: the three keys upstream #205's skip path acts on.
+	// Onion discovery: red (DEMOID_FindRedOnyon, demo04; the sandbox translates
+	// DEMOID_FindOnyon to it) and blue (DEMOID_FindBlueOnyon, demo06, which
+	// DEMOFLAG_DiscoverBlueOnyon starts untranslated; the object stage's Onion is
+	// blue). Localized at the Onion. Boot at frame kDiscoveryBoot starts the
+	// Onion's boot motion (info colour + 3), whose KEY_Action0 emits the first
+	// seed: frame 240 (blue) or 270 (red) of that motion in the stand-in Onion
+	// table (standin_object_profiles.cpp, the disc's key frames). So the seed
+	// comes out at movie frame 250 or 280, and EmitCone at kDiscoveryCone follows
+	// it, as on the disc: Boot, seed, EmitCone. That leaves the three skip
+	// windows upstream #205 is about (before Boot, between Boot and the seed,
+	// between the seed and EmitCone). demo04 then opens the red Onion text; demo06
+	// has no text key (its screen, tu_tx22, is not a stand-in).
 	{
-		Movie m;
-		m.cin           = "dataDir/cinemas/demo04.cin";
-		m.cinema.flags  = kCinLocalized | hideNavi;
-		m.cinema.scenes = { "cinemas/demo04/demo04_1.dsk" };
-		m.sceneFrames   = { 120 };
-		CinCut cut;
-		cut.endFrame  = 120;
-		cut.keys      = { action(kDemoSenderRedOnion, kDemoOnionBoot, 10), action(kDemoSenderRedOnion, kDemoOnionEmitCone, 80),
-                          notify(kMovieCmdTextDemo, kTutRedOnion, 100) };
-		m.cinema.cuts = { cut };
-		list.push_back(m);
+		constexpr int kDiscoveryBoot = 10, kDiscoveryCone = 300, kDiscoveryFrames = 330;
+		for (int blue = 0; blue < 2; blue++) {
+			const int sender = blue ? kDemoSenderBluOnion : kDemoSenderRedOnion;
+			Movie m;
+			m.cin           = blue ? "dataDir/cinemas/demo06.cin" : "dataDir/cinemas/demo04.cin";
+			m.cinema.flags  = kCinLocalized | hideNavi;
+			m.cinema.scenes = { blue ? "cinemas/demo06/demo06_1.dsk" : "cinemas/demo04/demo04_1.dsk" };
+			m.sceneFrames   = { kDiscoveryFrames };
+			CinCut cut;
+			cut.endFrame = kDiscoveryFrames;
+			cut.keys     = { action(sender, kDemoOnionBoot, kDiscoveryBoot), action(sender, kDemoOnionEmitCone, kDiscoveryCone) };
+			if (!blue) cut.keys.push_back(notify(kMovieCmdTextDemo, kTutRedOnion, kDiscoveryCone + 10));
+			m.cinema.cuts = { cut };
+			list.push_back(m);
+		}
 	}
 	return list;
 }

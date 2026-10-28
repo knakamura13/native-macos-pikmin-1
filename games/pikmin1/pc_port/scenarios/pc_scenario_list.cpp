@@ -9,6 +9,7 @@ const std::vector<PcScenario*>& pc_scenario_all(void)
 		pc_scenario_make_throw_release(),
 		pc_scenario_make_day30_clock(),
 		pc_scenario_make_sprout_landing(),
+		pc_scenario_make_onion_skip(),
 	};
 	return all;
 }
