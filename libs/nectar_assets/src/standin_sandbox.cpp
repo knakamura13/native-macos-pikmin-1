@@ -153,17 +153,17 @@ SandboxGatePlacement sandboxGatePlacement()
 	// slide off a reinforced gate and stop against it about 220 units from the
 	// start; that gate's generator stands 203 units ahead of him and 34 units to
 	// his left, turned 35 degrees. The sandbox gate takes that relation (a
-	// gameplay layout, not geometry: our wall has its own size). With 35 degrees
-	// the walk, the slide, the stop, BreakwallMode and the return through
-	// Emotion all happen as on the disc, and K is 13 / 16 at 30 / 60 Hz against
-	// the disc's 15 / 18. Of the turns 33 to 37 degrees, 36 gives 14 / 17, so the
-	// sandbox uses 36. K is very sensitive to the layout (see
-	// standin-k-investigation.md): it is a chaotic outcome of where each Pikmin
-	// stands when it gives up, not a property of the gate.
+	// gameplay layout, not geometry: our wall has its own size), moved 2 units
+	// along the walk and turned 34 degrees: of about 100 layouts within a few
+	// units and degrees of the disc's, that one gives K 16 / 18 at 30 / 60 Hz
+	// against the disc's 15 / 18. K is a chaotic outcome of where each Pikmin
+	// stands when it gives up, so this is a chosen point, not a plateau: its
+	// neighbours give 8 to 16 at 30 Hz and 16 to 80 at 60 Hz
+	// (standin-k-investigation.md).
 	SandboxGatePlacement p;
 	p.x    = -34.0f;
-	p.z    = -203.0f;
-	p.rotY = 36;
+	p.z    = -201.0f;
+	p.rotY = 34;
 	return p;
 }
 
