@@ -17,16 +17,15 @@
 // Cases, in order:
 //   watch      no skip: the movie plays to its end
 //   pre_boot   START at movie frame 5, before Boot
-//   mid_boot   START at movie frame 100, after Boot, before the seed (the #205 bug window)
+//   mid_boot   START at movie frame 100, after Boot, before the seed (the window
+//              upstream #205 fixed)
 //   post_seed  START at movie frame 275, after the seed, before EmitCone
 //
-// Asserted (holds with or without upstream #205): the movie starts and ends;
-// the Onion boots (boot bit set) and ends in GOAL_Wait; watch, pre_boot and
-// post_seed emit exactly one seed; no case emits more than one.
-// Printed, not asserted: the mid_boot seed count. Without #205 the replayed
-// EmitCone snaps the Onion from BootInit to Wait before the recovery runs, so no
-// seed is born (0); with #205 EmitCone first moves it to BootEmit (1). The line
-// says which one the run saw.
+// Asserted: the movie starts and ends; the Onion boots (boot bit set) and ends
+// in GOAL_Wait; every case emits exactly one seed. mid_boot is the regression
+// test for upstream #205: without the fix the replayed EmitCone snaps the Onion
+// from BootInit to Wait before the recovery runs, so no seed is born (0); with
+// it EmitCone first moves the Onion to BootEmit (1).
 #include "scenarios/pc_scenario_list.h"
 
 #if PIKI_SCENARIOS
@@ -51,12 +50,12 @@ constexpr int kBlue = 0;
 struct Case {
 	const char* name;
 	int skipFrame; ///< movie frame at which START is pressed; < 0: watch to the end
-	int expectSeeds; ///< exact count asserted; < 0: printed only (at most 1 asserted)
+	int expectSeeds; ///< exact seed count asserted
 };
 const Case kCases[] = {
 	{ "watch", -1, 1 },
 	{ "pre_boot", 5, 1 },
-	{ "mid_boot", 100, -1 },
+	{ "mid_boot", 100, 1 },
 	{ "post_seed", 275, 1 },
 };
 constexpr int kCaseCount = int(sizeof(kCases) / sizeof(kCases[0]));
@@ -200,18 +199,10 @@ private:
 			scenarioFailf(t, "the Onion is booted (hasBootContainer)", "case %s: boot bit clear", c.name);
 			return;
 		}
-		if (c.expectSeeds >= 0 && seeds != c.expectSeeds) {
-			scenarioFailf(t, "exactly one first seed", "case %s: %d seeds", c.name, seeds);
+		if (seeds != c.expectSeeds) {
+			scenarioFailf(t, "exactly one first seed", "case %s: %d seeds%s", c.name, seeds,
+			              seeds == 0 ? " (the upstream #205 bug: EmitCone snapped the Onion out of BootInit)" : "");
 			return;
-		}
-		if (seeds > 1) {
-			scenarioFailf(t, "at most one first seed", "case %s: %d seeds", c.name, seeds);
-			return;
-		}
-		if (c.expectSeeds < 0) {
-			std::printf("[scenario] onion_skip %s: %s\n", c.name,
-			            seeds == 0 ? "no seed: the upstream #205 bug (EmitCone snapped the Onion out of BootInit before the recovery)"
-			                       : "one seed: the upstream #205 behaviour (EmitCone fired the first seed before the snap)");
 		}
 		if (++mCase == kCaseCount) {
 			mPhase = Done;

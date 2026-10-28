@@ -173,7 +173,7 @@ increments.
 |------|----------------------|----------|
 | `watch` | none | 1 seed |
 | `pre_boot` | 5 (before Boot) | 1 seed |
-| `mid_boot` | 100 (after Boot, before the seed) | at most 1 seed; the count is printed |
+| `mid_boot` | 100 (after Boot, before the seed) | 1 seed (the #205 regression test) |
 | `post_seed` | 275 (after the seed, before EmitCone) | 1 seed |
 
 Every case also asserts the following:
@@ -187,12 +187,12 @@ Every case also asserts the following:
 `mid_boot` is the #205 window. Without the fix, the replayed EmitCone snaps the
 Onion from `BootInit` to `Wait` before `finishOnionBootAfterSkip` runs, so no
 seed is born. With the fix, EmitCone first moves the Onion to `BootEmit`, so one
-seed is born. The scenario prints which of the two it saw and does not assert
-either.
+seed is born. #205 is merged, so the case asserts exactly one seed; a count of
+zero fails with a message that names the #205 bug.
 
 ### Observed (macOS, 2026-10-28)
 
-On this branch (no #205), both rates:
+Before #205 was merged, both rates (`mid_boot` was then printed, not asserted):
 
 ```
 onion_skip watch: movie ran 330 ticks; seeds 1; Onion Wait; boot bit 1          (660 at 60 Hz)
@@ -213,9 +213,18 @@ onion_skip mid_boot: START at movie frame 100 (Onion BootInit, 0 seed(s) so far)
 onion_skip mid_boot: one seed: the upstream #205 behaviour (...)
 ```
 
-So the scenario tells the two builds apart cleanly. When #205 lands, set
-`mid_boot`'s expected count in `kCases` to 1, and the case becomes an exact
-regression test.
+So the scenario told the two builds apart cleanly.
+
+With #205 merged (kyle-develop rebuild v1), both rates pass with exactly one
+seed in every case, and `mid_boot` now asserts it:
+
+```
+onion_skip watch: movie ran 330 ticks; seeds 1; Onion Wait; boot bit 1          (660 at 60 Hz)
+onion_skip pre_boot: START at movie frame 5 (Onion BootInit, 0 seed(s) so far); seeds 1; Onion Wait
+onion_skip mid_boot: START at movie frame 100 (Onion BootInit, 0 seed(s) so far); seeds 1; Onion Wait
+onion_skip post_seed: START at movie frame 275 (Onion BootEmit, 1 seed(s) so far); seeds 1; Onion Wait
+PASS onion_skip
+```
 
 Not covered:
 
