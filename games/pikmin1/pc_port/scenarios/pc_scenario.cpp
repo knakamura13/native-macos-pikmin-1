@@ -23,6 +23,7 @@
 #include "Navi.h"
 #include "PaniAnimator.h"
 #include "PaniPikiAnimator.h"
+#include "GameStat.h"
 #include "Piki.h"
 #include "NaviMgr.h"
 #include "PikiMgr.h"
@@ -281,6 +282,78 @@ void trackStates()
 	++sStatsTick;
 }
 
+// Runner-level invariant (coverage/edge-cases.md I-2, EC-05/06/08): GameStat's
+// counters agree with each other and with the live Pikmin, after every tick of
+// every scenario. allPikis counts field Pikmin in every mode, sprouts (mePikis)
+// and Onion contents (containerPikis); it does not count the dead. The first
+// violation fails the scenario with the tick and the values.
+void checkGameStatInvariants(unsigned tick)
+{
+	static const char* const colName[PikiColorCount] = { "blue", "red", "yellow" };
+	struct Named {
+		const char* name;
+		GameStat::ColCounter* c;
+	};
+	const Named all[] = { { "deadPikis", &GameStat::deadPikis }, { "fallPikis", &GameStat::fallPikis },
+		                  { "formationPikis", &GameStat::formationPikis }, { "freePikis", &GameStat::freePikis },
+		                  { "workPikis", &GameStat::workPikis }, { "mePikis", &GameStat::mePikis },
+		                  { "containerPikis", &GameStat::containerPikis }, { "bornPikis", &GameStat::bornPikis },
+		                  { "victimPikis", &GameStat::victimPikis }, { "mapPikis", &GameStat::mapPikis },
+		                  { "allPikis", &GameStat::allPikis } };
+	for (const Named& n : all) {
+		for (int c = PikiMinColor; c < PikiColorCount; c++) {
+			if ((*n.c)[c] < 0) {
+				scenarioFailf(tick, "GameStat counters are never negative", "GameStat::%s[%s] = %d", n.name, colName[c], (*n.c)[c]);
+				return;
+			}
+		}
+	}
+	if (GameStat::killTekis < 0 || GameStat::getPellets < 0) {
+		scenarioFailf(tick, "GameStat counters are never negative", "killTekis %d getPellets %d", (int)GameStat::killTekis,
+		              (int)GameStat::getPellets);
+		return;
+	}
+	int live[PikiColorCount] = { 0, 0, 0 };
+	if (pikiMgr) {
+		Iterator it(pikiMgr);
+		CI_LOOP(it)
+		{
+			Piki* piki = static_cast<Piki*>(*it);
+			if (piki->mColor < PikiColorCount) live[piki->mColor]++;
+		}
+	}
+	for (int c = PikiMinColor; c < PikiColorCount; c++) {
+		const int field = GameStat::formationPikis[c] + GameStat::freePikis[c] + GameStat::workPikis[c];
+		if (field != live[c]) {
+			scenarioFailf(tick, "formation + free + work equals the live Pikmin of the colour",
+			              "%s: formation %d + free %d + work %d = %d, live Pikmin %d", colName[c], GameStat::formationPikis[c],
+			              GameStat::freePikis[c], GameStat::workPikis[c], field, live[c]);
+			return;
+		}
+		const int map = field + GameStat::mePikis[c];
+		if (GameStat::mapPikis[c] != map) {
+			scenarioFailf(tick, "mapPikis = formation + free + me + work", "%s: map %d, parts sum to %d", colName[c],
+			              GameStat::mapPikis[c], map);
+			return;
+		}
+		const int total = GameStat::mapPikis[c] + GameStat::containerPikis[c];
+		if (GameStat::allPikis[c] != total) {
+			scenarioFailf(tick, "allPikis = mapPikis + containerPikis", "%s: all %d, map %d + container %d", colName[c],
+			              GameStat::allPikis[c], GameStat::mapPikis[c], GameStat::containerPikis[c]);
+			return;
+		}
+	}
+	const int allTotal = GameStat::allPikis;
+	if (GameStat::maxPikis < allTotal) {
+		scenarioFailf(tick, "maxPikis >= allPikis", "maxPikis %d, allPikis %d", GameStat::maxPikis, allTotal);
+		return;
+	}
+	if (GameStat::minPikis < 0 || GameStat::minPikis > GameStat::maxPikis) {
+		scenarioFailf(tick, "0 <= minPikis <= maxPikis", "minPikis %d, maxPikis %d", GameStat::minPikis, GameStat::maxPikis);
+		return;
+	}
+}
+
 void printStateStats()
 {
 	if (!sStateStats) return;
@@ -519,6 +592,7 @@ void pc_scenario_on_tick_end(void)
 		            gameflow.mWorldClock.mCurrentDay, gameflow.mWorldClock.mTimeOfDay);
 	}
 	sScenario->onTick(sTick);
+	if (!sVerdict) checkGameStatInvariants(sTick);
 	if (sStateStats) trackStates();
 	++sTick;
 }

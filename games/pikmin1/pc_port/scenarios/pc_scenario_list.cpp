@@ -4,6 +4,8 @@
 
 #include <cstdlib>
 
+#include "GameStat.h"
+
 namespace {
 
 // Runner self-test (scenario_exit_atexit_fail): exit(0) before any verdict, as
@@ -15,6 +17,19 @@ public:
 	void onTick(unsigned tick) override
 	{
 		if (tick >= 30) std::exit(0);
+	}
+};
+
+// Runner self-test (scenario_gamestat_corrupt): at tick 5 a counter is raised with
+// no Pikmin behind it. The runner's GameStat invariant check must fail the run
+// (exit 1) on that same tick; this scenario never reports a verdict itself.
+class GameStatCorrupt : public PcScenario {
+public:
+	const char* name() const override { return "gamestat_corrupt"; }
+	bool testOnly() const override { return true; }
+	void onTick(unsigned tick) override
+	{
+		if (tick == 5) GameStat::workPikis.add(Blue, 3);
 	}
 };
 
@@ -32,6 +47,7 @@ const std::vector<PcScenario*>& pc_scenario_all(void)
 		pc_scenario_make_container_menu(),
 		pc_scenario_make_extinction(),
 		pc_scenario_make_captain_death(),
+		[] { static GameStatCorrupt s; return static_cast<PcScenario*>(&s); }(),
 		[] { static ExitZero s; return static_cast<PcScenario*>(&s); }(),
 	};
 	return all;

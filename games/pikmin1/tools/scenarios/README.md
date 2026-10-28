@@ -171,6 +171,19 @@ Three rules keep an abnormal exit from reading as a pass:
 An ERROR or abort ends the process by signal, which CTest also reports as a
 failure.
 
+## GameStat invariant check
+
+After every scenario's `onTick` the runner (`checkGameStatInvariants` in
+`pc_scenario.cpp`) reads `GameStat` and fails the scenario on the first
+violation (exit 1, one `[scenario] FAIL <name> tick <n>: expected ..., observed ...`
+line with the values): no counter is negative; per colour `formationPikis +
+freePikis + workPikis` equals the live Pikmin of that colour in `pikiMgr`;
+`mapPikis` equals formation + free + me + work; `allPikis` equals `mapPikis +
+containerPikis`; `maxPikis >= allPikis`; `0 <= minPikis <= maxPikis`. It is a
+pure read, so no state-hash log changes. All existing stand-in scenarios pass
+it unchanged. Not checked: `mePikis` against the live sprout items, and the
+check does not run during the intro gate. Covers EC-05, EC-06, EC-08 and I-2.
+
 ## CTest entries
 
 Registered in `games/pikmin1/CMakeLists.txt` under `if(PIKMIN_BUILD_SCENARIOS)`.
@@ -178,6 +191,8 @@ Registered in `games/pikmin1/CMakeLists.txt` under `if(PIKMIN_BUILD_SCENARIOS)`.
 entries (`-L game-assets`).
 
 All names are `scenario_<name>_<rate>`, at the rates in [Tick rates](#tick-rates).
+The runner self-tests and `scenario_determinism_*` entries below are 8 more
+stand-in entries (6 determinism, 1 determinism negative control, 1 GameStat negative control).
 
 ### Tick rates
 
@@ -223,6 +238,9 @@ Routes); the time left is per-tick rendering, which grows with the tick count.
 | `scenario_standin_generate` | writes `<build>/scenario-data` | | `FIXTURES_SETUP scenario_standin_tree`, 120 s timeout. Passes `--manifest tools/scenarios/boot-manifest.txt`. |
 | `scenario_<name>_<rate>` | stand-in tree | none | For `boot_smoke`, `throw_release`, `day30_clock`, `extinction`, `captain_death`, `sprout_landing`, `onion_skip` and `container_menu` at 30 and 60, and `objects_smoke` at 30 (see Tick rates). `FIXTURES_REQUIRED scenario_standin_tree`, 600 s timeout, `PIKMIN_SCENARIO_STAGE` as in the stage table below. No skip code: a missing or broken tree fails. |
 | `scenario_<name>_<rate>_disc` | a real install | `game-assets` | For `boot_smoke`, `throw_release` and `day30_clock` only, at 30 and 60 (6 entries). Runs in `<build>/scenario-scratch`, 600 s timeout, `SKIP_RETURN_CODE 77`. Set `PIKMIN_SCENARIO_DATA_DIR` to run it; otherwise CTest reports a skip. |
+| `scenario_determinism_<name>_<rate>` | stand-in tree | none | EC-60. `boot_smoke`, `throw_release` and `day30_clock` at 30 and 60 (6 entries). `check_scenario_determinism.cmake` runs the scenario twice with `--state-hash-log` and fails if the two per-tick hash logs differ (the first differing line is printed). No scenario change. 1200 s timeout, `stages/sandbox.ini`. |
+| `scenario_determinism_negative_boot_smoke_30` | stand-in tree | none | Negative control for the entry above: the second run boots `stages/sandbox_objects.ini`, and the test passes only if the logs differ (`-DEXPECT_DIFFER=1`, no `WILL_FAIL`). The runner clears `PIKMIN_NETPLAY_TEST_PREROLL_RAND`, so that variable cannot perturb a scenario run. |
+| `scenario_gamestat_invariant_fail` | stand-in tree | none | Negative control for the GameStat invariant check (see below): the test-only scenario `gamestat_corrupt` raises `workPikis[Blue]` by 3 at tick 5 with no Pikmin behind it; `check_scenario_exit.cmake` asserts exit 1 and the `FAIL gamestat_corrupt tick 5` line. |
 
 Which stage each stand-in entry boots:
 

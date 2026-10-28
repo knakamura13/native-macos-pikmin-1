@@ -2132,4 +2132,49 @@ if(PIKMIN_BUILD_SCENARIOS)
         ENVIRONMENT "${PIKMIN_STANDIN_ENV}")
     set_tests_properties(scenario_exit_no_gl PROPERTIES
         ENVIRONMENT "${PIKMIN_STANDIN_ENV};SDL_VIDEODRIVER=bogus")
+    # GameStat invariant checker (pc_scenario.cpp, checkGameStatInvariants): the
+    # test-only scenario raises a counter with no Pikmin behind it; the runner must
+    # report the failure (exit 1, a [scenario] FAIL line naming the invariant).
+    add_test(NAME scenario_gamestat_invariant_fail
+        COMMAND ${CMAKE_COMMAND} -DGAME=$<TARGET_FILE:${NECTAR_GAME}> -DSCENARIO=gamestat_corrupt -DEXPECT=1
+            "-DEXPECT_OUTPUT=FAIL gamestat_corrupt tick 5: expected formation \\+ free \\+ work equals the live Pikmin"
+            "-DFORBID_OUTPUT=\\[scenario\\] PASS"
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/check_scenario_exit.cmake)
+    set_tests_properties(scenario_gamestat_invariant_fail PROPERTIES
+        FIXTURES_REQUIRED scenario_standin_tree
+        ENVIRONMENT "${PIKMIN_STANDIN_ENV}"
+        TIMEOUT 600)
+
+    # Replay determinism (EC-60): two runs, identical per-tick state hash logs.
+    file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/scenario-determinism")
+    foreach(scenario boot_smoke throw_release day30_clock)
+        foreach(rate 30 60)
+            add_test(NAME scenario_determinism_${scenario}_${rate}
+                COMMAND ${CMAKE_COMMAND}
+                    -DGAME=$<TARGET_FILE:${NECTAR_GAME}>
+                    -DSCENARIO=${scenario} -DRATE=${rate}
+                    -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/scenario-determinism
+                    -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/check_scenario_determinism.cmake)
+            set_tests_properties(scenario_determinism_${scenario}_${rate} PROPERTIES
+                FIXTURES_REQUIRED scenario_standin_tree
+                WORKING_DIRECTORY "${PIKMIN_STANDIN_DATA}"
+                ENVIRONMENT "${PIKMIN_STANDIN_ENV}"
+                TIMEOUT 1200)
+        endforeach()
+    endforeach()
+    # Negative control: the second run boots the other stand-in stage, so its
+    # state differs and the logs must differ; this test passes only if the
+    # comparison sees that. (The RNG preroll variable is cleared by the runner.)
+    add_test(NAME scenario_determinism_negative_boot_smoke_30
+        COMMAND ${CMAKE_COMMAND}
+            -DGAME=$<TARGET_FILE:${NECTAR_GAME}>
+            -DSCENARIO=boot_smoke -DRATE=30
+            -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/scenario-determinism-negative
+            -DSECOND_ENV=PIKMIN_SCENARIO_STAGE=stages/sandbox_objects.ini -DEXPECT_DIFFER=1
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/check_scenario_determinism.cmake)
+    set_tests_properties(scenario_determinism_negative_boot_smoke_30 PROPERTIES
+        FIXTURES_REQUIRED scenario_standin_tree
+        WORKING_DIRECTORY "${PIKMIN_STANDIN_DATA}"
+        ENVIRONMENT "${PIKMIN_STANDIN_ENV}"
+        TIMEOUT 1200)
 endif()
