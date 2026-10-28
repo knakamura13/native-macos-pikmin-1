@@ -12,6 +12,7 @@
 /* The game owns main() (SDL_MAIN_HANDLED); SDL_main.h would redefine it on Windows. */
 #define SDL_MAIN_HANDLED
 #include <SDL.h>
+#undef main /* MinGW sdl2-config passes -Dmain=SDL_main */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
