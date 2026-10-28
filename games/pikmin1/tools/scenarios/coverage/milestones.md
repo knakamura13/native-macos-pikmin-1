@@ -3,7 +3,7 @@
 Paths are relative to `games/pikmin1/`. Every `file:line` pointer was checked against 3c7d100b (after the kyle-develop merge) and carries its function name, which is the stable pointer if a number drifts. Verified items: see the verification log in [README.md](README.md).
 Tier: **S** = runs on stand-in assets (CI); **D** = needs the disc tier (local, `_disc` tests); **S+** = stand-in with the named extra asset.
 Effort: S small, M medium, L large. Risk = how likely a port change or mod breaks it unnoticed.
-Covered = by an existing scenario (boot_smoke, throw_release, day30_clock, sprout_landing, onion_skip, objects_smoke).
+Covered = by an existing scenario (boot_smoke, throw_release, day30_clock, sprout_landing, onion_skip, objects_smoke, captain_damage for DF29).
 
 ## 0. Facts that shape every scenario here
 
@@ -58,7 +58,7 @@ Covered = by an existing scenario (boot_smoke, throw_release, day30_clock, sprou
 | DF26 | FirstNectar (first flower) | `PikiGrowupState::procAnimMsg` `pikiState.cpp:2440-2448`; text TUT_Mitu | flag 26; `RESFLAG_PikminSeeds`; Piki becomes Flower | `piki->mHappa==Flower`, flag, text start | S (nectar item in objects stage? needs a nectar `MizuItem`, `mizu` model/anim) | spawn nectar and Bud Piki | M | M | Not covered. |
 | DF27 | FirstBombDeath | `interactBattle.cpp:52-55 (InteractBomb::actPiki)` | flag 27 | | S+ | | M | L | Not covered. |
 | DF28 | CarryPathBlocked | `aiTransport.cpp:988-994 (ActTransport::moveGuruGuru)`; text TUT_Rute | flag 28 | carrier stuck -> text | S+ (route graph) | | L | L | Not covered. |
-| DF29 | OlimarLowHealth | `navi.cpp:442-445,497-500 (Navi::startDamageEffect)`; text TUT_APunchUFO | flag 29 | captain health < threshold -> flag | S | set `mHealth`, tick | S | L | Not covered; trivial. |
+| DF29 | OlimarLowHealth | `navi.cpp:442-445,497-500 (Navi::startDamageEffect)`; text TUT_APunchUFO | flag 29 | captain health < threshold -> flag | S | set `mHealth`, tick | S | L | **Covered (2026-10-28, `captain_damage`).** The test is in `startDamageEffect`, which `InteractFlick::actNavi` calls before it subtracts the damage, so it reads the health before the hit: threshold 0.25 * 100 = 25 with `<=`; the hit that takes the health to 25 or 24 does not set the flag, the next one does. Opens `tu_tx31.blo` (stand-in added, `TUT_APunchUFO`), no new file otherwise, no cinema. |
 | DF30 | Pluck15thPikmin | `pikiState.cpp:2917-2924 (pcUnlockColourFromAutoPluck)`; text TUT_NukiAndFree (30) | flag 30 | only while `isTutorial()`, `GameStat::allPikis>=15` | S+ (Practice id) | spawn Pikmin, pluck | M | L | Not covered. |
 | DF31 | FirstNoon | `gameCoreSection.cpp:3741-3746 (GameCoreSection::updateAI)`: clock reaches 1pm; text TUT_InfoDisplay | flag 31 | noon bell + flag + text once | S | set clock to start+dayLength/2 | S | L | Not covered; day30_clock sets clock but not asserting. |
 | DF32-61 | UfoPartDiscovery[i] | `Navi::demoCheck` near a ground-resting part `demoInvoker.cpp:110-130`; also `naviState.cpp:3683-3687 (NaviPartsAccessState::procAnimMsg)` (A on part: re-arms). Engine (idx 4) preset seen `gameDemo.cpp:111,127 (DemoFlags::DemoFlags)` | flag 32+i; `mShipTextType=PART_DISCOVERY` | flag set once per part; text id = 32+idx (TUT_PartsGetOnlyOffset) | S+ per-part model | walk captain in radius | M (one parametric scenario for 30) | M | Not covered. |
