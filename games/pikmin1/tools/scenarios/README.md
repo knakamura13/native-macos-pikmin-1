@@ -134,7 +134,8 @@ The same runs on the GPU take under a second at any of these sizes, so local
 GPU timing cannot show this.
 
 In a scenario the sim does not read the window size (in normal play it reads the
-window aspect through the culling frustum; see
+window aspect through the culling frustum, by decision: a wider view keeps more of the world
+alive; see
 [coverage/render-sim-coupling.md](coverage/render-sim-coupling.md)): every scenario's `--state-hash-log`
 at 160x90, 128x72 and 64x36 is byte-identical to the 640x360 run of the same
 scenario and rate, on the stand-in and the disc tree, and `throw_release`

@@ -168,19 +168,64 @@ not traced.
 
 ## Decision
 
-No fix was made.
+Decided by the fork owner on 2026-10-28.
 
-- **Aspect:** using the 4:3 frustum for sim decisions while drawing hor+ would
-  bring normal play back to GameCube's culling, but it changes current results at
-  every non-4:3 aspect, and it needs the draw culling and the sim culling split
-  apart at every `isPointVisible` / `isBoundVisible` caller listed above. It is not
-  neutral under the rule that a change must leave the disc path identical. The
-  decision is left to the fork owner.
-- **Co-op:** gating the second view's `updateLook` and culling would change co-op
-  results and cannot be tested by the harness. Co-op has no GameCube reference.
-  The decision is left to the fork owner.
+- **Aspect: keep today's behaviour.** The sim keeps judging visibility with the
+  window's own aspect. Matching GameCube's 4:3 culling would make the sim identical
+  across window shapes, but it would also stop drawing every enemy that stands in the
+  side strips of a wide window while it is on screen (see "Fix attempt" below).
+  A wide window is meant to show more of the world and keep it alive, so widescreen
+  play must not get worse. The price is documented here: the same recording can
+  play out differently in windows of different aspect, because what counts as on
+  screen decides which objects get the full AI update. The 4:3 Aspect setting gives
+  GameCube's culling.
+- **Co-op:** the second view's double `updateLook` is fixed separately (see the
+  co-op note at the end of this file, when present).
 - **Moving the look draws to the cosmetic stream:** not done. It changes the sim
   RNG sequence and therefore GameCube fidelity.
+
+## Fix attempt: sim frustum at the caller's aspect (not adopted)
+
+Branch `wip/aspect-cull` (2026-10-28, kept for reference, not merged) adds a second set of culling planes to
+`CullFrustum`, built at the aspect the game passes to `update()` (640/480 for
+the gameplay and movie cameras, as on GameCube). Every visibility test that
+writes sim state calls `isPointSimVisible` (Pikmin, `DualCreature`, the two
+`ItemCreature` paths, UFO, Onion, boss, teki); draw culling keeps
+`isPointVisible` and the hor+ planes. The draw planes are restored bit for bit
+after the sim planes are built, and when the two aspects are equal (a 4:3
+window, the 4:3 menu layout) `isPointSimVisible` is `isPointVisible`. The
+movie camera passes its stored 4:3 back, and the camera AI framing
+(`NCamera::getAspect`) reads the 4:3 value. The item draw and the Onion spot
+effect follow the draw frustum.
+
+Measured on the disc install at 30 and 60 Hz, all six logs each:
+
+| Check | Result |
+|-------|--------|
+| Shipped pins, 640x480, base `57c9e1a4` against the fix, stand-in and disc | identical; K = 15 / 18 in both |
+| `ctest -E _disc` and `ctest -R _disc`, base against the fix | same 122 and 6 passes; all 42 stand-in hash logs identical |
+| Pins off, 640x480, base against the fix | identical |
+| Pins off, base: 48x36, Aspect 4:3 against 640x480 | identical |
+| Pins off, base: 64x36, 640x360 at render scale 0.25 or 2 | `item` from tick 21 |
+| Pins off, base: 128x36, Aspect 21:9 in 64x36 | `item` from tick 7 |
+| Pins off, fix: 48x36, 64x36, 128x36, Aspect 4:3 and 21:9, render scale 0.25 and 2, against 640x480 | identical |
+
+With the pins off, `throw_release` measured K = 10 / 21 at 4:3 and 16:9 and
+7 / 14 at 32:9 on the base build, and 10 / 21 at every aspect with the fix.
+
+**Why it was not adopted.** The original game hides an AI-culled enemy:
+`BTeki::refresh` skips `drawTekiShape` when the teki is culled and no Pikmin
+or captain is in a neighbouring AI grid cell, and `BossMgr::refresh` skips
+`drawShape` for a culled boss. On GameCube culled means off screen. With the
+sim at 4:3 in a wider window, enemies in the side bands are culled but on
+screen, so they disappear at the 4:3 edges. Counted with a local probe (teki
+culled for the sim but inside the draw frustum): about 2 per tick at 16:9
+(1800 in 900 ticks of `boot_smoke`) and 5 per tick at 32:9; no boss in these
+scenarios. Drawing them needs a draw-only teki and boss path that neither
+advances animation (`BaseShape::updateAnim` animates in the draw) nor writes
+collision or platform state, and such enemies would still stand frozen until
+they enter the 4:3 area. Co-op has the same coupling: taking the sim culling
+from view 1 would hide enemies in view 2. The owner decided not to ship it.
 
 ## Regression coverage
 
