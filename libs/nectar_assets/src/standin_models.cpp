@@ -191,11 +191,22 @@ std::vector<StandInModelSpec> buildSpecs()
 	// cent, leg1-3 con su hijo bas1-3, cont, piki, eff1-3 y llit. Todo del disco.
 	add("objects/goal/goal.mod", kGoalRig, { 255, 140, 40, 255 }, 15.0f,
 	    collInfo({
-	        { 1, "cent", 30.0f, { 0.0f, -16.666666f, 0.0f } },
+	        // cent and cont are moved to the disc's world height (see cont below).
+	        // The disc's cent is -16.67 from joint 1, which the disc rig puts at
+	        // 291.5 - 181.7 = 109.8, so the body sphere is about 93 up. At -16.67
+	        // it sat on the ground and pushed the captain off the cont spot.
+	        // The other spheres keep the disc offsets on the identity rig (they
+	        // end up lower than on the disc; no scenario depends on them).
+	        { 1, "cent", 30.0f, { 0.0f, 93.1f, 0.0f } },
 	        { 3, "leg1", 10.0f, { 0.0f, 0.0f, 0.0f }, { { 3, "bas1", 10.0f, { 120.0f, 0.0f, 0.0f } } } },
 	        { 6, "leg2", 10.0f, { 0.0f, 0.0f, 0.0f }, { { 6, "bas2", 10.0f, { 120.0f, 0.0f, 0.0f } } } },
 	        { 9, "leg3", 10.0f, { 0.0f, 0.0f, 0.0f }, { { 9, "bas3", 10.0f, { 120.0f, 0.0f, 0.0f } } } },
-	        { 0, "cont", 20.0f, { 0.0f, -290.0f, 0.0f } },
+	        // The disc's cont is -290 from joint 0, which the disc rig puts 291.5 up
+	        // (the body on its legs), so the spot sits 1.5 above the ground. The
+	        // stand-in joints all stay at the origin (identity poses), so the
+	        // centre is the disc's world height: with -290 the captain could never
+	        // reach it and the container menu never opened (verification-log.md).
+	        { 0, "cont", 20.0f, { 0.0f, 1.5f, 0.0f } },
 	        { 12, "piki", 10.0f, { 0.0f, 0.0f, 0.0f } },
 	        { 9, "eff1", 10.0f, { -2.0f, 5.0f, 0.0f } },
 	        { 6, "eff2", 10.0f, { -2.0f, 5.0f, 0.0f } },

@@ -46,5 +46,5 @@ the stand-in `screen.bun`) and picture panes `ws8c`, `p2c4`, `ws8u`, `ws8l` (no
 texture; `P2DPicture::setTexture` does nothing with zero textures), so
 `DrawContainer::start` (`drawContainer.cpp:186-195`) finds every pane it
 dereferences. The writer test pins the type of each and that the window is the
-only one in the stand-in set. No scenario opens the container menu, so this is
-checked against the game's constructor oracle and the tag table, not by a run.
+only one in the stand-in set. The `container_menu` scenario now opens and closes the menu on the
+stand-in tree at 30 and 60 (`verification-log.md`, item 2).

@@ -222,7 +222,31 @@ bool stagesIni(Tree& tree, std::string& error)
 // and each differs from the code default in NaviMgr.h, PikiMgr.h,
 // CreatureProp.h, AIConstant.h or CPlate.h (noted per line).
 // The other differing IDs (whistle, punch, health, growth, bombs) are left at
-// the code defaults because no v1 scenario touches them.
+// the code defaults because no v1 scenario touches them. Every ID of the three
+// disc files was diffed against these and the code defaults on 2026-10-28
+// (verification-log.md, item 4); the ones left at code defaults are:
+//  - gamePrms.bin (stays empty): p00 daySpeed (disc 27, code 20) is overwritten
+//    on PC from the day-length setting (27 by default) in GameCoreSection's
+//    constructor, so the file value never reaches the clock; t00 startHour,
+//    t01 endHour, p06 nightTimer and x99 equal the code defaults; p01-p04, s01,
+//    s03 only blend the lighting; p05 nightWarning (disc 18, code 16) is the
+//    Hurry Up message, which day30_clock passes either way (it starts Day 30 at
+//    18:48, after both). x98 is the unused title string.
+//  - naviMgr.bin: p01-p03 whistle, p29/p30 escape animation frames, p31/p33
+//    pressed and push timing, p42 pluck loop count, p49 impatience time, p51
+//    punch damage, p57-p59 Kinoko flick and bury escape, p61 pluck zoom. No v1
+//    scenario whistles, runs into the escape speed, is pressed, pushes, plucks,
+//    punches or is buried.
+//  - pikiMgr.bin: health, attack, press, growth and seed timers, wall push,
+//    flick, panic, bomb, drown, free-boid and idle search ranges, sunset safety
+//    range. No v1 scenario hurts, grows, drowns, bombs or ends a day with
+//    Pikmin outside, and its Pikmin stay in the party.
+//
+// CreatureProp: the captain's effective code defaults are 1.0, 0.5, 0.5, 0.2,
+// 0.3 (the NaviProp constructor, navi.cpp, overrides s00, s02 and s03 of the
+// CreatureProp 0.5, 0.5, 0.25, 0.1, 0.3) and the Pikmin's 0.1, 0.5, 0.25, 0.1,
+// 0.3 (PikiProp overrides s00). The disc differs in the captain's s03 and the
+// Pikmin's s02 and s03; the lists below carry all five disc values.
 //
 // With these values the walk to the hand and the grab run identically on both
 // trees: the same target speeds (240 beyond 2 x grab range, then 120), the
@@ -251,7 +275,7 @@ bool parmFiles(Tree& tree, std::string& error)
 		  } } },
 		{ "dataDir/parms/naviMgr.bin",
 		  {
-		      // CreatureProp (code 0.5, 0.5, 0.25, 0.1, 0.3).
+		      // CreatureProp, disc values (effective code defaults 1.0, 0.5, 0.5, 0.2, 0.3: only s03 differs).
 		      { parmFloat("s00", 1.0f), parmFloat("s01", 0.5f), parmFloat("s02", 0.5f), parmFloat("s03", 0.1f), parmFloat("s04", 0.3f) },
 		      {
 		          parmFloat("p00", 25.0f),   // mActionRadius (code 120)
@@ -285,7 +309,7 @@ bool parmFiles(Tree& tree, std::string& error)
 		  } },
 		{ "dataDir/parms/pikiMgr.bin",
 		  {
-		      // CreatureProp (code 0.5, 0.5, 0.25, 0.1, 0.3).
+		      // CreatureProp, disc values (effective code defaults 0.1, 0.5, 0.25, 0.1, 0.3: s02 and s03 differ).
 		      { parmFloat("s00", 0.1f), parmFloat("s01", 0.5f), parmFloat("s02", 0.8f), parmFloat("s03", 0.14f), parmFloat("s04", 0.3f) },
 		      {
 		          parmFloat("p00", 10.0f),  // mMinMoveSpeed (code 84)
@@ -295,6 +319,11 @@ bool parmFiles(Tree& tree, std::string& error)
 		          parmFloat("p18", 8.0f),   // mWalkSpeedThreshold (code 35)
 		          parmFloat("p19", 20.0f),  // mRunSpeedThreshold (code 70)
 		          parmFloat("p20", 95.0f),  // mEscapeSpeedThreshold (code 160)
+		          // Walk, run and escape animation speeds (Piki walk animation, piki.cpp): the Pikmin
+		          // walk to the hand in throw_release. p21 (30) and p24 (60) equal the code defaults.
+		          parmFloat("p22", 50.0f),  // mMaxWalkAnimSpeed (code 60)
+		          parmFloat("p23", 40.0f),  // mMinRunAnimSpeed (code 30)
+		          parmFloat("p25", 60.0f),  // mEscapeAnimSpeed (code 30)
 		          parmFloat("p27", 3.0f),   // mMinPikiSize (code 6)
 		          parmFloat("p34", 5.0f),   // mMaxPikiSize (code 10)
 		          parmFloat("p39", 8.5f),   // mCollisionRadius (code 8)

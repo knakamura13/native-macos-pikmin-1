@@ -11,6 +11,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
+#include <map>
 #include <string>
 #include <thread>
 #include <chrono>
@@ -23,6 +24,7 @@
 #include "PaniPikiAnimator.h"
 #include "Piki.h"
 #include "NaviMgr.h"
+#include "PikiMgr.h"
 #include "gameflow.h"
 #include "jaudio/piki_scene.h"
 #include "netplay/pc_netplay_det.h"
@@ -193,9 +195,64 @@ void providerThunk(PcInputPad pads[4])
 	sScenario->providePads(sTick, pads[0]);
 }
 
+// PIKMIN_SCENARIO_STATE_STATS (any value): per state id of the captain and of
+// the Pikmin, the longest uninterrupted stay in ticks and how often it was
+// entered, printed with the verdict. A state that waits on an animation key the
+// stand-in lacks shows up as a long stay (verification-log.md, item 5).
+struct StateDwell {
+	unsigned longest = 0;
+	unsigned entries = 0;
+};
+struct StateTrack {
+	int state      = -1;
+	unsigned since = 0;
+};
+std::map<int, StateDwell> sCaptainDwell, sPikiDwell;
+std::map<const void*, StateTrack> sTracks;
+bool sStateStats = false;
+unsigned sStatsTick = 0;
+
+void noteState(const void* who, int state, std::map<int, StateDwell>& table)
+{
+	StateTrack& t = sTracks[who];
+	if (t.state != state) {
+		t.state = state;
+		t.since = sStatsTick;
+		table[state].entries++;
+	}
+	StateDwell& d = table[state];
+	if (sStatsTick - t.since + 1 > d.longest) d.longest = sStatsTick - t.since + 1;
+}
+
+void trackStates()
+{
+	if (Navi* navi = naviMgr ? naviMgr->getNavi() : nullptr) {
+		if (navi->getCurrState()) noteState(navi, navi->getCurrState()->getID(), sCaptainDwell);
+	}
+	if (pikiMgr) {
+		Iterator it(pikiMgr);
+		CI_LOOP(it)
+		{
+			Piki* piki = static_cast<Piki*>(*it);
+			noteState(piki, piki->getState(), sPikiDwell);
+		}
+	}
+	++sStatsTick;
+}
+
+void printStateStats()
+{
+	if (!sStateStats) return;
+	for (const auto& [id, d] : sCaptainDwell)
+		std::printf("[scenario-states] captain state %d: longest %u ticks, entered %u times\n", id, d.longest, d.entries);
+	for (const auto& [id, d] : sPikiDwell)
+		std::printf("[scenario-states] piki state %d: longest %u ticks, entered %u times\n", id, d.longest, d.entries);
+}
+
 void finish(int code)
 {
 	if (sVerdict) return;
+	printStateStats();
 	sVerdict  = true;
 	sExitCode = code;
 	std::fflush(stdout);
@@ -279,6 +336,7 @@ int pc_scenario_parse_argv(int argc, char** argv)
 
 	sActive         = true;
 	sTicksPerSecond = rate;
+	sStateStats     = std::getenv("PIKMIN_SCENARIO_STATE_STATS") != nullptr;
 
 	// Everything a scenario run must not inherit from the machine.
 	SDL_setenv("SDL_AUDIODRIVER", "dummy", 1);
@@ -402,6 +460,7 @@ void pc_scenario_on_tick_end(void)
 		            gameflow.mWorldClock.mCurrentDay, gameflow.mWorldClock.mTimeOfDay);
 	}
 	sScenario->onTick(sTick);
+	if (sStateStats) trackStates();
 	++sTick;
 }
 

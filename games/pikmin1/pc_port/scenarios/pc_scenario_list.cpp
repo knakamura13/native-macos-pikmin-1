@@ -11,6 +11,7 @@ const std::vector<PcScenario*>& pc_scenario_all(void)
 		pc_scenario_make_sprout_landing(),
 		pc_scenario_make_onion_skip(),
 		pc_scenario_make_objects_smoke(),
+		pc_scenario_make_container_menu(),
 	};
 	return all;
 }
