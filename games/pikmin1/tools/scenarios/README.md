@@ -78,13 +78,18 @@ cleared list of environment variables that change the sim or the input
 
 Three rules keep an abnormal exit from reading as a pass:
 
-- `--scenario` rejects boot-path-changing flags with exit 2 (`--input-replay`
-  and `PIKMIN_INPUT_REPLAY` today, more flags in the same change as the
-  watchdog).
+- `--scenario` rejects boot-path-changing flags with exit 2 before any window
+  exists: `--coop-direct`, `--coop`, `--vs-map`, `--mission-map`, `--campaign`,
+  `--netplay-host`, `--netplay-join`, `--netplay-host-ice`, `--netplay-join-ice`,
+  `--netplay-exit-after-ticks` and `--input-replay` (plus `PIKMIN_INPUT_REPLAY`).
+  `--input-record` stays allowed and records the scripted pads. The list is
+  `kRejectedFlags` in `pc_scenario.cpp`.
 - A wall-clock watchdog fails the run with exit 1 (default 540 s, override with
   `PIKMIN_SCENARIO_WATCHDOG_SECONDS`). It sits under the CTest timeout of 600 s.
-- Any `exit()` after the stage hooks start and before a verdict is a failure.
-  `System::halt` and `PPCHalt` call `exit(0)`, which would otherwise pass.
+- Any `exit()` before a verdict is a failure. The exit handler is armed once
+  argument and data checks pass. `System::halt` and `PPCHalt` call `exit(0)`,
+  which would otherwise pass. A GL context failure records exit 4 first, so the
+  handler reports 4.
 
 An ERROR or abort ends the process by signal, which CTest also reports as a
 failure.
