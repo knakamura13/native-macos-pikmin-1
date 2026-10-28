@@ -190,8 +190,29 @@ code or timing the 30 Hz run does not. The disc entries keep `boot_smoke`,
 | `day30_clock` | 30, 60 | The clock moves by one frame time per tick, so the hold and the sunset arithmetic differ per rate. |
 | `sprout_landing` | 30, 60 | `BuryInit` snaps the seed to the ground only above 30 Hz (`pc_seed_landing_snaps_to_ground`); 60 Hz is the only run of that path. |
 | `onion_skip` | 30, 60 | The movie advances half a frame per tick at 60 Hz (330 ticks against 660), so the skip frames and the boot motion's key events land on different ticks. |
-| `container_menu` | 30, 60 | Same object stage as `onion_skip`; both rates are registered, not yet measured for a rate-specific path. |
+| `container_menu` | 30, 60 | Rate-specific code runs on both paths. `Navi::updateWalkAnimation` (the captain walks to the Onion and back to Walk) scales its speed window and motion cooldown with `pc_anim_ticks_per_30hz(frame time)`, and `DrawContainer` keeps its phase timers as sums of `gsys->getFrameTime()` against fixed thresholds (0.1 s steps, 0.5 s ramps), so the tick on which each status changes differs per rate. The scenario scales its Operation hold and its bounds by rate. None of it is a branch on the rate like `BuryInit`'s, so both rates are kept for that arithmetic, not for a known failing path; read from code, not shown to fail at either rate. |
 | `objects_smoke` | 30 | Loads the every-object stage and counts the enemies born; neither depends on the tick rate. |
+
+Wall time of every stand-in entry, one run at a time on an M3 Max, `/usr/bin/time -p`
+(2026-10-28, base `ee769374`). "GPU" is the Mac's own GL, "software" is Apple's
+software renderer, forced by a local, uncommitted `SDL_GL_ACCELERATED_VISUAL` 0 in
+`pc_window.cpp` (the renderer macOS CI gets). The state-hash logs of the GPU and the
+software run are byte-identical for every entry.
+
+| Scenario | PASS tick at 30 / 60 | GPU 30 / 60 | Software 30 / 60 |
+|----------|----------------------|-------------|------------------|
+| `boot_smoke` | 899 / 899 | 2.1 s / 1.3 s | 5.6 s / 5.4 s |
+| `throw_release` | 374 / 661 | 1.0 s / 1.0 s | 2.9 s / 4.4 s |
+| `day30_clock` | 277 / 298 | 0.8 s / 0.7 s | 2.2 s / 2.4 s |
+| `sprout_landing` | 287 / 554 | 0.8 s / 1.6 s | 2.1 s / 3.6 s |
+| `onion_skip` | 367 / 718 | 0.9 s / 1.5 s | 2.2 s / 3.7 s |
+| `container_menu` | 363 / 726 | 1.1 s / 1.5 s | 2.5 s / 4.1 s |
+| `objects_smoke` | 299 / none | 1.0 s / none | 2.3 s / none |
+
+The object stage costs nothing at load any more: `sprout_landing` (287 ticks, 0.8 s)
+and `day30_clock` on the plain stage (277 ticks, 0.8 s) take the same time. The 17 s
+`PathFinder::selectWay` stage load recorded earlier is gone (see `standin-objects.md`,
+Routes); the time left is per-tick rendering, which grows with the tick count.
 
 | Entry | Data | Label | Notes |
 |-------|------|-------|-------|
