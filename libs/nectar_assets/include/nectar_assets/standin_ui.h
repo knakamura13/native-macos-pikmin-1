@@ -23,7 +23,7 @@ struct StandinLayout {
 
 /// Los 12 diseños del camino de arranque (orden de carga), más los 8 de
 /// day30_clock: tu_base, wait_char y los textos de la nave que abre, más los 2
-/// de los textos de las cinemáticas de relleno (tu_tx03, tu_tx20).
+/// de los textos de las cinemáticas de relleno (tu_tx03, tu_tx20), más tu_tx31 (captain_damage, TUT_APunchUFO).
 std::vector<StandinLayout> standinBloLayouts();
 
 /// Los 331 nombres distintos "effects/pcr/<x>.pcr" de ptclLoadInfo.

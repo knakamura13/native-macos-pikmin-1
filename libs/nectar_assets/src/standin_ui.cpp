@@ -250,6 +250,9 @@ std::vector<StandinLayout> standinBloLayouts()
 	// bloFile_Zenmetu).
 	for (const char* f : { "tu_tx03.blo", "tu_tx20.blo" })
 		out.push_back(tutorialPage(f));
+	// captain_damage: DEMOFLAG_OlimarLowHealth asks for TUT_APunchUFO (navi.cpp
+	// startDamageEffect), whose page is bloFile_APunchUFO.
+	out.push_back(tutorialPage("tu_tx31.blo"));
 
 	// captain_death: the day-end chain after the captain falls (coverage/terminals.md
 	// T06). Pages of the diary (ogScrMessageMgr), the results screen and its save step
