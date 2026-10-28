@@ -25,7 +25,9 @@
 #include "NaviMgr.h"
 #include "gameflow.h"
 #include "jaudio/piki_scene.h"
+#include "netplay/pc_input_log.h"
 #include "netplay/pc_netplay_det.h"
+#include "netplay/pc_state_hash.h"
 #include "Dolphin/pad.h"
 #include "pc_permadeath.h"
 #include "gl/pc_gfx.h"
@@ -138,6 +140,10 @@ void removeScratch()
 
 [[noreturn]] void terminate(int code)
 {
+	// _Exit skips stdio's own flush: the hash log flushes every 300 ticks, so
+	// its tail (and a --input-record file's) would be lost.
+	pc_state_hash_flush();
+	pc_input_log_flush();
 	std::fflush(stdout);
 	std::fflush(stderr);
 	removeScratch();
