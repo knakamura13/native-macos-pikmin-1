@@ -30,7 +30,7 @@ cmake --build build/pikmin1-scenarios --target pikmin_pc nectar_standin_generato
 ```
 
 `PIKMIN_BUILD_TESTS` defaults to ON, so this configure also registers the unit
-tests: `ctest -N` lists 105 entries, 27 of them scenario entries. Most test
+tests: `ctest -N` lists 107 entries, 29 of them scenario entries (with `ship_parts`; other branches add theirs). Most test
 executables are not built by the two targets above; CTest reports them as missing
 and `-R ^scenario_` leaves them out.
 
@@ -69,7 +69,7 @@ PIKMIN_SCENARIO_STAGE=stages/sandbox.ini \
 
 | Argument | Meaning |
 |----------|---------|
-| `--scenario <name>` | Scenario to run: `boot_smoke`, `throw_release`, `day30_clock`, `extinction`, `captain_death`, `sprout_landing`, `onion_skip`, `container_menu` or `objects_smoke`. The last three need an object stage (`PIKMIN_SCENARIO_STAGE`, see the table below). |
+| `--scenario <name>` | Scenario to run: `boot_smoke`, `throw_release`, `day30_clock`, `extinction`, `captain_death`, `ship_parts`, `sprout_landing`, `onion_skip`, `container_menu` or `objects_smoke`. The last three need an object stage (`PIKMIN_SCENARIO_STAGE`, see the table below). |
 | `--scenario-tick-rate 30\|60` | Ticks per second. Default `30`. Any other value (or a missing one) exits 2. |
 | `--scenario-visible` | Show the window. Default is hidden. A visible window is also positioned and may move the real mouse pointer (see [Mouse pointer](#mouse-pointer)). |
 
@@ -196,6 +196,7 @@ code or timing the 30 Hz run does not. The disc entries keep `boot_smoke`,
 | `onion_skip` | 30, 60 | The movie advances half a frame per tick at 60 Hz (330 ticks against 660), so the skip frames and the boot motion's key events land on different ticks. |
 | `container_menu` | 30, 60 | Rate-specific code runs on both paths. `Navi::updateWalkAnimation` (the captain walks to the Onion and back to Walk) scales its speed window and motion cooldown with `pc_anim_ticks_per_30hz(frame time)`, and `DrawContainer` keeps its phase timers as sums of `gsys->getFrameTime()` against fixed thresholds (0.1 s steps, 0.5 s ramps), so the tick on which each status changes differs per rate. The scenario scales its Operation hold and its bounds by rate. None of it is a branch on the rate like `BuryInit`'s, so both rates are kept for that arithmetic, not for a known failing path; read from code, not shown to fail at either rate. |
 | `objects_smoke` | 30 | Loads the every-object stage and counts the enemies born; neither depends on the tick rate. |
+| `ship_parts` | 30, 60 | Nothing in `getUfoParts` depends on the rate (it is direct calls, one part per tick); both rates are kept because the run costs half a second and the intro gate and the tick counter differ (intro 15 ticks on the stand-ins, 45 on the disc). Not shown to fail at either rate. |
 
 Wall time of every stand-in entry, one run at a time on an M3 Max, `/usr/bin/time -p`
 (2026-10-28, base `ee769374`). "GPU" is the Mac's own GL, "software" is Apple's
@@ -212,6 +213,7 @@ software run are byte-identical for every entry.
 | `onion_skip` | 367 / 718 | 0.9 s / 1.5 s | 2.2 s / 3.7 s |
 | `container_menu` | 363 / 726 | 1.1 s / 1.5 s | 2.5 s / 4.1 s |
 | `objects_smoke` | 299 / none | 1.0 s / none | 2.3 s / none |
+| `ship_parts` | 30 / 30 | 0.7 s / 0.5 s (CTest wall time, 2026-10-28; not the `/usr/bin/time -p` method above) | not measured |
 
 The object stage costs nothing at load any more: `sprout_landing` (287 ticks, 0.8 s)
 and `day30_clock` on the plain stage (277 ticks, 0.8 s) take the same time. The 17 s
@@ -221,14 +223,14 @@ Routes); the time left is per-tick rendering, which grows with the tick count.
 | Entry | Data | Label | Notes |
 |-------|------|-------|-------|
 | `scenario_standin_generate` | writes `<build>/scenario-data` | | `FIXTURES_SETUP scenario_standin_tree`, 120 s timeout. Passes `--manifest tools/scenarios/boot-manifest.txt`. |
-| `scenario_<name>_<rate>` | stand-in tree | none | For `boot_smoke`, `throw_release`, `day30_clock`, `extinction`, `captain_death`, `sprout_landing`, `onion_skip` and `container_menu` at 30 and 60, and `objects_smoke` at 30 (see Tick rates). `FIXTURES_REQUIRED scenario_standin_tree`, 600 s timeout, `PIKMIN_SCENARIO_STAGE` as in the stage table below. No skip code: a missing or broken tree fails. |
+| `scenario_<name>_<rate>` | stand-in tree | none | For `boot_smoke`, `throw_release`, `day30_clock`, `extinction`, `captain_death`, `ship_parts`, `sprout_landing`, `onion_skip` and `container_menu` at 30 and 60, and `objects_smoke` at 30 (see Tick rates). `FIXTURES_REQUIRED scenario_standin_tree`, 600 s timeout, `PIKMIN_SCENARIO_STAGE` as in the stage table below. No skip code: a missing or broken tree fails. |
 | `scenario_<name>_<rate>_disc` | a real install | `game-assets` | For `boot_smoke`, `throw_release` and `day30_clock` only, at 30 and 60 (6 entries). Runs in `<build>/scenario-scratch`, 600 s timeout, `SKIP_RETURN_CODE 77`. Set `PIKMIN_SCENARIO_DATA_DIR` to run it; otherwise CTest reports a skip. |
 
 Which stage each stand-in entry boots:
 
 | Scenarios | `PIKMIN_SCENARIO_STAGE` |
 |-----------|-------------------------|
-| `boot_smoke`, `throw_release`, `day30_clock`, `captain_death` | `stages/sandbox.ini` |
+| `boot_smoke`, `throw_release`, `day30_clock`, `captain_death`, `ship_parts` | `stages/sandbox.ini` |
 | `sprout_landing`, `onion_skip`, `container_menu` | `stages/sandbox_objects.ini`, the opt-in second stage with a cliff, an Onion, sprouts, a pellet and an enemy. See `standin-objects.md` for what the object stand-ins are, what was read from the disc and what remains, and `standin-cinema.md` for `onion_skip`. |
 | `objects_smoke` | `stages/sandbox_all_objects.ini`, one of each plant, bridge, gate, boss and eight enemies. |
 
@@ -327,6 +329,7 @@ that stay with the platform are exact by IEEE 754.
 | `container_menu` | Day 1, object stage | The captain walks onto the Onion's `cont` spot and presses A; the container menu (`DrawContainer`, stand-in `con01.blo` with its `p264` window) opens, passes Wait, Start and Operation, stays in Operation for 4 s with one stick push, and closes, once with B and once with A. The captain returns to Walk and the Onion count is unchanged. |
 | `onion_skip` | Day 1, object stage | The blue Onion discovery movie (upstream #205), started with `DEMOFLAG_DiscoverBlueOnyon`. Four cases: watched to the end, START before Boot, between Boot and the first seed, and between the seed and EmitCone. Each asserts that the movie plays and ends, the Onion boots and reaches Wait, and exactly one seed comes out. The between case is the regression test for #205 (0 seeds without the fix). Upstream PR #205 is still open; the fix is in this tree through the kyle-develop merge. See `standin-cinema.md`. |
 | `sprout_landing` | Day 1, object stage | Six seeds launched at the cliff the way `GoalAI::BootEmit` launches them. Each must plant (Wait) within a bound, not on a steep face, not below the ground and not floating more than 30 units above it. Height and speed at the start of Bury are printed, not asserted (upstream #208, merged upstream 2026-10-28, changes them at 30 Hz). See `standin-objects.md`. |
+| `ship_parts` | Day 1 | The ship-part upgrade chain (`coverage/milestones.md` SP1-SP11, SP13). `getUfoParts(id, true)` for all 30 ids, one per tick (ticks 0-29), the ids of the five optional parts last except Nova Blaster third. After each: `mCurrParts`, part visibility, per-stage counts (part i goes to stage i % 5; the sandbox's stage id 5 would write one byte past `mStagePartsCollected`, so the scenario swaps a valid id in around each call), `mRequiredUfoPartCount` and `happyEndable` (true at 25 required = part 26, not part 25), radar and jet flags, `mShipUpgradeLevel` and the open stages against the live `AICONST._154/_164/_174/_184` (5, 12, 29, 30 on both trees), `mPendingStageUnlockID`, the result flags (on 1, seen 2, `Collect10Parts` with the clock set to day 10 for one call), `getNextPowerupNumber` (parts left to the next level, not the 1,6,12,29,30 table), and that a second collection of the same id changes nothing (again for all 30 at the end). The stand-in tree registers no ship part, so the scenario registers the ids with `PlayerState::registerUfoParts`; on the disc all 30 are registered. Sets the scenario-only infinite-day setting so achievements are blocked (no icon read, no `pikmin_achievements.txt`). Also passes on the disc (not registered as a `_disc` entry). |
 | `objects_smoke` | Day 1, every-object stage | Boots `stages/sandbox_all_objects.ini`, checks the eight enemies were born and passes after 300 ticks. A missing or malformed model, platform, table or parameter file aborts the run instead. |
 
 `throw_release` measures K at run time and never hard-codes it. On this tree both
