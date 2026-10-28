@@ -5,6 +5,11 @@
 # needs the file. Collected from boot_smoke, throw_release and day30_clock at
 # 30 and 60 ticks per second on macOS, 2026-10-27.
 
+# No texture (.bti, .txe) or .bun bundle is allowlisted: the generator writes
+# every one the disc boot opens (#67). The only allowlisted .anm files are the
+# per-model animation bundles of #66. standin-texture-experiments.md records
+# what happens when a texture or bundle is missing or malformed.
+
 # Sandbox generator files. Every .gen read is guarded (gameCoreSection.cpp
 # initStage): the day file prints NOT FOUND, init and plants are skipped.
 # Scenarios spawn their own Pikmin (#61), so only default.gen is written.
