@@ -47,6 +47,7 @@ constexpr int kEndCausePikminZero       = 0; ///< ENDCAUSE_PikminZero
 constexpr std::uint32_t kCinLocalized = 1u << 0;
 constexpr std::uint32_t kCinHideNavi  = 1u << 2;
 constexpr std::uint32_t kCinNaviNoAI  = 1u << 6;
+constexpr std::uint32_t kCinNonGameMovie = 1u << 7; ///< NonGameMovie: time stops, the AI does not update
 
 /// SceneCut flags: playback mode = (flags >> 1) & 7. 3 plays once, 5 loops
 /// until skipped (CINMODE_LoopScene).

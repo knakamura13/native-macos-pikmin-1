@@ -29,6 +29,10 @@ std::vector<StandinLayout> standinBloLayouts();
 /// Los 331 nombres distintos "effects/pcr/<x>.pcr" de ptclLoadInfo.
 const std::vector<std::string>& standinPcrNames();
 
+/// Los 52 nombres de EffectMgr2D (effectMgr2D.cpp, ptclInfo): las partículas de las
+/// pantallas de archivo. No se solapan con standinPcrNames().
+const std::vector<std::string>& standinPcr2dNames();
+
 /// Partícula inerte: DisableEmission, un pase y un fotograma. Un generador
 /// creado con ella termina y vuelve al pool sin crear partículas.
 PcrParticle inertPcrParticle();

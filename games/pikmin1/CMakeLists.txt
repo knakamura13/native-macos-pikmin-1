@@ -442,7 +442,8 @@ if (PIKMIN_BUILD_SCENARIOS)
         pc_port/scenarios/scenario_extinction.cpp
         pc_port/scenarios/scenario_onion_skip.cpp
         pc_port/scenarios/scenario_objects_smoke.cpp
-        pc_port/scenarios/scenario_container_menu.cpp)
+        pc_port/scenarios/scenario_container_menu.cpp
+        pc_port/scenarios/scenario_captain_death.cpp)
 endif()
 
 include_directories(
@@ -1451,7 +1452,8 @@ if(PIKMIN_BUILD_TESTS)
         ${NECTAR_ASSETS_DIR}/src/bundle.cpp)
     target_include_directories(nectar_pcr_writer_test PRIVATE ${NECTAR_ASSETS_DIR}/include ${NECTAR_ASSETS_DIR}/src)
     target_compile_definitions(nectar_pcr_writer_test PRIVATE
-        NECTAR_EFFECT_MGR_CPP="${CMAKE_CURRENT_SOURCE_DIR}/src/plugPikiYamashita/effectMgr.cpp")
+        NECTAR_EFFECT_MGR_CPP="${CMAKE_CURRENT_SOURCE_DIR}/src/plugPikiYamashita/effectMgr.cpp"
+        NECTAR_EFFECT_MGR2D_CPP="${CMAKE_CURRENT_SOURCE_DIR}/src/plugPikiYamashita/effectMgr2D.cpp")
     target_compile_options(nectar_pcr_writer_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
     add_test(NAME nectar_pcr_writer_test COMMAND nectar_pcr_writer_test)
 
@@ -2031,7 +2033,7 @@ if(PIKMIN_BUILD_SCENARIOS)
         FIXTURES_SETUP scenario_standin_tree
         TIMEOUT 120)
     file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/scenario-logs")
-    foreach(scenario boot_smoke throw_release day30_clock extinction)
+    foreach(scenario boot_smoke throw_release day30_clock extinction captain_death)
         foreach(rate 30 60)
             add_test(NAME scenario_${scenario}_${rate}
                 COMMAND ${CMAKE_COMMAND}

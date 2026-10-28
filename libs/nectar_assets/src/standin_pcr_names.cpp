@@ -343,4 +343,66 @@ const std::vector<std::string>& standinPcrNames()
 	return names;
 }
 
+// Los 52 nombres de `ptclInfo` (effectMgr2D.cpp, EffectMgr2D: pantalla de archivos y
+// resultados), en orden. Ninguno está en la lista de arriba. La prueba de deriva
+// (pcr_writer_test) los compara con los literales de effectMgr2D.cpp.
+const std::vector<std::string>& standinPcr2dNames()
+{
+	static const std::vector<std::string> names = {
+		"effects/pcr/frt_l.pcr",
+		"effects/pcr/frt_h_l.pcr",
+		"effects/pcr/frt_s.pcr",
+		"effects/pcr/frt_h_s.pcr",
+		"effects/pcr/bg_od01.pcr",
+		"effects/pcr/bg_od01r.pcr",
+		"effects/pcr/bg_od01g.pcr",
+		"effects/pcr/bg_od01b.pcr",
+		"effects/pcr/bg_od02.pcr",
+		"effects/pcr/bg_od02r.pcr",
+		"effects/pcr/bg_od02g.pcr",
+		"effects/pcr/bg_od02b.pcr",
+		"effects/pcr/record_l.pcr",
+		"effects/pcr/rec_h_l.pcr",
+		"effects/pcr/star.pcr",
+		"effects/pcr/record_s.pcr",
+		"effects/pcr/rec_h_s.pcr",
+		"effects/pcr/bg_ds01.pcr",
+		"effects/pcr/bg_ds01r.pcr",
+		"effects/pcr/bg_ds01g.pcr",
+		"effects/pcr/bg_ds01b.pcr",
+		"effects/pcr/bg_ds02.pcr",
+		"effects/pcr/bg_ds02r.pcr",
+		"effects/pcr/bg_ds02g.pcr",
+		"effects/pcr/bg_ds02b.pcr",
+		"effects/pcr/bg_cms01.pcr",
+		"effects/pcr/bg_cms01r.pcr",
+		"effects/pcr/bg_cms01g.pcr",
+		"effects/pcr/bg_cms01b.pcr",
+		"effects/pcr/bg_cms02.pcr",
+		"effects/pcr/bg_cms02r.pcr",
+		"effects/pcr/bg_cms02g.pcr",
+		"effects/pcr/bg_cms02b.pcr",
+		"effects/pcr/selec_tm.pcr",
+		"effects/pcr/selec_km.pcr",
+		"effects/pcr/file_slm.pcr",
+		"effects/pcr/file_sel.pcr",
+		"effects/pcr/select_k.pcr",
+		"effects/pcr/select_t.pcr",
+		"effects/pcr/syokika2.pcr",
+		"effects/pcr/syokika.pcr",
+		"effects/pcr/file_cpm.pcr",
+		"effects/pcr/file_cp.pcr",
+		"effects/pcr/file_dlm.pcr",
+		"effects/pcr/file_del.pcr",
+		"effects/pcr/rktin1.pcr",
+		"effects/pcr/mapap1.pcr",
+		"effects/pcr/mapap2.pcr",
+		"effects/pcr/z_ufoF.pcr",
+		"effects/pcr/z_ufoS.pcr",
+		"effects/pcr/z_ony.pcr",
+		"effects/pcr/z_sstar.pcr",
+	};
+	return names;
+}
+
 } // namespace nectar

@@ -354,8 +354,90 @@ std::map<std::string, LayoutReq> requirements()
 	// ogMsgCtrlTagMgr: maru, ten and han text boxes (the last two are 3-letter tags
 	// with a leading NUL), each with text of at most 7 bytes (char[8] buffers).
 	m["wait_char.blo"].reqs = { { "maru", 'T' }, { std::string("\0ten", 4), 'T' }, { std::string("\0han", 4), 'T' } };
-	for (const char* f : { "tu_tx00.blo", "tu_tx26.blo", "tu_tx35.blo", "tu_tx37_00.blo", "tu_tx37_01.blo", "tu_tx37_02.blo", "tu_tx03.blo", "tu_tx20.blo" })
+	for (const char* f : { "tu_tx00.blo", "tu_tx26.blo", "tu_tx35.blo", "tu_tx37_00.blo", "tu_tx37_01.blo", "tu_tx37_02.blo", "tu_tx03.blo", "tu_tx20.blo",
+	                       "re_j_00.blo" })
 		m[f].reqs = { { "tx00", 'A' } }; // tx00..tx19 are optional and any type (the disc has a picture in tu_tx37_01); the stand-in has one text box
+
+	// captain_death: the results chain (ogResult.cpp, ogSave.cpp, ogMemChk.cpp, ogFileSelect.cpp ...).
+	// Tags built from NUL padding ('hai', 'fp') are written with tag3().
+	auto tag3 = [](const char* t) {
+		std::string s(t);
+		return std::string(4 - s.size(), '\0') + s;
+	};
+	auto nitaku = [](std::vector<Req>& v) {
+		cat(v, list({ "i00l", "i00r", "i01l", "i01r", "z00l", "z00r" }, 'P'));
+	};
+	{
+		// ogScrResultMgr::ogScrResultMgrSub: pane anchors (search(.., true), any type), digits and a text box.
+		std::vector<Req>& r = m["account2.blo"].reqs;
+		r                   = list({ "po_1", "po2u", "po2d", "po3u", "po3c", "po3d", "p_rc", "p_bc", "p_yc", "g_sp", "data", "da_1", "da_2", "da_3" }, 'A');
+		r.push_back({ "getp", 'T' });
+		for (const char* g : { "rc", "bc", "yc", "bo", "ba", "sd" }) {
+			std::string s(g);
+			cat(r, list({ ("4_" + s).c_str(), (s + "_l").c_str(), (s + "_c").c_str(), (s + "_r").c_str() }, 'A'));
+		}
+		cat(r, list({ "tp_4", "tp_l", "tp_c", "tp_r", "4bo2", "bo2l", "bo2c", "bo2r", "4ba2", "ba2l", "ba2c", "ba2r", "4sd2", "sd2l", "sd2c", "sd2r", "dc_l",
+		              "dc_c", "dc_r", "ro_l", "ro_c", "ro_r", "ti_l", "ti_c", "ti_r" },
+		            'A'));
+	}
+	{
+		// ogSaveMgr::ogSaveMgr and ogNitakuMgr.
+		std::vector<Req>& r = m["ac_save.blo"].reqs;
+		r                   = list({ "he00", "he01", "se_c", "sa_c", "sa_s" }, 'T');
+		cat(r, list({ "hs00", "hs01", "sakc", "saks", "1win", "chui" }, 'A'));
+		cat(r, list({ "back" }, 'P'));
+		nitaku(r);
+		std::vector<Req>& r2 = m["ac_save2.blo"].reqs;
+		r2                   = list({ "he00", "he01" }, 'T');
+		cat(r2, list({ "2win" }, 'A'));
+		cat(r2, list({ "back" }, 'P'));
+		nitaku(r2);
+	}
+	{
+		// ogScrMemChkMgr::ogScrMemChkMgr.
+		std::vector<Req>& r = m["data_m.blo"].reqs;
+		r                   = list({ "shom", "shot", "shch", "shoi", "shok", "shos", "shuf", "shsi", "shxx", "sari", "memo", "brom", "kaim", "ijom", "naim", "file",
+		                             "se_c", "haic", "iiec", "fomt", "rtry" },
+		                           'T');
+		r.push_back({ tag3("hai"), 'T' });
+		r.push_back({ tag3("iie"), 'T' });
+		r.push_back({ tag3("cws"), 'T' });
+		cat(r, list({ "abtn", "main", "curs" }, 'P'));
+		cat(r, list({ "yn_w", "cpsl" }, 'A'));
+		nitaku(r);
+		// ogScrMakeDefaultMgr::ogScrMakeDefaultMgr.
+		std::vector<Req>& p = m["data_pf.blo"].reqs;
+		p                   = list({ "tx00", "pfok", "pfxx" }, 'T');
+		cat(p, list({ "abtn", "curs" }, 'P'));
+		cat(p, list({ "tx01", "tx02", "tx03" }, 'A'));
+	}
+	m["data_b.blo"].reqs = {};
+	m["save_x.blo"].reqs = { { "saxx", 'A' }, { "back", 'P' } };
+	for (int slot = 1; slot <= 3; slot++) {
+		// ogScrFileSelectMgr: getPane_FileIcon (data1..3) and the ROOT lookup in data1_n..3_n.
+		std::vector<Req>& r = m["data" + std::to_string(slot) + ".blo"].reqs;
+		r                   = list({ "ce_p", "efmc", "ef_c", "fp_m", "newi", "nemi", "sm_c", "dcmc", "dcml", "dcmr", "dc_c", "dc_l", "dc_r" }, 'A');
+		r.push_back({ tag3("fp"), 'A' });
+		if (slot == 1) cat(r, list({ "no_c", "ne_c" }, 'A')); // only data1.blo is asked for them (mSlotScreensData[0])
+		m["data" + std::to_string(slot) + "_n.blo"].reqs = {};
+	}
+	{
+		// getPane_FileTop1.
+		std::vector<Req>& r = m["data_t1.blo"].reqs;
+		r                   = list({ "hsho", "d1co", "dasa", "uasa", "u1co", "usho", "se_c" }, 'T');
+		r.push_back({ tag3("hai"), 'T' });
+		r.push_back({ tag3("iie"), 'T' });
+		r.push_back({ tag3("sho"), 'A' });
+		cat(r, list({ "chui", "back" }, 'P'));
+		cat(r, list({ "p_co", "p_sh", "p_ma", "yn_w", "dono", "dsho", "doko", "copc", "dcxx", "dcop", "dosa", "savc", "ddxx" }, 'A'));
+		nitaku(r);
+		// getPane_FileTop2.
+		m["data_t2.blo"].reqs = list({ "da_1", "da_2", "da_3", "ro_l", "ro_r", "rt_l", "rt_r", "rc_l", "rc_c", "rc_r", "bc_l", "bc_c", "bc_r", "yc_l", "yc_c",
+		                               "yc_r", "rcon", "bcon", "ycon", "dall", "navi", "newd" },
+		                             'A');
+		// getPane_CpyCurScreen.
+		m["data_i.blo"].reqs = list({ "i00u", "i00d", "i01u", "i01d", "i02u", "i02d", "z00l", "z00r" }, 'A');
+	}
 	return m;
 }
 
@@ -604,7 +686,7 @@ int main()
 	{
 		std::vector<nectar::StandinLayout> layouts = nectar::standinBloLayouts();
 		std::map<std::string, LayoutReq> reqs      = requirements();
-		check(layouts.size() == 22, "22 layouts: 12 on the boot path, 8 for day30_clock, 2 for the stand-in cinema text keys");
+		check(layouts.size() == 39, "39 layouts: 12 on the boot path, 8 for day30_clock, 2 for the stand-in cinema text keys, 17 for captain_death");
 		const char* bootOrder[] = { "black.blo", "pause.blo", "pause_ok.blo", "gameover.blo", "gameove2.blo", "count.blo",
 			                        "con01.blo", "sund.blo",  "account.blo",  "play09.blo",   "play10.blo",   "play_day.blo" };
 		for (size_t i = 0; i < 12 && i < layouts.size(); i++) check(layouts[i].file == bootOrder[i], std::string("load order: ") + bootOrder[i]);

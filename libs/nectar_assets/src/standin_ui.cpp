@@ -100,6 +100,44 @@ Kids drawMenuSet(int items)
 	return k;
 }
 
+
+// Panel con hijos: la jerarquía de los .blo del disco (un ancla con sus cajas de texto).
+BloPane with(BloPane parent, std::initializer_list<BloPane> kids)
+{
+	for (const BloPane& k : kids) parent.children.push_back(k);
+	return parent;
+}
+
+BloPane sized(BloPane p, int w, int h)
+{
+	p.w = w;
+	p.h = h;
+	return p;
+}
+
+// Una etiqueta de menos de cuatro letras ('hai', 'fp'): el u32 lleva NUL delante.
+std::string tag3(const char* t)
+{
+	std::string s(t);
+	return std::string(4 - s.size(), '\0') + s;
+}
+
+// Cursores z00l / z00r (SpectrumCursorMgr::init): una pareja basta.
+void cursors(Kids& k) { k.add(pic("z00l")).add(pic("z00r")); }
+
+// ogNitakuMgr::ogNitakuMgr: i00l, i00r, i01l, i01r imágenes y la pareja de cursores.
+void nitaku(Kids& k)
+{
+	k.add(pic("i00l")).add(pic("i00r")).add(pic("i01l")).add(pic("i01r"));
+	cursors(k);
+}
+
+// El número de tres o cuatro cifras de ogScrResultMgr: `n` etiquetas, de la de millares a la de unidades.
+void digitTags(Kids& k, std::initializer_list<const char*> tags)
+{
+	for (const char* t : tags) k.add(pic(t));
+}
+
 StandinLayout tutorialPage(const char* file)
 {
 	Kids k;
@@ -212,6 +250,108 @@ std::vector<StandinLayout> standinBloLayouts()
 	// bloFile_Zenmetu).
 	for (const char* f : { "tu_tx03.blo", "tu_tx20.blo" })
 		out.push_back(tutorialPage(f));
+
+	// captain_death: the day-end chain after the captain falls (coverage/terminals.md
+	// T06). Pages of the diary (ogScrMessageMgr), the results screen and its save step
+	// (ogSaveMgr and the memory-card and file-select screens it builds in its constructor).
+	{ // ogResult.cpp, ogScrResultMgr::ogScrResultMgrSub: account2.blo. The panes are named
+		// by the search(.., true) calls; the digits are pictures (NumberPicCallBack), the diary
+		// template `getp` a text box. b_00.. (DrawCMbest) and pk00.. (PikaAlphaMgr) are optional.
+		Kids k;
+		for (const char* t : { "po_1", "po2u", "po2d", "po3u", "po3c", "po3d", "p_rc", "p_bc", "p_yc" }) k.add(pane(t));
+		k.add(sized(pane("g_sp"), 375, 61));
+		k.add(pic("data")).add(pic("da_1")).add(pic("da_2")).add(pic("da_3"));
+		k.add(box("getp", "000"));
+		digitTags(k, { "4_rc", "rc_l", "rc_c", "rc_r", "4_bc", "bc_l", "bc_c", "bc_r", "4_yc", "yc_l", "yc_c", "yc_r" });
+		digitTags(k, { "tp_4", "tp_l", "tp_c", "tp_r", "4_bo", "bo_l", "bo_c", "bo_r", "4_ba", "ba_l", "ba_c", "ba_r" });
+		digitTags(k, { "4_sd", "sd_l", "sd_c", "sd_r", "4bo2", "bo2l", "bo2c", "bo2r", "4ba2", "ba2l", "ba2c", "ba2r" });
+		digitTags(k, { "4sd2", "sd2l", "sd2c", "sd2r", "dc_l", "dc_c", "dc_r", "ro_l", "ro_c", "ro_r", "ti_l", "ti_c", "ti_r" });
+		out.push_back(layout("account2.blo", k));
+	}
+	{ // ogSave.cpp, ogSaveMgr::ogSaveMgr: ac_save.blo. he00 and he01 sit under hs00 and hs01 on the disc.
+		Kids k;
+		k.add(pic("back")).add(pic("1win")).add(box("hs00", "Stand-in text.")).add(box("he00", "Stand-in text."));
+		k.add(box("hs01", "Stand-in text.")).add(box("he01", "Stand-in text."));
+		k.add(box("sa_s", "Stand-in text.")).add(box("saks", "Stand-in text."));
+		k.add(box("se_c", "Stand-in text.")).add(box("sa_c", "Stand-in text.")).add(box("sakc", "Stand-in text."));
+		k.add(pic("chui"));
+		nitaku(k);
+		out.push_back(layout("ac_save.blo", k));
+	}
+	{ // ogSave.cpp: ac_save2.blo (he00, he01, 2win, back).
+		Kids k;
+		k.add(pic("back")).add(pic("2win")).add(box("he00", "Stand-in text.")).add(box("he01", "Stand-in text.")).add(box("se_c", "Stand-in text."));
+		nitaku(k);
+		out.push_back(layout("ac_save2.blo", k));
+	}
+	{ // ogMemChk.cpp, ogScrMemChkMgr::ogScrMemChkMgr: data_m.blo. Every message is a text box
+		// (TypingTextMgr copies the text), the yes/no pair sits in yn_w, the rest are pictures.
+		Kids k;
+		for (const char* t : { "shom", "shot", "shch", "shoi", "shok", "shos", "shuf", "shsi", "shxx", "sari", "memo", "brom", "kaim", "ijom", "naim", "file", "se_c" })
+			k.add(box(t, "Stand-in text."));
+		k.add(pic("abtn")).add(pic("main")).add(pic("curs")).add(pane("cpsl"));
+		k.add(with(pane("yn_w"), { box(tag3("cws"), "Stand-in text."), box(tag3("hai"), "Stand-in text."), box("fomt", "Stand-in text."),
+		                           box("rtry", "Stand-in text."), box(tag3("iie"), "Stand-in text.") }));
+		k.add(box("haic", "Stand-in text.")).add(box("iiec", "Stand-in text."));
+		nitaku(k); // ogNitakuMgr over this screen
+		out.push_back(layout("data_m.blo", k));
+	}
+	// The diary page of a day that ends with the captain down (ResultFlags::getDocument).
+	out.push_back(tutorialPage("re_j_00.blo"));
+	{ // ogMakeDefault.cpp, ogScrMakeDefaultMgr::ogScrMakeDefaultMgr: data_pf.blo.
+		Kids k;
+		k.add(box("tx00", "Stand-in text.")).add(box("pfok", "Stand-in text.")).add(box("pfxx", "Stand-in text."));
+		k.add(pic("tx01")).add(pic("tx02")).add(pic("tx03")).add(pic("abtn")).add(pic("curs"));
+		out.push_back(layout("data_pf.blo", k));
+	}
+	{ // ogFileChkSel.cpp: data_b.blo (back).
+		Kids k;
+		k.add(pic("back")).add(pane("re_p"));
+		out.push_back(layout("data_b.blo", k));
+	}
+	for (int slot = 1; slot <= 3; slot++) { // ogFileSelect.cpp, getPane_FileIcon: data1..data3.blo.
+		Kids k;
+		for (const char* t : { "ce_p", "efmc", "ef_c" }) k.add(pane(t));
+		k.add(pic("newi")).add(pic("nemi")).add(pic("sm_c"));
+		if (slot == 1) k.add(pic("no_c")).add(pic("ne_c")); // only mSlotScreensData[0] is searched for them
+		k.add(with(pane("fp_m"), { pic("dcmc"), pic("dcml"), pic("dcmr") }));
+		k.add(with(pane(tag3("fp")), { pic("dc_c"), pic("dc_l"), pic("dc_r") }));
+		out.push_back(layout(("data" + std::to_string(slot) + ".blo").c_str(), k));
+	}
+	for (int slot = 1; slot <= 3; slot++) {
+		Kids k; // data1_n.blo..data3_n.blo: only ROOT is looked up; the disc's panes are the icons' pieces.
+		k.add(pic("ce_p"));
+		out.push_back(layout(("data" + std::to_string(slot) + "_n.blo").c_str(), k));
+	}
+	{ // ogFileSelect.cpp, getPane_FileTop1: data_t1.blo.
+		Kids k;
+		k.add(pic("back")).add(pic("chui")).add(pic("p_sh")).add(pic("p_co")).add(pic("p_ma"));
+		k.add(with(pane("yn_w"), { box(tag3("hai"), "Stand-in text."), box(tag3("iie"), "Stand-in text.") }));
+		for (const char* t : { "dono", "doko", "d1co", "u1co", "copc", "dcop", "dcxx", "hsho", "usho", "savc", "ddxx", "dosa", "dasa", "uasa", "dsho", "se_c" })
+			k.add(box(t, "Stand-in text."));
+		k.add(box(tag3("sho"), "Stand-in text."));
+		nitaku(k);
+		out.push_back(layout("data_t1.blo", k));
+	}
+	{ // ogFileSelect.cpp, getPane_FileTop2: data_t2.blo.
+		Kids k;
+		for (const char* t : { "da_1", "da_2", "da_3", "ro_l", "ro_r", "rt_l", "rt_r", "rc_l", "rc_c", "rc_r", "bc_l", "bc_c", "bc_r", "yc_l", "yc_c",
+		                       "yc_r", "rcon", "bcon", "ycon", "dall", "navi" })
+			k.add(pic(t));
+		k.add(box("newd", "Stand-in text."));
+		out.push_back(layout("data_t2.blo", k));
+	}
+	{ // ogFileSelect.cpp, getPane_CpyCurScreen: data_i.blo (i00u..i02d).
+		Kids k;
+		for (const char* t : { "i00u", "i00d", "i01u", "i01d", "i02u", "i02d" }) k.add(pic(t));
+		cursors(k);
+		out.push_back(layout("data_i.blo", k));
+	}
+	{ // drawSaveFailure.cpp: save_x.blo (saxx, back).
+		Kids k;
+		k.add(pic("saxx")).add(pic("back"));
+		out.push_back(layout("save_x.blo", k));
+	}
 
 	return out;
 }

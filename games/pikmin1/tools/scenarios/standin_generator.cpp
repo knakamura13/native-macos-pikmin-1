@@ -403,6 +403,8 @@ bool siblingStandIns(Tree& tree, std::string& error)
 	std::vector<nectar::BundleEntry> pcr;
 	const Bytes inert = nectar::inertPcrPayload();
 	for (const std::string& name : nectar::standinPcrNames()) pcr.push_back({ nectar::BUNDLE_BINARY, name, inert });
+	// The 2D effects of the file-select and results screens (EffectMgr2D).
+	for (const std::string& name : nectar::standinPcr2dNames()) pcr.push_back({ nectar::BUNDLE_BINARY, name, inert });
 	Bytes bun;
 	if (!nectar::writeBundle(pcr, bun, error)) return fail(error, "effects/pcr/effects.bun: " + error);
 	tree["dataDir/effects/pcr/effects.bun"] = std::move(bun);

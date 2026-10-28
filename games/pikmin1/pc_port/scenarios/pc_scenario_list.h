@@ -16,5 +16,6 @@ PcScenario* pc_scenario_make_extinction(void);
 PcScenario* pc_scenario_make_onion_skip(void);
 PcScenario* pc_scenario_make_objects_smoke(void);
 PcScenario* pc_scenario_make_container_menu(void);
+PcScenario* pc_scenario_make_captain_death(void);
 
 #endif

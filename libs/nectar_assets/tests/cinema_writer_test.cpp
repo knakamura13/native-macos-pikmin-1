@@ -470,7 +470,12 @@ int main(int argc, char** argv)
 		}
 		for (const ReadCut& c : r.cuts) {
 			check(c.scene >= 0 && c.scene < int(r.scenes.size()), f.path + ": cut scene in range");
-			check(c.flags == nectar::kCutPlayOnce, f.path + ": every cut plays once, so the movie ends without a skip");
+			// demo36 (the results backdrop) ends with a looping cut on purpose: it keeps the results screen up
+			// until exitDayEnd drops it, as the disc's does. Every other stand-in ends on its own.
+			if (f.path == "dataDir/cinemas/demo36.cin" && &c == &r.cuts.back())
+				check(c.flags == nectar::kCutLoop, f.path + ": the last cut loops until the results window closes it");
+			else
+				check(c.flags == nectar::kCutPlayOnce, f.path + ": every cut plays once, so the movie ends without a skip");
 			for (const ReadKey& k : c.keys) {
 				const int lo = c.start < c.end ? c.start : c.end, hi = c.start < c.end ? c.end : c.start;
 				check(k.frame >= lo && k.frame < hi, f.path + ": key inside its cut, so playback fires it");

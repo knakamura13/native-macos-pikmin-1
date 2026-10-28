@@ -185,6 +185,29 @@ std::vector<Movie> movies()
 		end.cinema.cuts = { endCut };
 		list.push_back(end);
 	}
+
+	// End-of-day results backdrop (DEMOID_EndOfDayResults, demo36): started by
+	// DayOverModeState::initialisePhaseTwo together with the results screen, which stays
+	// up as long as the movie is active (DayOverModeState::update waits on
+	// mMoviePlayer->mIsActive before phases three and four). The disc's movie plays a
+	// 420-frame cut once and then a 10-frame cut in a loop (CINMODE_LoopScene) that runs
+	// until exitDayEnd drops it. Same shape here, shorter. A missing demo36 is a
+	// zero-length movie: phases three and four then run on the next ticks and the day
+	// ends through the title exit (ONEPLAYER_GameExit) with the results screen unread.
+	{
+		Movie m;
+		m.cin           = "dataDir/cinemas/demo36.cin";
+		m.cinema.flags  = kCinNonGameMovie;
+		m.cinema.scenes = { "cinemas/demo36/ship_t00.dsk", "cinemas/demo36/ship_l00.dsk" };
+		m.sceneFrames   = { 30, 10 };
+		CinCut once, loop;
+		once.endFrame = 30;
+		loop.scene    = 1;
+		loop.endFrame = 10;
+		loop.flags    = kCutLoop;
+		m.cinema.cuts = { once, loop };
+		list.push_back(m);
+	}
 	return list;
 }
 
