@@ -99,7 +99,7 @@ else()
     list(APPEND errors "no CARDInit line in the output")
 endif()
 
-string(REGEX MATCH "Shader binary cache: ([^\r\n]+) \\(" m "${out}")
+string(REGEX MATCH "Shader binary cache: ([^\r\n(]+) \\(" m "${out}")
 if(m)
     file(TO_CMAKE_PATH "${CMAKE_MATCH_1}" cache_path)
     message("[check] shader cache: ${cache_path}")
