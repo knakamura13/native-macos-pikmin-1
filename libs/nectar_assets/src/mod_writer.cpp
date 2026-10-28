@@ -81,6 +81,10 @@ bool validate(const Model& m, std::string& error)
 	for (std::size_t i = 0; i < m.materials.size(); i++) {
 		const ModMaterial& mat = m.materials[i];
 		if (mat.flags & MOD_MAT_PVW) return fail(error, "el escritor no admite materiales PVW");
+		// BaseShape::recAddMatpoly adds a matpoly once per render pass bit (8-10) set in
+		// the material flags: none leaves an uninitialised slot, two overflow the list.
+		const std::uint32_t pass = (mat.flags >> 8) & 7u;
+		if (pass != 1 && pass != 2 && pass != 4) return fail(error, "el material " + std::to_string(i) + " necesita exactamente un bit de pasada (0x100, 0x200 o 0x400)");
 		if (mat.texAttr >= 0) return fail(error, "el escritor no admite materiales con textura");
 	}
 	for (std::size_t i = 0; i < m.vtxMatrices.size(); i++) {

@@ -341,6 +341,8 @@ void testRejects()
 	m = good; m.joints[1].parent = -1; rejects(m, "a second root");
 	m = good; m.textures.resize(1); rejects(m, "textures");
 	m = good; m.materials[0].flags |= nectar::MOD_MAT_PVW; rejects(m, "PVW materials");
+	m = good; m.materials[0].flags &= ~0x700u; rejects(m, "a material with no render pass bit");
+	m = good; m.materials[0].flags |= 0x500u; rejects(m, "a material with two render pass bits");
 	m = good; m.materials[0].texAttr = 0; rejects(m, "a textured material");
 	m = good; m.envelopes.resize(1); rejects(m, "envelopes");
 	m = good; m.colours.resize(1); rejects(m, "vertex colours");

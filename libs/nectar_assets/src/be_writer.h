@@ -32,7 +32,9 @@ struct BeWriter {
 		std::memcpy(&v, &f, 4);
 		u32(v);
 	}
-	/// Cadena del juego (Stream::writeString): largo int y los bytes, sin NUL.
+	/// Cadena del juego: largo int y los bytes, sin NUL. Stream::writeString además
+	/// rellena con NUL hasta un múltiplo de 4 y cuenta el relleno en el largo; los
+	/// lectores (readString) leen exactamente el largo, así que sin relleno también cargan.
 	void str(const std::string& s)
 	{
 		u32(std::uint32_t(s.size()));
