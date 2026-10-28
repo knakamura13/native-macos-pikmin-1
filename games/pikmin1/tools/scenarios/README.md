@@ -201,8 +201,9 @@ particles from the writers below. The sandbox has no `id` line, so it is
 The writers live in `libs/nectar_assets`: `mod_writer.h` and `standin_models.h`
 (`.mod`), `anim.h` and `standin_anims.h` (`.dca`, `.dck`, `animMgr.bin`),
 `texture.h`, `bundle.h` and `standin_textures.h` (`.bti`, `.txe`, bundles),
-`blo.h`, `pcr.h` and `standin_ui.h` (screens, particles), and `parms.h`,
-`archive.h`, `stages_ini.h` and `gen.h`.
+`blo.h`, `pcr.h` and `standin_ui.h` (screens, particles), `cinema.h` (`.cin`
+and `.dsk` cutscenes, see `standin-cinema.md`), and `parms.h`, `archive.h`,
+`stages_ini.h` and `gen.h`.
 
 Each writer is a pure function (a plain input struct, bytes out, an error
 string, no file I/O) with a write-then-read unit test registered in CTest, for
@@ -266,8 +267,10 @@ Build it with `cc gl_probe.c $(sdl2-config --cflags --libs) -o gl_probe`.
 
 - Audio is off. Scenario builds use `PIKMIN_NATIVE_JAUDIO=OFF` and
   `SDL_AUDIODRIVER=dummy`, so nothing audio-related is tested.
-- No cutscene or movie stand-ins. The stand-in stage plays no landing movie and
-  the post-extinction movie finds no file and ends at once. The sandbox has no
+- Cutscenes are stand-ins with no actors (`standin-cinema.md`). The sandbox
+  plays no landing; it plays the stand-in post-extinction movie (demo60), which
+  the intro gate skips on its first tick. No scenario covers the Onion
+  discovery skip yet (design in `standin-cinema.md`). The sandbox has no
   enemies, bosses, plants, gates or bridges.
 - Stand-in and disc runs can differ in timing. `throw_release` measures K, the
   press-to-grab delay, per run because the stand-in value need not equal the
