@@ -1318,6 +1318,93 @@ if(PIKMIN_BUILD_TESTS)
     target_compile_options(nectar_archive_stages_writer_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
     add_test(NAME nectar_archive_stages_writer_test COMMAND nectar_archive_stages_writer_test)
 
+    # .mod writer and the 45 stand-in models (#65). Oracle: nectar::parseMod
+    # (mod.cpp, compiled in with image.cpp), a raw chunk walk, and the game's real
+    # CmdStream over the collinfo text. BaseShape::read cannot link; boot_smoke
+    # covers it. The boot manifest argument is the cross-check from #64.
+    add_executable(nectar_mod_writer_test
+        ${NECTAR_ASSETS_DIR}/tests/mod_writer_test.cpp
+        ${NECTAR_ASSETS_DIR}/tests/game_loader_stubs.cpp
+        ${NECTAR_ASSETS_DIR}/src/mod_writer.cpp
+        ${NECTAR_ASSETS_DIR}/src/standin_models.cpp
+        ${NECTAR_ASSETS_DIR}/src/mod.cpp
+        ${NECTAR_ASSETS_DIR}/src/image.cpp
+        ${PC_PORT_DIR}/launcher/bti_decode.cpp
+        src/sysCommon/cmdStream.cpp src/sysCommon/stream.cpp src/sysCommon/string.cpp)
+    target_include_directories(nectar_mod_writer_test PRIVATE pc_port include ${NECTAR_ASSETS_DIR}/include ${NECTAR_ASSETS_DIR}/src
+        ${NECTAR_ASSETS_DIR}/third_party ${PC_PORT_DIR}/launcher ${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb)
+    target_compile_options(nectar_mod_writer_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME nectar_mod_writer_test COMMAND nectar_mod_writer_test ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/boot-manifest.txt)
+
+    # Texture (.bti/.txe) and bundle (.bun/.anm) writers and the stand-in textures.
+    # Header fields are read with the game's BtiHeader and RamStream; pixels with
+    # the launcher's BTI decoder (compiled in, with image.cpp).
+    add_executable(nectar_texture_bundle_writer_test
+        ${NECTAR_ASSETS_DIR}/tests/texture_bundle_writer_test.cpp
+        ${NECTAR_ASSETS_DIR}/src/texture.cpp
+        ${NECTAR_ASSETS_DIR}/src/bundle.cpp
+        ${NECTAR_ASSETS_DIR}/src/standin_textures.cpp
+        ${NECTAR_ASSETS_DIR}/src/mesh_mod.cpp
+        ${NECTAR_ASSETS_DIR}/src/mod.cpp
+        ${NECTAR_ASSETS_DIR}/src/image.cpp
+        ${PC_PORT_DIR}/launcher/bti_decode.cpp
+        src/sysCommon/stream.cpp src/sysCommon/string.cpp)
+    target_include_directories(nectar_texture_bundle_writer_test PRIVATE pc_port include ${NECTAR_ASSETS_DIR}/include ${NECTAR_ASSETS_DIR}/src
+        ${NECTAR_ASSETS_DIR}/third_party ${PC_PORT_DIR}/launcher ${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb)
+    target_compile_options(nectar_texture_bundle_writer_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME nectar_texture_bundle_writer_test COMMAND nectar_texture_bundle_writer_test)
+
+    # Screen layout (.blo) and particle (.pcr) writers and their stand-ins (#72).
+    # The .blo test drives the game's P2DStream and RamStream from a transcription
+    # of makeHiearachyPanes; the .pcr test checks the name list against effectMgr.cpp.
+    add_executable(nectar_blo_writer_test
+        ${NECTAR_ASSETS_DIR}/tests/blo_writer_test.cpp
+        ${NECTAR_ASSETS_DIR}/tests/game_loader_stubs.cpp
+        ${NECTAR_ASSETS_DIR}/src/blo.cpp
+        ${NECTAR_ASSETS_DIR}/src/pcr.cpp
+        ${NECTAR_ASSETS_DIR}/src/standin_ui.cpp
+        ${NECTAR_ASSETS_DIR}/src/standin_pcr_names.cpp
+        src/plugPikiYamashita/P2DStream.cpp src/sysCommon/stream.cpp src/sysCommon/string.cpp)
+    target_include_directories(nectar_blo_writer_test PRIVATE pc_port include ${NECTAR_ASSETS_DIR}/include ${NECTAR_ASSETS_DIR}/src)
+    target_compile_options(nectar_blo_writer_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME nectar_blo_writer_test COMMAND nectar_blo_writer_test)
+
+    add_executable(nectar_pcr_writer_test
+        ${NECTAR_ASSETS_DIR}/tests/pcr_writer_test.cpp
+        ${NECTAR_ASSETS_DIR}/src/pcr.cpp
+        ${NECTAR_ASSETS_DIR}/src/blo.cpp
+        ${NECTAR_ASSETS_DIR}/src/standin_ui.cpp
+        ${NECTAR_ASSETS_DIR}/src/standin_pcr_names.cpp
+        ${NECTAR_ASSETS_DIR}/src/bundle.cpp)
+    target_include_directories(nectar_pcr_writer_test PRIVATE ${NECTAR_ASSETS_DIR}/include ${NECTAR_ASSETS_DIR}/src)
+    target_compile_definitions(nectar_pcr_writer_test PRIVATE
+        NECTAR_EFFECT_MGR_CPP="${CMAKE_CURRENT_SOURCE_DIR}/src/plugPikiYamashita/effectMgr.cpp")
+    target_compile_options(nectar_pcr_writer_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME nectar_pcr_writer_test COMMAND nectar_pcr_writer_test)
+
+    # DCA/DCK payload and AnimMgr table writers, and the stand-in animations (#66).
+    # Parameters::read and the game's Stream/DataChunk/AnimKey types read the bytes
+    # back; AnimDck::read, AnimInfo::doread and AnimMgr::read cannot link, so their
+    # loops are transcribed in the test. The rig cross-check reads the #65 stand-in
+    # models, hence the mod writer. The boot manifest argument is the #64 cross-check.
+    add_executable(nectar_anim_writer_test
+        ${NECTAR_ASSETS_DIR}/tests/anim_writer_test.cpp
+        ${NECTAR_ASSETS_DIR}/tests/game_loader_stubs.cpp
+        ${NECTAR_ASSETS_DIR}/src/anim.cpp
+        ${NECTAR_ASSETS_DIR}/src/standin_anims.cpp
+        ${NECTAR_ASSETS_DIR}/src/parms.cpp
+        ${NECTAR_ASSETS_DIR}/src/bundle.cpp
+        ${NECTAR_ASSETS_DIR}/src/mod_writer.cpp
+        ${NECTAR_ASSETS_DIR}/src/standin_models.cpp
+        ${NECTAR_ASSETS_DIR}/src/mod.cpp
+        ${NECTAR_ASSETS_DIR}/src/image.cpp
+        ${PC_PORT_DIR}/launcher/bti_decode.cpp
+        src/plugPikiColin/parameters.cpp src/sysCommon/stream.cpp src/sysCommon/string.cpp)
+    target_include_directories(nectar_anim_writer_test PRIVATE pc_port include ${NECTAR_ASSETS_DIR}/include ${NECTAR_ASSETS_DIR}/src
+        ${NECTAR_ASSETS_DIR}/third_party ${PC_PORT_DIR}/launcher ${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb)
+    target_compile_options(nectar_anim_writer_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME nectar_anim_writer_test COMMAND nectar_anim_writer_test ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/boot-manifest.txt)
+
     # Photo mode camera convention (no stage needed)
     add_executable(pc_photo_mode_test pc_port/pc_photo_mode_test.cpp pc_port/pc_photo_mode.cpp)
     target_include_directories(pc_photo_mode_test PRIVATE ${SDL2_INCLUDE_DIRS} pc_port)
