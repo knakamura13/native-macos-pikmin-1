@@ -473,6 +473,9 @@ CamDataInfo::CamDataInfo()
 	mCamera.mNear        = 1.0f;
 	mCamera.mFar         = 15000.0f;
 	mCamera.mAspectRatio = 640.0f / 480.0f;
+#if defined(PIKI_PC_PORT)
+	mCamera.mSimAspectRatio = 640.0f / 480.0f; // MovieInfo::setCamera passes it back
+#endif
 	mUseStaticCamera     = false;
 	mCamNearAnims[0].mEntryNum = mCamNearAnims[0].mDataOffset = mCamNearAnims[0].mFlags = 0;
 	mCamFarAnims[0].mEntryNum = mCamFarAnims[0].mDataOffset = mCamFarAnims[0].mFlags = 0;

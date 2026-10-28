@@ -178,7 +178,7 @@ void DualCreature::refresh(Graphics& gfx)
 	// I don't enjoy splitting this difference in two, but syntax highlighting really hates extra opening braces.
 #else
 #if defined(PIKI_PC_PORT)
-	bool isPointVisible = pc_netplay_sim_visible(gfx.mCamera->isPointVisible(mSRT.t, 2.0f * getBoundingSphereRadius()));
+	bool isPointVisible = pc_netplay_sim_visible(gfx.mCamera->isPointSimVisible(mSRT.t, 2.0f * getBoundingSphereRadius()));
 #else
 	bool isPointVisible = gfx.mCamera->isPointVisible(mSRT.t, 2.0f * getBoundingSphereRadius());
 #endif

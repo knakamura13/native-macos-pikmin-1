@@ -53,6 +53,53 @@ bool CullFrustum::isPointVisible(immut Vector3f& point, f32 cutoff)
 	return true;
 }
 
+#if defined(PIKI_PC_PORT)
+/**
+ * Sim-side visibility: isPointVisible against the planes built at the
+ * caller's (GameCube) aspect instead of the hor+ window aspect.
+ */
+bool CullFrustum::isPointSimVisible(immut Vector3f& point, f32 cutoff)
+{
+	if (!mSimPlanesDiffer || pc_netplay_present_sim_pass()) {
+		return isPointVisible(point, cutoff);
+	}
+	for (int i = 0; i < mActivePlaneCount; i++) {
+		// update() points every slot at its own plane; keep any other pointer.
+		Plane* plane = mPlanePointers[i] == &mCullPlanes[i] ? &mSimCullPlanes[i].mPlane : &mPlanePointers[i]->mPlane;
+		if (point.x * plane->mNormal.x + point.y * plane->mNormal.y + point.z * plane->mNormal.z - plane->mOffset < -cutoff) {
+			return false;
+		}
+	}
+
+	return true;
+}
+
+/**
+ * Rebuilds the sim planes for the current view at simAspect.
+ */
+void CullFrustum::setSimAspect(f32 simAspect)
+{
+	mSimAspectRatio  = simAspect;
+	mSimPlanesDiffer = simAspect != mAspectRatio;
+	if (!mSimPlanesDiffer) {
+		return;
+	}
+	// Build the side planes at simAspect, keep a copy, and put the draw
+	// planes back bit for bit (updateViewPlanes rewrites only these four).
+	CullingPlane drawPlanes[4];
+	for (int i = 0; i < 4; i++) {
+		drawPlanes[i] = mCullPlanes[mViewPlaneIdx + i];
+	}
+	updateViewPlanes(simAspect, -simAspect, -mVerticalScale, mVerticalScale);
+	for (int i = 0; i < 6; i++) {
+		mSimCullPlanes[i] = mCullPlanes[i];
+	}
+	for (int i = 0; i < 4; i++) {
+		mCullPlanes[mViewPlaneIdx + i] = drawPlanes[i];
+	}
+}
+#endif
+
 /**
  * @todo: Documentation
  */
@@ -322,6 +369,8 @@ void CullFrustum::createInvVecs()
 void CullFrustum::update(f32 aspectRatio, f32 fov, f32 zNear, f32 zFar)
 {
 #if defined(PIKI_PC_PORT)
+	// The sim keeps the caller's aspect (isPointSimVisible).
+	const f32 simAspect = aspectRatio;
 	// Same rule as DGXGraphics::setPerspective: field 3D is hor+ on the
 	// window aspect. Callers still pass 640/480 (mScreenWidth/Height stay
 	// GX virtual). Without this, isPointVisible / isBoundVisible cull at
@@ -351,6 +400,9 @@ void CullFrustum::update(f32 aspectRatio, f32 fov, f32 zNear, f32 zFar)
 
 	mActivePlaneCount = mTotalPlaneCount;
 	mBoundOffset.set(0.0f, 0.0f, 0.0f);
+#if defined(PIKI_PC_PORT)
+	setSimAspect(simAspect);
+#endif
 }
 
 /**
@@ -501,6 +553,9 @@ Camera::Camera()
 	mRotation.set(0.0f, 4.363323f, 0.0f);
 	_32C.set(0.0f, 0.0f, 0.0f);
 	mAspectRatio = 1.0f;
+#if defined(PIKI_PC_PORT)
+	mSimAspectRatio = 1.0f;
+#endif
 	mBlurAlpha   = 110.0f;
 }
 

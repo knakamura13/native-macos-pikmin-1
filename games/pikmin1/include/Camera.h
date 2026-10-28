@@ -50,9 +50,25 @@ public:
 		mFov  = 60.0f;
 		mNear = 1.0f;
 		mFar  = 1000.0f;
+#if defined(PIKI_PC_PORT)
+		mSimAspectRatio  = 640.0f / 480.0f;
+		mSimPlanesDiffer = false;
+#endif
 	}
 
 	bool isPointVisible(immut Vector3f&, f32);
+#if defined(PIKI_PC_PORT)
+	// The world sim must not depend on the window. update() widens the side
+	// planes to the window aspect (hor+) so the draw does not pop at the 4:3
+	// edges, but GameCube's sim culls at the aspect the game passes (640/480).
+	// Visibility tests that write sim state (AI culling, LOD distance, head
+	// look) call isPointSimVisible, which tests the caller's aspect; draw
+	// culling keeps isPointVisible and the hor+ planes.
+	bool isPointSimVisible(immut Vector3f&, f32);
+	// Rebuilds the sim planes for the current view at simAspect. update()
+	// calls it with the caller's aspect.
+	void setSimAspect(f32 simAspect);
+#endif
 	void draw(Graphics&);
 	void updateViewPlanes(f32, f32, f32, f32);
 	void createViewPlanes();
@@ -154,6 +170,15 @@ public:
 	f32 mWidth;                      // _1DC
 	Matrix4f mLookAtMtx;             // _1E0
 	Matrix4f mInverseLookAtMtx;      // _220
+#if defined(PIKI_PC_PORT)
+	// The aspect GameCube would have stored in mAspectRatio (the caller's,
+	// before the hor+ override) and the planes built at it. When it equals
+	// mAspectRatio (a 4:3 window, the 4:3 menu layout) mSimCullPlanes is
+	// not used and isPointSimVisible is isPointVisible.
+	f32 mSimAspectRatio;
+	bool mSimPlanesDiffer;
+	CullingPlane mSimCullPlanes[6];
+#endif
 };
 
 /**

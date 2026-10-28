@@ -834,7 +834,7 @@ void GoalItem::refresh(Graphics& gfx)
 	mWorldMtx.makeSRT(mSRT.s, mSRT.r, pos);
 	gfx.mCamera->mLookAtMtx.multiplyTo(mWorldMtx, mtx1);
 #if defined(PIKI_PC_PORT)
-	if (!pc_netplay_sim_visible(gfx.mCamera->isPointVisible(mSRT.t, 200.0f))) {
+	if (!pc_netplay_sim_visible(gfx.mCamera->isPointSimVisible(mSRT.t, 200.0f))) {
 #else
 	if (!gfx.mCamera->isPointVisible(mSRT.t, 200.0f)) {
 #endif
@@ -851,6 +851,15 @@ void GoalItem::refresh(Graphics& gfx)
 	// The sim pass sets it again before the effects update.
 	if (!pc_netplay_present_sim_side() && !gameflow.mMoviePlayer->mIsActive) {
 		mSpotModelEff->mIsVisible = gfx.mCamera->isPointVisible(mSRT.t, 200.0f);
+	}
+	// Single pass: the AI flag above used the 4:3 sim frustum; the spot
+	// effect is drawn, so it follows the hor+ draw frustum as before.
+	if (!pc_netplay_present_two_pass_active()) {
+		if (gfx.mCamera->isPointVisible(mSRT.t, 200.0f)) {
+			mSpotModelEff->mIsVisible = true;
+		} else if (!gameflow.mMoviePlayer->mIsActive) {
+			mSpotModelEff->mIsVisible = false;
+		}
 	}
 #endif
 

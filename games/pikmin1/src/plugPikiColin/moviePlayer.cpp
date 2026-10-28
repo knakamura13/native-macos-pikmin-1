@@ -146,7 +146,13 @@ bool MovieInfo::setCamera(Graphics& gfx)
 	bool res = false;
 	if (mPlayer->mCurrentData) {
 		gfx.setCamera(&mPlayer->mCurrentData->mCameraData->mCamera);
+#if defined(PIKI_PC_PORT)
+		// mAspectRatio holds the hor+ window aspect after the first update;
+		// pass the one GameCube stored (640/480) so the sim frustum keeps it.
+		gfx.mCamera->update(gfx.mCamera->mSimAspectRatio, gfx.mCamera->mFov, gfx.mCamera->mNear, gfx.mCamera->mFar);
+#else
 		gfx.mCamera->update(gfx.mCamera->mAspectRatio, gfx.mCamera->mFov, gfx.mCamera->mNear, gfx.mCamera->mFar);
+#endif
 		res = true;
 	}
 	return res;

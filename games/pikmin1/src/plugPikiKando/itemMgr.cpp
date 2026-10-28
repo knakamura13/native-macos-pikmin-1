@@ -784,7 +784,7 @@ void ItemCreature::refresh(Graphics& gfx)
 	bool isOffCamera = false;
 
 #if defined(PIKI_PC_PORT)
-	if (!pc_netplay_sim_visible(gfx.mCamera->isPointVisible(mSRT.t, getBoundingSphereRadius()))) {
+	if (!pc_netplay_sim_visible(gfx.mCamera->isPointSimVisible(mSRT.t, getBoundingSphereRadius()))) {
 #else
 	if (!gfx.mCamera->isPointVisible(mSRT.t, getBoundingSphereRadius())) {
 #endif
@@ -794,11 +794,10 @@ void ItemCreature::refresh(Graphics& gfx)
 		disableAICulling();
 	}
 #if defined(PIKI_PC_PORT)
-	// Netplay presentation pass: the draw follows the local frustum (the AI
-	// flags above only change on the sim side).
-	if (!pc_netplay_present_sim_side()) {
-		isOffCamera = !gfx.mCamera->isPointVisible(mSRT.t, getBoundingSphereRadius());
-	}
+	// The draw follows the draw frustum: the hor+ window aspect in normal play
+	// (the AI flag above uses the 4:3 sim frustum), the local frustum in a
+	// netplay presentation pass (the AI flags only change on the sim side).
+	isOffCamera = !gfx.mCamera->isPointVisible(mSRT.t, getBoundingSphereRadius());
 #endif
 
 	if (mItemShapeObject) {
@@ -1174,7 +1173,7 @@ void BuildingItem::refresh(Graphics& gfx)
 
 	bool isOffCamera = false;
 #if defined(PIKI_PC_PORT)
-	if (!pc_netplay_sim_visible(gfx.mCamera->isPointVisible(mSRT.t, getBoundingSphereRadius()))) {
+	if (!pc_netplay_sim_visible(gfx.mCamera->isPointSimVisible(mSRT.t, getBoundingSphereRadius()))) {
 #else
 	if (!gfx.mCamera->isPointVisible(mSRT.t, getBoundingSphereRadius())) {
 #endif
@@ -1184,11 +1183,10 @@ void BuildingItem::refresh(Graphics& gfx)
 		disableAICulling();
 	}
 #if defined(PIKI_PC_PORT)
-	// Netplay presentation pass: the draw follows the local frustum (the AI
-	// flags above only change on the sim side).
-	if (!pc_netplay_present_sim_side()) {
-		isOffCamera = !gfx.mCamera->isPointVisible(mSRT.t, getBoundingSphereRadius());
-	}
+	// The draw follows the draw frustum: the hor+ window aspect in normal play
+	// (the AI flag above uses the 4:3 sim frustum), the local frustum in a
+	// netplay presentation pass (the AI flags only change on the sim side).
+	isOffCamera = !gfx.mCamera->isPointVisible(mSRT.t, getBoundingSphereRadius());
 #endif
 
 	if (mItemShapeObject) {

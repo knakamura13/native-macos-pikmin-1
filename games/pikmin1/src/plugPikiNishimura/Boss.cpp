@@ -565,7 +565,7 @@ void Boss::refreshViewCulling(Graphics& gfx)
 	if (!pc_netplay_present_sim_side()) {
 		return;
 	}
-	if (!pc_netplay_sim_visible(gfx.mCamera->isPointVisible(point, BOSS_PARM(mRenderSphereRadius)))) {
+	if (!pc_netplay_sim_visible(gfx.mCamera->isPointSimVisible(point, BOSS_PARM(mRenderSphereRadius)))) {
 #else
 	if (!gfx.mCamera->isPointVisible(point, BOSS_PARM(mRenderSphereRadius))) {
 #endif

@@ -1950,7 +1950,7 @@ void BTeki::drawDefault(Graphics& gfx)
 
 	f32 rad = getBoundingSphereRadius();
 #if defined(PIKI_PC_PORT)
-	if (!pc_netplay_sim_visible(gfx.mCamera->isPointVisible(getBoundingSphereCentre(), rad))) {
+	if (!pc_netplay_sim_visible(gfx.mCamera->isPointSimVisible(getBoundingSphereCentre(), rad))) {
 #else
 	if (!gfx.mCamera->isPointVisible(getBoundingSphereCentre(), rad)) {
 #endif

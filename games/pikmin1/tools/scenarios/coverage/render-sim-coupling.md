@@ -182,6 +182,49 @@ No fix was made.
 - **Moving the look draws to the cosmetic stream:** not done. It changes the sim
   RNG sequence and therefore GameCube fidelity.
 
+## Fix attempt: sim frustum at the caller's aspect (WIP, not ready)
+
+Branch `wip/aspect-cull` (2026-10-28) adds a second set of culling planes to
+`CullFrustum`, built at the aspect the game passes to `update()` (640/480 for
+the gameplay and movie cameras, as on GameCube). Every visibility test that
+writes sim state calls `isPointSimVisible` (Pikmin, `DualCreature`, the two
+`ItemCreature` paths, UFO, Onion, boss, teki); draw culling keeps
+`isPointVisible` and the hor+ planes. The draw planes are restored bit for bit
+after the sim planes are built, and when the two aspects are equal (a 4:3
+window, the 4:3 menu layout) `isPointSimVisible` is `isPointVisible`. The
+movie camera passes its stored 4:3 back, and the camera AI framing
+(`NCamera::getAspect`) reads the 4:3 value. The item draw and the Onion spot
+effect follow the draw frustum.
+
+Measured on the disc install at 30 and 60 Hz, all six logs each:
+
+| Check | Result |
+|-------|--------|
+| Shipped pins, 640x480, base `57c9e1a4` against the fix, stand-in and disc | identical; K = 15 / 18 in both |
+| `ctest -E _disc` and `ctest -R _disc`, base against the fix | same 122 and 6 passes; all 42 stand-in hash logs identical |
+| Pins off, 640x480, base against the fix | identical |
+| Pins off, base: 48x36, Aspect 4:3 against 640x480 | identical |
+| Pins off, base: 64x36, 640x360 at render scale 0.25 or 2 | `item` from tick 21 |
+| Pins off, base: 128x36, Aspect 21:9 in 64x36 | `item` from tick 7 |
+| Pins off, fix: 48x36, 64x36, 128x36, Aspect 4:3 and 21:9, render scale 0.25 and 2, against 640x480 | identical |
+
+With the pins off, `throw_release` measured K = 10 / 21 at 4:3 and 16:9 and
+7 / 14 at 32:9 on the base build, and 10 / 21 at every aspect with the fix.
+
+**Why it is not ready.** The original game hides an AI-culled enemy:
+`BTeki::refresh` skips `drawTekiShape` when the teki is culled and no Pikmin
+or captain is in a neighbouring AI grid cell, and `BossMgr::refresh` skips
+`drawShape` for a culled boss. On GameCube culled means off screen. With the
+sim at 4:3 in a wider window, enemies in the side bands are culled but on
+screen, so they disappear at the 4:3 edges. Counted with a local probe (teki
+culled for the sim but inside the draw frustum): about 2 per tick at 16:9
+(1800 in 900 ticks of `boot_smoke`) and 5 per tick at 32:9; no boss in these
+scenarios. Drawing them needs a draw-only teki and boss path that neither
+advances animation (`BaseShape::updateAnim` animates in the draw) nor writes
+collision or platform state, and such enemies would still stand frozen until
+they enter the 4:3 area. Co-op has the same coupling: taking the sim culling
+from view 1 would hide enemies in view 2. Both are product decisions.
+
 ## Regression coverage
 
 No new test. The deterministic pins are already unit-tested by

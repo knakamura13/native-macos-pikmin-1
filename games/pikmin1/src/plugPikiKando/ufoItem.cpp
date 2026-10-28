@@ -1003,7 +1003,7 @@ void UfoItem::refresh(Graphics& gfx)
 #if defined(PIKI_PC_PORT)
 	if (!pc_netplay_present_sim_side()) {
 		// Netplay presentation pass: AI culling is sim state.
-	} else if (!pc_netplay_sim_visible(gfx.mCamera->isPointVisible(mSRT.t, 200.0f))) {
+	} else if (!pc_netplay_sim_visible(gfx.mCamera->isPointSimVisible(mSRT.t, 200.0f))) {
 #else
 	if (!gfx.mCamera->isPointVisible(mSRT.t, 200.0f)) {
 #endif

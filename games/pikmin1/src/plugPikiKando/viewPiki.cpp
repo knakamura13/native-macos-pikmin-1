@@ -682,7 +682,7 @@ void ViewPiki::refresh(Graphics& gfx)
 #if defined(PIKI_PC_PORT)
 	// Netplay: the sim sees always-visible and the full LOD, never the local
 	// camera's frustum or distance.
-	if (!pc_netplay_sim_visible(gfx.mCamera->isPointVisible(mSRT.t, size * 4.0f))) {
+	if (!pc_netplay_sim_visible(gfx.mCamera->isPointSimVisible(mSRT.t, size * 4.0f))) {
 #else
 	if (!gfx.mCamera->isPointVisible(mSRT.t, size * 4.0f)) {
 #endif

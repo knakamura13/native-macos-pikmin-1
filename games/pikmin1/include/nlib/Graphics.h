@@ -29,8 +29,20 @@ struct NCamera {
 	NVector3f& getWatchpoint() { return mWatchpoint; }
 	void inputWatchpoint(immut Vector3f& watchPt) { mWatchpoint.input(watchPt); }
 
+#if defined(PIKI_PC_PORT)
+	// The camera AI (PcamCamera::makeWatchObjectViewpoint) frames at the
+	// aspect GameCube stores, not the hor+ window aspect, so the camera path
+	// and the sim culling it drives do not depend on the window.
+	f32 getAspect() immut { return mCamera->mSimAspectRatio; }
+	void setAspect(f32 aspect)
+	{
+		mCamera->mAspectRatio    = aspect;
+		mCamera->mSimAspectRatio = aspect;
+	}
+#else
 	f32 getAspect() immut { return mCamera->mAspectRatio; }
 	void setAspect(f32 aspect) { mCamera->mAspectRatio = aspect; }
+#endif
 
 	f32 getFov() immut { return mCamera->mFov; }
 	void setFov(f32 fov) { mCamera->mFov = fov; }
