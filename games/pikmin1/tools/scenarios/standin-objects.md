@@ -19,9 +19,16 @@ Per model written here (`naka1`, `naka4`, `naka7`, `chappy`): the joint count an
 parents, and the collision parts (id, code, joint, radius, centre), as for the
 first 45 models (`standin_models.h`).
 
+For the world models below (`standin_world.h`): the joint parents and the
+collision parts (id, code, joint, radius, centre, or the platform `.mod` a part
+names) of 15 models, and the numbers of the 31 `tekipara/*.bin` files and the two
+boss `parms.bin` files, carried as words (a `tekipara` file is a version int,
+eight ids and the type's int and float parameters in order; the counts differ per
+enemy, so the words are not split).
+
 Not read and not written: curves, geometry, textures, animation names, event keys
-(sound and effect cues; their counts per info are 0 to 19), the parameter files'
-numbers (`tekipara`, `pelMgr` carry weights) and anything else.
+(sound and effect cues; their counts per info are 0 to 19), the `pelMgr` carry
+weights, the plants' light-flare groups and anything else.
 
 ## What is written (`libs/nectar_assets/src/standin_objects.cpp`)
 
@@ -55,6 +62,46 @@ types, walks every bundle through a transcription of `StdSystem::loadBundle` and
 through the game's `CmdStream`, reads the pellet tables with Parm fields declared
 as in `PelletConfig` and `PelletAnimInfo`, and compares the file lists with the
 boot manifest.
+
+## World models and parameter files (`standin_world.cpp`, `standin_world_data.cpp`)
+
+Models for what had animations and no model, so a generator can place any of them
+without aborting. Colour-only boxes (`buildStandInModel`) on the disc's joints,
+with a collinfo text built from the disc's parts (`worldCollInfo`):
+
+| Group | Files |
+|-------|-------|
+| Plants | `objects/plants/{chidome,clover,hae,hutaba,ine,tanpopo}.mod` |
+| Bridges and the push box | `objects/bridge/brd_test.mod` (37 joints), `brd_long.mod` (91), `objects/hinderrock/cube10.mod` |
+| Soft gate | `objects/gate/gt_soft.mod` (4 joints; parts `gate`, `side`, `flag`, `flg1`-`flg3`) and `gt_soft.anm` |
+| Bosses | `bosses/{mizu,snake}/*.mod`, `parms.bin` |
+| Enemies | `tekis/{beatle,iwagon,kabekuiA,kabekuiB,otama,palm,swallow}/*.mod` |
+| Collision platforms | `tekis/beatle/p_{body,l_wing,nozzle,r_wing}.mod`, `tekis/swallow/swalcol{b,h}.mod`: a box whose triangles are also the collision (`writePlatformMod`) |
+| Enemy parameters | `tekipara/*.bin`, 31 files |
+
+Notes:
+
+- The gate's `gate.bin`, `gt_hard.mod`, `centcoll.mod`, `sidecoll.mod` and
+  `gt_hard.anm` are the sandbox gate's (`standin_sandbox.cpp`); the object
+  profiles no longer have the two gate sets. `gt_soft.anm` reuses the sandbox
+  table's info names and frame count with the soft gate's four joints.
+- `standInObjectModelSpecs()` now includes these, so the animation sets take their
+  parents from the models.
+- With `tekipara/chappy.bin` the Bulborb of `sandbox_objects` runs on the disc's
+  parameters, not the code defaults.
+
+The every-object stage `stages/sandbox_all_objects.ini`
+(`tools/scenarios/standin_all_objects_stage.cpp`, a flat floor, a third hidden
+`stages.ini` entry) places, from `default.gen`: the soft gate (`sluice soft`), six
+plants (clover, chidome, hutaba, ine, tanpopo, hae), two bridges and a push box
+(`work` objects `bridge test` shapes `bridge 4` and `bridge 13`, `move stone`
+shape `stone 10`), the snake and mizu bosses and eight enemies (iwagon, chappy,
+swallow, palm, beatle, kabekuiA, kabekuiB, otama). `scenario_objects_smoke_30` and
+`_60` boot it for 300 ticks and check the eight enemies were born; every model,
+platform, table and parameter file loads or the process aborts.
+
+New generator kinds in `ObjectGenSpec`: `Plant` (`plnt`), `Work` (`work` v0.3) and
+`Boss` (`boss` v2).
 
 ## The generators
 
@@ -110,10 +157,11 @@ the behaviour #208 changes, so the printed lines will differ once it lands.
 - A surface that makes a seed land on a steep edge (the real #65 case).
 - The sprout is launched by the scenario, not by the Onion. Making the Onion shoot
   its own seeds needs its enter animation and a container state (`aiEnter`).
-- Enemy behaviour is not asserted: the Bulborb is placed and loaded, and sleeps on
-  the code-default parameters (`tekipara/chappy.bin` is not written).
-- Plants, gates, bosses and the other enemies have animations but no models, so a
-  generator that places one still aborts at its `.mod` load.
+- Enemy, boss, plant and bridge behaviour is not asserted: they are placed and
+  loaded and survive 300 ticks, nothing more.
+- Models exist only for the objects in the boot manifest; the 23 other enemies, the
+  other bosses, the other plants and the slopes have none.
+- The plants' light-flare groups (`hae`) are not stand-ins.
 - Event keys (sounds, effects) are not stand-ins.
 - Disc-only checks: a `_disc` variant of `sprout_landing` does not exist, because
   the stage does not exist on a real install.

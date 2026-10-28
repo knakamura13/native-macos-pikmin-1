@@ -6,6 +6,7 @@
 #include "nectar_assets/gen.h"
 #include "nectar_assets/mod_writer.h"
 #include "nectar_assets/parms.h"
+#include "nectar_assets/standin_world.h"
 
 #include <cstdio>
 #include <iterator>
@@ -219,6 +220,7 @@ std::vector<StandInModelSpec> buildObjectModelSpecs()
 		m.collInfo = t;
 		s.push_back(std::move(m));
 	}
+	for (StandInModelSpec& w : worldModelSpecs()) s.push_back(std::move(w));
 	return s;
 }
 
@@ -439,6 +441,30 @@ std::vector<std::uint8_t> writeObjectGen(const ObjectGenSpec& g)
 		putGenParams(w, {});
 		break;
 	}
+	case ObjectGenSpec::Plant: // GenObjectPlant::doRead: the type
+		putGenId(w, "plnt");
+		putGenId(w, "v0.0");
+		w.s32(g.plantType);
+		putGenParams(w, {});
+		break;
+	case ObjectGenSpec::Work: // GenObjectWorkObject::doRead, version v0.3: name, shape, and a move stone's destination
+		putGenId(w, "work");
+		putGenId(w, "v0.3");
+		putGenString(w, g.name);
+		putGenString(w, g.shape);
+		if (g.name == "move stone") {
+			w.f32(g.stoneTo.x);
+			w.f32(g.stoneTo.y);
+			w.f32(g.stoneTo.z);
+		}
+		putGenParams(w, {});
+		break;
+	case ObjectGenSpec::Boss: // GenObjectBoss::readParameters, version 2: one word of flags (the boss in the low four bits)
+		putGenId(w, "boss");
+		putGenVersionNumber(w, 2);
+		w.u32(std::uint32_t(g.bossType) & 0xFu);
+		putGenParams(w, {});
+		break;
 	}
 
 	// GenAreaPoint ('pint'): version, an offset, parameters.
@@ -472,7 +498,7 @@ bool writeStandInObjectFiles(std::vector<StandInAnimFile>& out, std::string& err
 	std::vector<StandInModelFile> models;
 	if (!writeStandInObjectModels(models, error)) return false;
 	for (StandInModelFile& f : models) out.push_back({ f.path, std::move(f.bytes) });
-	return writeStandInPelletTables(out, error);
+	return writeStandInPelletTables(out, error) && writeStandInWorldFiles(out, error);
 }
 
 } // namespace nectar

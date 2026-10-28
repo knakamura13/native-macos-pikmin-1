@@ -35,6 +35,7 @@
 #include "nectar_assets/standin_ui.h"
 #include "nectar_mapcore/compile.h"
 #include "nectar_mapcore/map.h"
+#include "standin_all_objects_stage.h"
 #include "standin_objects_stage.h"
 
 #include <cstdint>
@@ -194,6 +195,11 @@ bool stagesIni(Tree& tree, std::string& error)
 	objects.name    = "sandbox_objects";
 	objects.file    = standin::kObjectsStageIni;
 	entries.push_back(objects);
+	nectar::StagesEntry all; // every-object stage (standin_all_objects_stage.h)
+	all.visible = false;
+	all.name    = "sandbox_all_objects";
+	all.file    = standin::kAllObjectsStageIni;
+	entries.push_back(all);
 
 	std::string text;
 	if (!nectar::writeStagesIni(entries, text, error)) return fail(error, "stages.ini: " + error);
@@ -389,7 +395,7 @@ bool buildTree(Tree& tree, std::string& error)
 {
 	tree.clear();
 	return parmFiles(tree, error) && archives(tree, error) && stagesIni(tree, error) && sandboxMap(tree, error) && siblingStandIns(tree, error)
-	    && standInCinemas(tree, error) && audioStandIns(tree, error) && standin::addObjectsStage(tree, error);
+	    && standInCinemas(tree, error) && audioStandIns(tree, error) && standin::addObjectsStage(tree, error) && standin::addAllObjectsStage(tree, error);
 }
 
 /// FNV-1a 64 over every path and its bytes, in path order.
@@ -423,19 +429,13 @@ const Allowed kManifestAllowlist[] = {
 	// What the Forest of Hope loads and the sandbox (no generators) does not.
 	{ "dataDir/courses/stage1/", "the disc-mode stage's map; stand-ins boot the sandbox map" },
 	{ "dataDir/stages/stage1", "the disc-mode stage's .ini and generators; stand-ins boot stages/sandbox.ini" },
-	// Models, parameters and the like of Forest of Hope objects, created by its
-	// generators. The animation tables and bundles of these (.key, .anm, .bin
-	// tables) are written by standin_objects.cpp; chappy.mod too.
-	{ "dataDir/tekis/", "Forest of Hope enemy models", ".mod" },
-	{ "dataDir/bosses/", "Forest of Hope boss models", ".mod" },
-	{ "dataDir/bosses/", "Forest of Hope boss parameters", "parms.bin" },
-	{ "dataDir/objects/plants/", "Forest of Hope plant models", ".mod" },
-	{ "dataDir/objects/bridge/", "Forest of Hope bridges, created by its generators" },
-	{ "dataDir/objects/gate/", "gt_soft.mod: the sandbox has only a bomb gate, whose files are in the tree", ".mod" },
-	{ "dataDir/objects/hinderrock/", "Forest of Hope push box, created by its generators" },
+	// Every model, platform, animation table and parameter file of the objects,
+	// plants, gates, bosses and enemies in the manifest is written by
+	// standin_objects.cpp and standin_world.cpp (and the sandbox gate), so none
+	// is allowlisted: objects/{tekis,bosses,plants,bridge,gate,hinderrock}/ and
+	// tekikeys/ and tekipara/ are all in the tree.
 	// Silent when missing: CoreNode::load and the null-checked opens keep the
 	// code defaults (see standin-open-allowlist.txt for each).
-	{ "dataDir/tekipara/", "enemy parameters, CoreNode::load skips a missing file" },
 	{ "dataDir/parms/demo.bin", "demo flag parameters, skipped when missing" },
 	{ "dataDir/parms/sound.bin", "sound constants, skipped when missing" },
 	{ "dataDir/parms/key.bin", "key config, skipped when missing; the throw key stays A" },

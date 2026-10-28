@@ -96,6 +96,9 @@ struct ObjectGenSpec {
 		Pellet, ///< 'pelt': `name` is the 4-letter pellet id of parms/pelMgr.bin ("pr01")
 		Piki,   ///< 'piki': `pikiState` 0 a buried sprout, 1 a free Pikmin, 2 one in the party; `pikiColour` 0-2
 		Teki,   ///< 'teki': `tekiType` is the TEKI_* index (3 is the Dwarf Bulborb, chappy)
+		Plant,  ///< 'plnt': `plantType` is the PLANT_* index (0 clover ... 11 hae)
+		Work,   ///< 'work' (version v0.3): `name` is the object ("bridge test", "move stone"), `shape` its shape ("bridge 4", "bridge 13", "stone 10"); a move stone also takes `pos`-relative destination `stoneTo`
+		Boss,   ///< 'boss' (version 2): `bossType` is the GENBOSS_* index (1 snake, 8 mizu)
 	};
 	Kind kind = Item;
 	std::string generatorName = "    "; ///< four characters: an Onion the player does not own yet is only born by a generator named "next" (GenObjectItem::birth)
@@ -108,6 +111,10 @@ struct ObjectGenSpec {
 	int pikiColour  = 0;
 	int tekiType    = 3;
 	int faceDegrees = 0;
+	int plantType   = 0;
+	std::string shape;
+	Vec3 stoneTo;
+	int bossType = 1;
 };
 
 /// The bytes of one generator, as a Generator::raw for writeGen.

@@ -427,7 +427,8 @@ if (PIKMIN_BUILD_SCENARIOS)
         pc_port/scenarios/scenario_boot_smoke.cpp
         pc_port/scenarios/scenario_throw_release.cpp
         pc_port/scenarios/scenario_day30_clock.cpp
-        pc_port/scenarios/scenario_sprout_landing.cpp)
+        pc_port/scenarios/scenario_sprout_landing.cpp
+        pc_port/scenarios/scenario_objects_smoke.cpp)
 endif()
 
 include_directories(
@@ -1471,6 +1472,11 @@ if(PIKMIN_BUILD_TESTS)
         ${NECTAR_ASSETS_DIR}/src/standin_anims.cpp
         ${NECTAR_ASSETS_DIR}/src/standin_objects.cpp
         ${NECTAR_ASSETS_DIR}/src/standin_object_profiles.cpp
+        ${NECTAR_ASSETS_DIR}/src/standin_world.cpp
+        ${NECTAR_ASSETS_DIR}/src/standin_world_data.cpp
+        ${NECTAR_ASSETS_DIR}/src/standin_sandbox.cpp
+        ${NECTAR_ASSETS_DIR}/src/gen_item_writer.cpp
+        ${NECTAR_ASSETS_DIR}/src/mod_platform_writer.cpp
         ${NECTAR_ASSETS_DIR}/src/gen.cpp
         ${NECTAR_ASSETS_DIR}/src/parms.cpp
         ${NECTAR_ASSETS_DIR}/src/bundle.cpp
@@ -1816,7 +1822,7 @@ if(PIKMIN_BUILD_SCENARIOS)
     # src/jaudio/pikiseq.c is the game's BARC table for SndData/Seqs/pikiseq.arc
     # (data only), compiled with this build's PIKMIN_GAME_VERSION so the
     # stand-in .arc matches the executable's layout (standin-audio.md).
-    add_executable(nectar_standin_generator tools/scenarios/standin_generator.cpp tools/scenarios/standin_objects_stage.cpp src/jaudio/pikiseq.c)
+    add_executable(nectar_standin_generator tools/scenarios/standin_generator.cpp tools/scenarios/standin_objects_stage.cpp tools/scenarios/standin_all_objects_stage.cpp src/jaudio/pikiseq.c)
     # Source-level include path (every target here already has include/), so
     # the generator's own empty include list stays free of the game headers.
     set_source_files_properties(src/jaudio/pikiseq.c
@@ -1869,6 +1875,27 @@ if(PIKMIN_BUILD_SCENARIOS)
                 FIXTURES_REQUIRED scenario_standin_tree
                 WORKING_DIRECTORY "${PIKMIN_STANDIN_DATA}"
                 ENVIRONMENT "PIKMIN_SCENARIO_DATA_DIR=${PIKMIN_STANDIN_DATA};PIKMIN_SCENARIO_STAGE=stages/sandbox_objects.ini"
+                TIMEOUT 600)
+        endforeach()
+    endforeach()
+
+    # The every-object stage (stages/sandbox_all_objects.ini,
+    # tools/scenarios/standin_all_objects_stage.h): the soft gate, plants, bridges,
+    # a push box, bosses and enemies, one of each. A boot-smoke run proves each
+    # model, platform, animation table and parameter file loads. No disc entry.
+    foreach(scenario objects_smoke)
+        foreach(rate 30 60)
+            add_test(NAME scenario_${scenario}_${rate}
+                COMMAND ${CMAKE_COMMAND}
+                    -DGAME=$<TARGET_FILE:${NECTAR_GAME}>
+                    -DSCENARIO=${scenario} -DRATE=${rate}
+                    -DALLOWLIST=${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/standin-open-allowlist.txt
+                    -DLOG_DIR=${CMAKE_CURRENT_BINARY_DIR}/scenario-logs
+                    -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/run_standin_scenario.cmake)
+            set_tests_properties(scenario_${scenario}_${rate} PROPERTIES
+                FIXTURES_REQUIRED scenario_standin_tree
+                WORKING_DIRECTORY "${PIKMIN_STANDIN_DATA}"
+                ENVIRONMENT "PIKMIN_SCENARIO_DATA_DIR=${PIKMIN_STANDIN_DATA};PIKMIN_SCENARIO_STAGE=stages/sandbox_all_objects.ini"
                 TIMEOUT 600)
         endforeach()
     endforeach()
