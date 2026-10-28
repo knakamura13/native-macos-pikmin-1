@@ -120,26 +120,30 @@ std::vector<Movie> movies()
 	// DEMOFLAG_DiscoverBlueOnyon starts untranslated; the object stage's Onion is
 	// blue). Localized at the Onion. Boot at frame kDiscoveryBoot starts the
 	// Onion's boot motion (info colour + 3), whose KEY_Action0 emits the first
-	// seed: frame 240 (blue) or 270 (red) of that motion in the stand-in Onion
-	// table (standin_object_profiles.cpp, the disc's key frames). So the seed
-	// comes out at movie frame 250 or 280, and EmitCone at kDiscoveryCone follows
-	// it, as on the disc: Boot, seed, EmitCone. That leaves the three skip
-	// windows upstream #205 is about (before Boot, between Boot and the seed,
-	// between the seed and EmitCone). demo04 then opens the red Onion text; demo06
-	// has no text key (its screen, tu_tx22, is not a stand-in).
+	// seed: frame 270 (red) of that motion in the stand-in Onion table
+	// (standin_object_profiles.cpp, the disc's key frame), or frame 60 (blue),
+	// which is our own short blue boot motion (100 frames; the disc's has 360 and
+	// the key at 240) so that the onion_skip scenario runs few ticks. So the seed
+	// comes out at movie frame 280 (red) or 70 (blue), and EmitCone follows it,
+	// as on the disc: Boot, seed, EmitCone. That leaves the three skip windows
+	// upstream #205 is about (before Boot, between Boot and the seed, between the
+	// seed and EmitCone). demo04 then opens the red Onion text; demo06 has no
+	// text key (its screen, tu_tx22, is not a stand-in).
 	{
-		constexpr int kDiscoveryBoot = 10, kDiscoveryCone = 300, kDiscoveryFrames = 330;
+		constexpr int kDiscoveryBoot = 10;
 		for (int blue = 0; blue < 2; blue++) {
+			const int cone   = blue ? 90 : 300; // EmitCone: after the seed, before the movie's end
+			const int frames = blue ? 100 : 330;
 			const int sender = blue ? kDemoSenderBluOnion : kDemoSenderRedOnion;
 			Movie m;
 			m.cin           = blue ? "dataDir/cinemas/demo06.cin" : "dataDir/cinemas/demo04.cin";
 			m.cinema.flags  = kCinLocalized | hideNavi;
 			m.cinema.scenes = { blue ? "cinemas/demo06/demo06_1.dsk" : "cinemas/demo04/demo04_1.dsk" };
-			m.sceneFrames   = { kDiscoveryFrames };
+			m.sceneFrames   = { frames };
 			CinCut cut;
-			cut.endFrame = kDiscoveryFrames;
-			cut.keys     = { action(sender, kDemoOnionBoot, kDiscoveryBoot), action(sender, kDemoOnionEmitCone, kDiscoveryCone) };
-			if (!blue) cut.keys.push_back(notify(kMovieCmdTextDemo, kTutRedOnion, kDiscoveryCone + 10));
+			cut.endFrame = frames;
+			cut.keys     = { action(sender, kDemoOnionBoot, kDiscoveryBoot), action(sender, kDemoOnionEmitCone, cone) };
+			if (!blue) cut.keys.push_back(notify(kMovieCmdTextDemo, kTutRedOnion, cone + 10));
 			m.cinema.cuts = { cut };
 			list.push_back(m);
 		}

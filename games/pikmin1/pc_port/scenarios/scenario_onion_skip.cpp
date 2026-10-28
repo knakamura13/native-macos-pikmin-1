@@ -3,7 +3,9 @@
 // places a blue Onion the player does not own yet (standin-objects.md). The
 // discovery movie is the stand-in demo06.cin (standin-cinema.md): Boot at movie
 // frame 10, the first seed from the Onion's boot motion KEY_Action0 at motion
-// frame 240 (movie frame about 250), EmitCone at frame 300, 330 frames long.
+// frame 60 (movie frame about 70), EmitCone at frame 90, 100 frames long. The
+// blue boot motion is our own short one, 100 frames (standin-cinema.md); the
+// scenario's length in ticks is what the CI runners pay for.
 //
 // DemoInvoker starts the discovery only on story stages, so the scenario sets
 // DEMOFLAG_DiscoverBlueOnyon itself, as DemoInvoker would (movie 6,
@@ -17,9 +19,9 @@
 // Cases, in order:
 //   watch      no skip: the movie plays to its end
 //   pre_boot   START at movie frame 5, before Boot
-//   mid_boot   START at movie frame 100, after Boot, before the seed (the window
+//   mid_boot   START at movie frame 40, after Boot, before the seed (the window
 //              upstream #205 fixed)
-//   post_seed  START at movie frame 275, after the seed, before EmitCone
+//   post_seed  START at movie frame 80, after the seed, before EmitCone
 //
 // Asserted: the movie starts and ends; the Onion boots (boot bit set) and ends
 // in GOAL_Wait; every case emits exactly one seed. mid_boot is the regression
@@ -55,8 +57,8 @@ struct Case {
 const Case kCases[] = {
 	{ "watch", -1, 1 },
 	{ "pre_boot", 5, 1 },
-	{ "mid_boot", 100, 1 },
-	{ "post_seed", 275, 1 },
+	{ "mid_boot", 40, 1 },
+	{ "post_seed", 80, 1 },
 };
 constexpr int kCaseCount = int(sizeof(kCases) / sizeof(kCases[0]));
 
@@ -139,11 +141,11 @@ public:
 			return;
 		}
 		case Settle:
-			// Watched to the end, the boot motion (360 frames from Boot at movie frame 10) outlasts the movie by about
-			// 40 frames; wait for Wait, then 2 s more for a late seed.
+			// Watched to the end, the boot motion (100 frames from Boot at movie frame 10) outlasts the movie by about
+			// 10 frames; wait for Wait, then 1 s more for a late seed.
 			if (goalState() == GoalAI::GOAL_Wait) {
 				if (mWaitTick == 0) mWaitTick = t;
-				if (t - mWaitTick >= unsigned(2 * rate)) {
+				if (t - mWaitTick >= unsigned(rate)) {
 					finishCase(t);
 				}
 			} else {

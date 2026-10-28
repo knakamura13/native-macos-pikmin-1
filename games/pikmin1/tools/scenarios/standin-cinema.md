@@ -92,15 +92,23 @@ boot are the ones listed in `boot-manifest.txt`.
 | `demo41.cin` + `demo40/ca_d_m01.dsk` (90) | Forest of Hope landing (`DEMOID_LandingForest`) | HideNavi, NaviNoAI | yellow Onion Land at 10, EmitCone at 70 |
 | `demo45.cin` + 2 scenes (40 + 40) | Pikmin into the Onion, Forest of Hope | HideNavi, NaviNoAI | none |
 | `demo04.cin` + 1 scene (330) | Red Onion discovery (`DEMOID_FindRedOnyon`; the sandbox translates `DEMOID_FindOnyon` to it) | Localized, HideNavi, NaviNoAI | red Onion Boot at 10, EmitCone at 300; `TextDemo` `TUT_RedOnion` (1) at 310 |
-| `demo06.cin` + 1 scene (330) | Blue Onion discovery (`DEMOID_FindBlueOnyon`, started untranslated by `DEMOFLAG_DiscoverBlueOnyon`); used by `onion_skip` | Localized, HideNavi, NaviNoAI | blue Onion Boot at 10, EmitCone at 300; no text key (its screen, `tu_tx22`, is not a stand-in) |
+| `demo06.cin` + 1 scene (100) | Blue Onion discovery (`DEMOID_FindBlueOnyon`, started untranslated by `DEMOFLAG_DiscoverBlueOnyon`); used by `onion_skip` | Localized, HideNavi, NaviNoAI | blue Onion Boot at 10, EmitCone at 90; no text key (its screen, `tu_tx22`, is not a stand-in) |
 
 The discovery key frames follow the Onion's boot motion. Boot starts the motion
-(info colour + 3), and its `KEY_Action0` emits the first seed at motion frame
-240 (blue) or 270 (red). These key frames are the disc's, kept in the stand-in
-Onion table (`standin_object_profiles.cpp`, `standin-objects.md`). So the seed
-comes out at movie frame 250 or 280, before EmitCone at 300, the same order as
-on the disc. This leaves three skip windows: before Boot, between Boot and the
-seed, and between the seed and EmitCone.
+(info colour + 3), and its `KEY_Action0` emits the first seed. Red keeps the
+disc's motion (472 frames, key at 270), kept in the stand-in Onion table
+(`standin_object_profiles.cpp`, `standin-objects.md`), so its seed comes out at
+movie frame 280, before EmitCone at 300.
+
+Blue is shortened on purpose. The disc's blue boot motion has 360 frames with
+the key at 240, which made `onion_skip` run about 965 ticks at 30 Hz. The blue
+stand-in motion (goal info 3) is our own: 100 frames, loop key 0, `KEY_Action0`
+at 60, last key 99. The yellow info (5), which no scenario uses, and the
+Onion's other infos keep the disc's numbers, so `sprout_landing` and
+`objects_smoke` are not affected. The seed comes out at movie frame 70, before
+EmitCone at 90, and the movie is 100 frames: Boot, seed, EmitCone, the same
+order as on the disc. This leaves three skip windows: before Boot, between Boot
+and the seed, and between the seed and EmitCone.
 
 On `stages/sandbox.ini` only `demo60` plays: the sandbox plays no landing. The runner's
 intro gate presses START on the first movie tick. The skip replays the
@@ -173,8 +181,8 @@ increments.
 |------|----------------------|----------|
 | `watch` | none | 1 seed |
 | `pre_boot` | 5 (before Boot) | 1 seed |
-| `mid_boot` | 100 (after Boot, before the seed) | 1 seed (the #205 regression test) |
-| `post_seed` | 275 (after the seed, before EmitCone) | 1 seed |
+| `mid_boot` | 40 (after Boot, before the seed) | 1 seed (the #205 regression test) |
+| `post_seed` | 80 (after the seed, before EmitCone) | 1 seed |
 
 Every case also asserts the following:
 
@@ -182,7 +190,7 @@ Every case also asserts the following:
 - The movie ends within 20 s.
 - The boot bit is set.
 - The Onion reaches `GOAL_Wait` within 10 s of the movie's end.
-- No second seed comes out in the 2 s after that.
+- No second seed comes out in the 1 s after that.
 
 `mid_boot` is the #205 window. Without the fix, the replayed EmitCone snaps the
 Onion from `BootInit` to `Wait` before `finishOnionBootAfterSkip` runs, so no
@@ -233,3 +241,16 @@ Not covered:
 - The frame-order sort of the skip replay. #205 tests it in
   `pc_cine_skip_order_test`.
 - The red and yellow discovery movies.
+
+### Length after the blue motion was shortened (macOS, 2026-10-28)
+
+Total ticks of one `onion_skip` run, from its `ticks in all` line:
+
+| Rate | Before (330-frame movie, 360-frame motion, 2 s settle) | After (100-frame movie, 100-frame motion, 1 s settle) |
+|------|------|------|
+| 30 Hz | 965 | 368 |
+| 60 Hz | 1912 | 719 |
+
+The movie lines are now `watch` 100 ticks (200 at 60 Hz), `pre_boot` 6,
+`mid_boot` 41 and `post_seed` 81 (twice that at 60 Hz). Every case still
+reports exactly one seed.
