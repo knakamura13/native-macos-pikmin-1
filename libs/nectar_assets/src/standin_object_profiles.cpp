@@ -2,8 +2,8 @@
 
 // Structure-only measurements of the disc's AnimMgr tables and bundles, for the
 // 46 object, ship-part, plant, gate, boss and enemy bundles of the boot manifest
-// (everything but pikis/animMgr.bin, which standin_anims.cpp owns) and the hard
-// gate's, which shares the soft gate's table. The rules
+// (everything but pikis/animMgr.bin, which standin_anims.cpp owns) except the two
+// gates, whose table and bundles standin_sandbox.cpp and standin_world.cpp write. The rules
 // for what may be read from the disc are in standin_objects.h.
 //
 // Per info: { frame count N, 'p00' flags, 'spd', anim-key frames, info keys }.
@@ -309,26 +309,6 @@ const std::vector<ObjectAnimProfile>& objectAnimProfiles()
 	{ "tanpopo", "dataDir/objects/plants/tanpopo.bin", "dataDir/objects/plants/tanpopo.anm", "objects/plants/tanpopo", 3,
 	  {
 	      { 50, 2, 30.0f, { 0, 49 }, {} },
-	  } },
-	// gt_soft: 6 infos, 4 joints
-	{ "gt_soft", "dataDir/objects/gate/gate.bin", "dataDir/objects/gate/gt_soft.anm", "objects/gate/motion", 4,
-	  {
-	      { 61, 2, 30.0f, { 0, 60 }, {} },
-	      { 61, 2, 30.0f, { 0, 60 }, {} },
-	      { 42, 2, 30.0f, { 0, 41 }, {} },
-	      { 21, 1, 30.0f, { 0, 20 }, {} },
-	      { 21, 1, 30.0f, { 0, 20 }, {} },
-	      { 21, 1, 30.0f, { 0, 20 }, {} },
-	  } },
-	// gt_hard: 6 infos, 4 joints
-	{ "gt_hard", "dataDir/objects/gate/gate.bin", "dataDir/objects/gate/gt_hard.anm", "objects/gate/motion", 4,
-	  {
-	      { 61, 2, 30.0f, { 0, 60 }, {} },
-	      { 61, 2, 30.0f, { 0, 60 }, {} },
-	      { 42, 2, 30.0f, { 0, 41 }, {} },
-	      { 21, 1, 30.0f, { 0, 20 }, {} },
-	      { 21, 1, 30.0f, { 0, 20 }, {} },
-	      { 21, 1, 30.0f, { 0, 20 }, {} },
 	  } },
 	// mizu: 11 infos, 1 joints
 	{ "mizu", "dataDir/bosses/mizu/anims.bin", "dataDir/bosses/mizu/mizu.anm", "bosses/mizu/motion", 1,

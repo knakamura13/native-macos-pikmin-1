@@ -32,6 +32,8 @@
 #include "nectar_assets/standin_anims.h"
 #include "nectar_assets/standin_models.h"
 #include "nectar_assets/standin_objects.h"
+#include "nectar_assets/standin_sandbox.h"
+#include "nectar_assets/standin_world.h"
 
 #include "Animator.h"
 #include "CmdStream.h"
@@ -294,7 +296,7 @@ void testProfiles()
 {
 	const auto& profiles = nectar::objectAnimProfiles();
 	const auto& sets     = nectar::standInObjectAnims();
-	check(profiles.size() == 47 && sets.size() == 47, "47 object AnimMgrs (the boot manifest's 46 .anm bundles but the Pikmin one, plus the hard gate's)");
+	check(profiles.size() == 45 && sets.size() == 45, "45 object AnimMgrs (the boot manifest's 46 .anm bundles but the Pikmin one and the soft gate's, which the world files write)");
 
 	std::set<std::string> bundles;
 	for (std::size_t s = 0; s < sets.size(); s++) {
@@ -416,7 +418,7 @@ void testCheckRejects()
 void testModels()
 {
 	const auto& specs = nectar::standInObjectModelSpecs();
-	check(specs.size() == 4, "four extra models: naka1, naka4, naka7, chappy");
+	check(specs.size() == 4 + nectar::worldModelSpecs().size(), "naka1, naka4, naka7, chappy and the world models");
 	std::vector<nectar::StandInModelFile> files;
 	std::string err;
 	check(nectar::writeStandInObjectModels(files, err), "write models: " + err);
@@ -433,11 +435,12 @@ void testModels()
 		check(g_haltMessage.empty(), spec.path + ": CmdStream raised an error: " + g_haltMessage);
 		for (const CollRead& p : parts) {
 			check(p.joint >= 0 && p.joint < spec.jointCount(), spec.path + ": collinfo " + p.id + " joint index is in range");
-			check(p.type == 1 && p.radius > 0.0f && p.id.size() == 4, spec.path + ": collinfo " + p.id + " is a sphere with a 4-letter id");
+			check((p.type == 1 && p.radius > 0.0f) || p.type == 2, spec.path + ": collinfo " + p.id + " is a sphere or a platform");
+			check(p.id.size() <= 4 && p.code.size() <= 4, spec.path + ": collinfo " + p.id + " has a four-character id and code");
 		}
 		if (spec.path.find("naka") != std::string::npos) {
 			check(parts.size() == 1 && parts[0].id == "cent" && parts[0].radius == 35.0f && parts[0].centre.y == 3.0f, spec.path + ": one 'cent' sphere");
-		} else {
+		} else if (spec.path.find("chappy") != std::string::npos) {
 			// chappy: the parts the enemy code looks up by id, and the Pikmin sticking code.
 			std::map<std::string, const CollRead*> byId;
 			for (const CollRead& p : parts) byId[p.id] = &p;
@@ -702,6 +705,169 @@ void testGenerators()
 	check(nectar::writeObjectGenFile({}).size() == nectar::writeGen({}).size(), "an empty file is the empty .gen");
 }
 
+// ------------------------------------------------------------------ tests: world models and parameter files
+
+void testWorld()
+{
+	std::vector<nectar::StandInAnimFile> files;
+	std::string err;
+	check(nectar::writeStandInWorldFiles(files, err), "write world files: " + err);
+	std::map<std::string, const nectar::StandInAnimFile*> byPath;
+	for (const auto& f : files) byPath[f.path] = &f;
+	check(byPath.size() == files.size(), "world file paths are unique");
+
+	// Platform models: parseMod, one joint, collision triangles, no grid.
+	check(nectar::worldPlatformPaths().size() == 6, "six platform models (beatle's four, swallow's two)");
+	for (const std::string& path : nectar::worldPlatformPaths()) {
+		check(byPath.count(path) == 1, path + ": written");
+		if (!byPath.count(path)) continue;
+		nectar::Model m;
+		check(nectar::parseMod(byPath[path]->bytes.data(), byPath[path]->bytes.size(), m, err), path + ": parseMod: " + err);
+		check(m.joints.size() == 1 && !m.collision.empty(), path + ": one joint and collision triangles");
+	}
+
+	// Every model's collision platforms are written (or are the sandbox gate's), and its parts are in range.
+	std::set<std::string> gatePaths = { "dataDir/objects/gate/centcoll.mod", "dataDir/objects/gate/sidecoll.mod" };
+	int platformRefs = 0;
+	for (const nectar::WorldModelProfile& m : nectar::worldModelProfiles()) {
+		for (const nectar::WorldPart& part : m.parts) {
+			check(part.joint >= 0 && part.joint < int(m.parents.size()), std::string(m.path) + ": part " + part.id + " joint in range");
+			if (part.type == 2) {
+				platformRefs++;
+				const std::string ref = std::string("dataDir/") + part.platform;
+				check(byPath.count(ref) == 1 || gatePaths.count(ref) == 1, std::string(m.path) + ": platform " + part.platform + " is written");
+			}
+		}
+	}
+	check(platformRefs >= 8, "the models name their platforms, " + std::to_string(platformRefs));
+
+	// The soft gate's bundle: the sandbox gate's table, four joints.
+	std::vector<nectar::SandboxFile> gate;
+	check(nectar::writeSandboxGateFiles(gate, err), "sandbox gate files: " + err);
+	const nectar::SandboxFile* table = nullptr;
+	for (const auto& f : gate) {
+		if (f.path == "dataDir/objects/gate/gate.bin") table = &f;
+	}
+	check(table != nullptr && byPath.count("dataDir/objects/gate/gt_soft.anm") == 1, "gate.bin and gt_soft.anm exist");
+	if (table && byPath.count("dataDir/objects/gate/gt_soft.anm")) {
+		LoadedMgr mgr = readAnimMgr(table->bytes);
+		int pending = -1;
+		std::vector<LoadedEntry> loaded = loadBundleLoop(byPath["dataDir/objects/gate/gt_soft.anm"]->bytes, pending);
+		check(pending == 0 && loaded.size() == mgr.infos.size(), "gt_soft.anm: one entry per info of gate.bin");
+		for (std::size_t i = 0; i < loaded.size() && i < mgr.infos.size(); i++) {
+			check(loaded[i].name == mgr.baseDir + "/" + mgr.infos[i].name, "gt_soft.anm entry " + std::to_string(i) + " is named as gate.bin's info");
+			check(loaded[i].anim.ok && loaded[i].anim.jointCount == 4, "gt_soft.anm entry " + std::to_string(i) + ": four joints");
+			check(loaded[i].anim.parent == std::vector<int>({ -1, 0, 1, 0 }), "gt_soft.anm entry: the soft gate's parents");
+		}
+	}
+
+	// tekipara/*.bin: version 8 to 11, eight ids, then the parameters; size a multiple of four.
+	check(nectar::tekiParaProfiles().size() == 31, "31 tekipara files");
+	for (const nectar::TekiParaProfile& t : nectar::tekiParaProfiles()) {
+		const std::string path = std::string("dataDir/tekipara/") + t.name + ".bin";
+		check(byPath.count(path) == 1, path + ": written");
+		if (!byPath.count(path)) continue;
+		const Bytes& b = byPath[path]->bytes;
+		check(b.size() == t.words.size() * 4 && b.size() >= 4 * (1 + 8 + 20), path + ": size matches the words and holds the shared parameters");
+		RamStream in      = streamOf(b);
+		const int version = in.readInt();
+		check(version >= 8 && version <= 11, path + ": version " + std::to_string(version));
+		for (int i = 0; i < 8; i++) in.readInt(); // ParaIDs
+		int left = 0;
+		while (in.getPending() > 0) {
+			in.readInt();
+			left++;
+		}
+		check(left == int(t.words.size()) - 9, path + ": the parameters fill the rest");
+	}
+
+	// Boss parameters: tagged lists, read with the game's Parameters::read until every byte is used.
+	check(nectar::bossParmProfiles().size() == 2, "two boss parameter files");
+	for (const nectar::BossParmProfile& b : nectar::bossParmProfiles()) {
+		check(byPath.count(b.path) == 1, std::string(b.path) + ": written");
+		if (!byPath.count(b.path)) continue;
+		RamStream in = streamOf(byPath[b.path]->bytes);
+		for (std::size_t l = 0; l < b.lists.size(); l++) {
+			GenParms parms; // any Parm set: unknown tags are skipped by size
+			parms.read(in);
+		}
+		check(in.getPending() == 0, std::string(b.path) + ": Parameters::read consumes every byte, one list at a time");
+	}
+}
+
+// ------------------------------------------------------------------ tests: world generators
+
+void testWorldGenerators()
+{
+	using Spec = nectar::ObjectGenSpec;
+	std::vector<Spec> specs(4);
+	specs[0].kind      = Spec::Plant;
+	specs[0].plantType = 11;
+	specs[1].kind      = Spec::Work;
+	specs[1].name      = "move stone";
+	specs[1].shape     = "stone 10";
+	specs[1].stoneTo   = { 1.0f, 2.0f, 3.0f };
+	specs[2].kind      = Spec::Work;
+	specs[2].name      = "bridge test";
+	specs[2].shape     = "bridge 13";
+	specs[3].kind      = Spec::Boss;
+	specs[3].bossType  = 8;
+	const Bytes file   = nectar::writeObjectGenFile(specs);
+
+	nectar::GenFile parsed;
+	std::string err;
+	check(nectar::parseGen(file.data(), file.size(), parsed, err), "parseGen of plant, work and boss generators: " + err);
+	check(parsed.generators.size() == 4, "four generators");
+	if (parsed.generators.size() != 4) return;
+	check(nectar::genIdString(parsed.generators[0].object.kind) == "plnt" && parsed.generators[0].object.type == 11, "plant type 11");
+	check(nectar::genIdString(parsed.generators[1].object.kind) == "work" && parsed.generators[1].object.name == "move stone", "move stone");
+	check(parsed.generators[2].object.name == "bridge test", "bridge");
+	check(nectar::genIdString(parsed.generators[3].object.kind) == "boss" && parsed.generators[3].object.type == 8, "boss 8 (mizu)");
+
+	// The game's read of each part: GenObjectPlant (an int), GenObjectWorkObject v0.3 (two strings, a stone's three floats), GenObjectBoss v2 (one word).
+	RamStream in = streamOf(file);
+	readGenId(in);
+	for (int i = 0; i < 4; i++) in.readFloat();
+	check(in.readInt() == 4, "count");
+	for (int g = 0; g < 4; g++) {
+		readGenId(in);
+		readGenId(in);
+		readGenId(in);
+		in.readInt();
+		for (int i = 0; i < 32; i++) in.readByte();
+		for (int i = 0; i < 6; i++) in.readFloat();
+		const std::string kind = genIdText(readGenId(in));
+		const std::uint32_t version = readGenId(in);
+		if (kind == "plnt") {
+			check(version == 0x76302e30u, "plnt is v0.0");
+			check(in.readInt() == 11, "plnt type");
+		} else if (kind == "work") {
+			check(genIdText(version) == "v0.3", "work is v0.3");
+			String name(0), shape(0);
+			in.readString(name);
+			in.readString(shape);
+			if (std::string(name.mString) == "move stone") {
+				check(in.readFloat() == 1.0f && in.readFloat() == 2.0f && in.readFloat() == 3.0f, "a move stone's destination");
+			}
+		} else if (kind == "boss") {
+			check(version == 2, "boss is version 2");
+			check((static_cast<std::uint32_t>(in.readInt()) & 0xF) == 8u, "boss type in the low four bits");
+		}
+		GenParms objParms;
+		objParms.read(in);
+		readGenId(in); // pint
+		readGenId(in);
+		for (int i = 0; i < 3; i++) in.readFloat();
+		GenParms a;
+		a.read(in);
+		readGenId(in); // 1one
+		readGenId(in);
+		GenParms t;
+		t.read(in);
+	}
+	check(in.getPending() == 0, "Generator::read consumes every byte of the plant, work and boss generators");
+}
+
 // ------------------------------------------------------------------ tests: boot manifest
 
 void testManifest(const std::string& path)
@@ -714,8 +880,11 @@ void testManifest(const std::string& path)
 	std::string err;
 	check(nectar::writeStandInObjectFiles(files, err), "write all object files: " + err);
 	for (const auto& f : files) written.insert(f.path);
+	std::vector<nectar::SandboxFile> gate;
+	check(nectar::writeSandboxGateFiles(gate, err), "write the sandbox gate files: " + err);
+	for (const auto& f : gate) written.insert(f.path); // gt_hard.mod, centcoll, sidecoll, gate.bin, gt_hard.anm
 
-	int anm = 0, tables = 0;
+	int anm = 0, tables = 0, worldFiles = 0;
 	std::string line;
 	while (std::getline(in, line)) {
 		if (line.empty() || line[0] == '#') continue;
@@ -735,8 +904,17 @@ void testManifest(const std::string& path)
 		}
 		if (p.find("dataDir/objects/ufoparts/naka") == 0 && ends(".mod")) check(written.count(p) == 1, "manifest model " + p + " is written");
 		if (p == "dataDir/tekis/chappy/chappy.mod") check(written.count(p) == 1, "manifest model " + p + " is written");
+		// Every model, platform and parameter file of the objects, plants, gates, bosses and enemies.
+		const bool world = (ends(".mod") && (p.find("dataDir/tekis/") == 0 || p.find("dataDir/bosses/") == 0 || p.find("dataDir/objects/plants/") == 0
+		                                     || p.find("dataDir/objects/bridge/") == 0 || p.find("dataDir/objects/gate/") == 0 || p.find("dataDir/objects/hinderrock/") == 0))
+		                || (p.find("dataDir/tekipara/") == 0 && ends(".bin")) || (p.find("dataDir/bosses/") == 0 && ends("parms.bin"));
+		if (world) {
+			worldFiles++;
+			check(written.count(p) == 1, "manifest file " + p + " is written");
+		}
 	}
 	check(anm == 46, "the manifest lists 46 .anm bundles besides the Pikmin one, found " + std::to_string(anm));
+	check(worldFiles >= 60, "found the manifest's model, tekipara and boss parameter files, " + std::to_string(worldFiles));
 	check(tables == 48, "found the manifest's 48 AnimMgr and pellet tables, " + std::to_string(tables));
 }
 
@@ -749,6 +927,8 @@ int main(int argc, char** argv)
 	testModels();
 	testPelletTables();
 	testGenerators();
+	testWorld();
+	testWorldGenerators();
 	testManifest(argc > 1 ? argv[1] : "");
 	if (failures) {
 		std::printf("%d failure(s)\n", failures);

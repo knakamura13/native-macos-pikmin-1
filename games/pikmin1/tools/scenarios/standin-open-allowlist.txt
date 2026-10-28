@@ -22,16 +22,20 @@ dataDir/stages/sandbox_objects/0.gen
 dataDir/stages/sandbox_objects/1.gen
 dataDir/stages/sandbox_objects/init.gen
 dataDir/stages/sandbox_objects/plants.gen
+# The every-object stage (standin_all_objects_stage.h) writes only default.gen too.
+dataDir/stages/sandbox_all_objects/0.gen
+dataDir/stages/sandbox_all_objects/1.gen
+dataDir/stages/sandbox_all_objects/init.gen
+dataDir/stages/sandbox_all_objects/plants.gen
 
 # Parameter files CoreNode::load skips silently when missing (node.cpp); every
 # value keeps its code default. key.bin: the throw key stays A, which
 # throw_release asserts. demo, sound: no demo flags or sound constants are read
-# by a v1 scenario. tekipara: the enemy parameters, read per enemy type.
+# by a v1 scenario.
 dataDir/parms/demo.bin
 dataDir/parms/sound.bin
 dataDir/parms/key.bin
 dataDir/camera/camepara.bin
-dataDir/tekipara/
 
 # The disc's naka1 table names three animations its bundle lacks, so the game
 # opens loose .dck files that do not exist there either (FAILED in the boot
