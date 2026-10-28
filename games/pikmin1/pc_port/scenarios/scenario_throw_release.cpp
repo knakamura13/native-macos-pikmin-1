@@ -1,7 +1,9 @@
 // throw_release: one captain, Pikmin in grab range. Three cases (a calibration
 // that holds A until the grab completes and measures K, a release one tick
 // after the press, a release K + 2 ticks after it). Each asserts its
-// preconditions, then only behaviour that holds with or without upstream #209:
+// preconditions, then only behaviour that holds with or without upstream #209
+// (merged into kyle-develop; K did not move, 15 / 18 at 30 / 60 Hz on disc and
+// stand-ins alike):
 // the Pikmin is Hanged before the captain enters Throw, the captain enters
 // Throw, the Pikmin flies and lands (Normal), and the captain returns to Walk.
 // All within tick bounds. The before-keyframe timing check is not in v1.

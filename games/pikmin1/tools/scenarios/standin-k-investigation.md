@@ -269,6 +269,14 @@ the exact 60 Hz match is still a chosen point, not a plateau.
 | Stand-ins, gate 34 degrees at z -201, 150-unit panel (as merged) | 16, 16, 16 | 18, 18, 18 |
 | Stand-ins, gate 36 degrees at z -197, 210-unit panel (committed) | 15, 15, 15 | 18, 18, 18 |
 
+After merging kyle-develop rebuild v1 (upstream #205, #206, #209, #211, #212
+and others, 2026-10-28), K did not move on either tree:
+
+| Tree (merged tree, 3 runs per cell) | 30 Hz | 60 Hz |
+|---|---|---|
+| Disc (Forest of Hope) | 15, 15, 15 | 18, 18, 18 |
+| Stand-ins, gate 36 degrees at z -197, 210-unit panel | 15, 15, 15 | 18, 18, 18 |
+
 ### Limits
 
 - The exact match depends on the chosen layout: at 30 Hz its neighbours stay
