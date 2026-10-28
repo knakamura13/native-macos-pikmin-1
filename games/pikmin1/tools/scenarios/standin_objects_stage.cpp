@@ -137,6 +137,16 @@ bool addObjectsStage(std::map<std::string, std::vector<std::uint8_t>>& tree, std
 		}
 	}
 
+	// No route points on the cliff or the plateau. The face is too steep to link,
+	// so plateau points would form a second network with no way to the Onion, and
+	// at stage start WayPoint::initLinkInfos runs PathFinder::findSync from every
+	// link of every point to each goal: the original depth-first search with no
+	// visited set explores every simple path of that unreachable island before it
+	// gives up (about 17 s for 20 points). Nothing on the stage walks up there;
+	// seeds that land on the plateau plant without a route.
+	const double blockX = (kCliffFootX + kCliffTopX) / 2.0;
+	doc.routeBlocks.push_back({ { blockX, doc.minZ - 100 }, { doc.maxX + 100, doc.minZ - 100 }, { doc.maxX + 100, doc.maxZ + 100 }, { blockX, doc.maxZ + 100 } });
+
 	nectar::MapData data;
 	if (!nectar::expandMap(doc, data, error, /*validate=*/false)) return fail(error, "sandbox_objects map: " + error);
 

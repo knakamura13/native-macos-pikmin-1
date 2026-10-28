@@ -127,6 +127,13 @@ generators are untouched, so every existing scenario keeps its numbers (the
   units higher, so across the one cell from x = 50 to x = 100 the ground rises
   200 over 50 units (about 76 degrees, face normal y about 0.24). Flat floor and
   plateau.
+- Routes: a route block from x = 75 east keeps every route point off the cliff
+  and the plateau (26 points, all on the floor). The face is too steep to link,
+  so plateau points formed an island with no path to the Onion, and
+  `WayPoint::initLinkInfos` ran the original depth-first `PathFinder::findSync`
+  (no visited set) from each of their links to each goal until every simple path
+  was exhausted: about 17 s of stage load, now none. Seeds that land up there
+  plant without a route.
 - `default.gen`: a blue Onion at (-120, -250), three buried sprouts (blue, red,
   yellow), a `pr01` pellet and a Dwarf Bulborb (chappy) at (-330, 300). The
   captain starts at the origin.
