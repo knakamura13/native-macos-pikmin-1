@@ -29,6 +29,16 @@ namespace {
 constexpr int kPikminCount = 3;
 constexpr int kBlue        = 0;
 constexpr unsigned kAwaySeconds = 4;
+// The walk away starts no earlier than this many ticks after the stage is
+// ready (intro plus hold). The calibration's trajectory depends on the sim
+// state and the world clock when the squad is born, and the intro's length
+// depends on the data: the intro gate presses START every 15 ticks while a
+// movie plays, and the disc's landing movie ends on the third press (45 ticks at
+// 30 and at 60 Hz), a stand-in tree's on the first (15). Holding the stand-in
+// run to the disc's 45 makes both trees start the calibration on the same
+// tick. On the disc the hold is 0, so the disc run is unchanged
+// (standin-k-investigation.md).
+constexpr unsigned kWalkStartTicks = 45;
 // NaviThrowWaitState::init picks the thrown Pikmin from the plate within 80.
 constexpr float kSelectDistance = 80.0f;
 // The thrown Pikmin must end up at least this far from where it hung when Throw began.
@@ -49,6 +59,20 @@ public:
 			scenarioFailf(0, "a captain", "none");
 			return;
 		}
+		const unsigned intro = pc_scenario_intro_ticks();
+		mHold                = intro < kWalkStartTicks ? kWalkStartTicks - intro : 0;
+		std::printf("[scenario] throw_release: intro %u ticks, hold %u ticks before the walk away\n", intro, mHold);
+		if (mHold == 0) {
+			spawnSquad(navi);
+			mPhase = Away;
+		} else {
+			mPhase = Hold; // the captain stands in Walk with neutral input
+		}
+	}
+
+	// The squad is born when the walk away starts (tick 0 when there is no hold).
+	void spawnSquad(Navi* navi)
+	{
 		// The intro gate hands tick 0 over with the captain in Walk.
 		// About 45 units from the captain on a circle, so selection finds them
 		// (grab range is 80) and they do not sit on each other.
@@ -97,8 +121,15 @@ public:
 			if (wait->mIsHoldingThrowPiki && wait->mHeldThrowPiki && wait->mHeldThrowPiki->getState() == PIKISTATE_Hanged) mSawHanged = true;
 		}
 		switch (mPhase) {
+		case Hold:
+			if (t + 1 >= mHold) {
+				spawnSquad(navi);
+				mPhase     = Away;
+				mAwayStart = t + 1;
+			}
+			break;
 		case Away:
-			if (t + 1 >= kAwaySeconds * (unsigned)rate) {
+			if (t + 1 >= mAwayStart + kAwaySeconds * (unsigned)rate) {
 				mPhase     = Settle;
 				mStepStart = t;
 			}
@@ -238,7 +269,7 @@ public:
 	}
 
 private:
-	enum Phase { Away, Settle, Held, WaitThrow, WaitFlying, WaitLanded, WaitWalk };
+	enum Phase { Hold, Away, Settle, Held, WaitThrow, WaitFlying, WaitLanded, WaitWalk };
 
 	// Normal Pikmin in the plate closer to the captain than `within`.
 	int plateNormalCount(Navi* navi, float within)
@@ -255,6 +286,8 @@ private:
 	}
 
 	Phase mPhase        = Away;
+	unsigned mHold      = 0; // ticks of neutral input before the walk away
+	unsigned mAwayStart = 0; // tick the walk away starts
 	int mCase           = 0;
 	unsigned mPress     = 0;
 	unsigned mK         = 0;
