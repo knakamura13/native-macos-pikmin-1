@@ -242,6 +242,51 @@ run. The unit tests run in a later step with `-E ^scenario_`. The environment is
 - The native JAudio scenario run in `standin-audio.md` is a proposal and is not
   in CI; the `jaudio-build` job only compiles that configuration.
 
+### Cross-platform floats
+
+A scenario build (`PIKMIN_BUILD_SCENARIOS=ON`) also turns on
+`PIKMIN_SCENARIO_FLOAT_DET` (default ON), so a state-hash log, K, or a stand-in
+file from Linux or Windows means the same as one from macOS:
+
+- `-ffp-contract=off` on the game, the legacy library, the generator,
+  `nectar_assets` and `nectar_mapcore`. arm64 clang otherwise fuses
+  multiply-adds; x86-64 GCC without `-march` has no FMA to fuse.
+- The netplay build's software libm (`pc_port/netplay/pc_netplay_libm.c`)
+  replaces the platform's `sinf`, `atan2f`, `powf` and the rest in `nectar`
+  and the generator. On Apple, `pc_port/scenarios/pc_scenario_sincos_apple.c`
+  also replaces `__sincosf_stret` and `__sincos_stret`, which clang calls when it
+  fuses a sine and a cosine of the same value.
+
+Release builds never set `PIKMIN_BUILD_SCENARIOS`, so their flags and libm are
+unchanged. A `PIKMIN_NETPLAY_BUILD` already has the first two and is left as is.
+`-DPIKMIN_SCENARIO_FLOAT_DET=OFF` gives the platform's own floats again.
+
+Measured 2026-10-28: macOS arm64 (Apple clang, Release, Unix Makefiles) against
+Linux x86-64 (Ubuntu 24.04 in Docker `linux/amd64`, GCC 13.3, glibc 2.39,
+Release, Ninja, the CI Linux packages, `xvfb-run`, llvmpipe). `--state-hash-log`
+of `throw_release`, `boot_smoke` and `day30_clock` at 30 and 60 Hz on the
+stand-in tree:
+
+| Build | Identical across the two | First difference |
+|-------|--------------------------|------------------|
+| Default (option OFF) | none of 6 | tick 30 (30 Hz) or 23 (60 Hz), captain hash, in every scenario: arm64 FMA |
+| `-ffp-contract=off` only | 4 of 6 (`boot_smoke`, `day30_clock`) | `throw_release` at tick 53 (30 Hz) or 52 (60 Hz), Pikmin hash: libm (`atan2f`) |
+| Option ON (both) | 6 of 6 | none |
+
+On Linux the default and the `-ffp-contract=off` logs are the same, as
+expected without FMA. With the option ON the generator writes byte-identical
+trees on both (by default `sandbox_objects.mod` and `sandbox_all_objects.mod`
+differed), and the hash logs of all 18 stand-in scenario entries, the object
+stages included, are byte-identical on the two; all 19 stand-in entries pass on
+both. K is 15 at 30 Hz and 18 at 60 Hz in every build, on the stand-in tree
+and on a real install (macOS only).
+
+Not measured: Windows (MinGW-w64). Its libm uses x87 transcendentals, which is
+what the software libm exists to replace, so the same result is expected but was
+not observed. Remaining assumptions: compile-time folding of a math call on
+constant arguments is up to each compiler, and the sqrt, `frexpf` and `ldexpf`
+that stay with the platform are exact by IEEE 754.
+
 ## The scenarios
 
 | Scenario | Start | What it asserts |
