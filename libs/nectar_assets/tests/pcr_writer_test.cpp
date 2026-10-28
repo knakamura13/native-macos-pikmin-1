@@ -32,6 +32,9 @@
 #include <string>
 #include <vector>
 
+#ifndef NECTAR_EFFECT_MGR2D_CPP
+#error "NECTAR_EFFECT_MGR2D_CPP must name games/pikmin1/src/plugPikiYamashita/effectMgr2D.cpp"
+#endif
 #ifndef NECTAR_EFFECT_MGR_CPP
 #error "NECTAR_EFFECT_MGR_CPP must name games/pikmin1/src/plugPikiYamashita/effectMgr.cpp"
 #endif
@@ -205,6 +208,25 @@ std::vector<std::string> registrations()
 	}
 	return out;
 }
+
+// The registrations of ptclInfo in effectMgr2D.cpp (EffectMgr2D), in source order.
+std::vector<std::string> registrations2d()
+{
+	std::ifstream f(NECTAR_EFFECT_MGR2D_CPP);
+	std::stringstream ss;
+	ss << f.rdbuf();
+	const std::string src = ss.str();
+	std::vector<std::string> out;
+	std::size_t pos = src.find("PtclLoadInfo ptclInfo[");
+	while (pos != std::string::npos) {
+		std::size_t o = src.find("{ \"effects/pcr/", pos);
+		if (o == std::string::npos) break;
+		std::size_t s = o + 3, e = src.find('"', s);
+		out.push_back(src.substr(s, e - s));
+		pos = e;
+	}
+	return out;
+}
 } // namespace
 
 int main()
@@ -301,6 +323,18 @@ int main()
 		for (const std::string& s : names)
 			check(s.rfind("effects/pcr/", 0) == 0 && s.size() > 16 && s.compare(s.size() - 4, 4, ".pcr") == 0, "name shape: " + s);
 		check(std::count(regs.begin(), regs.end(), std::string("effects/pcr/r7meteor.pcr")) == 2, "r7meteor.pcr is registered twice");
+	}
+
+	// ---- the 2D names: 52, in step with effectMgr2D.cpp, none shared with the 331 -------------------------
+	{
+		const std::vector<std::string>& n2 = nectar::standinPcr2dNames();
+		check(registrations2d().size() == 52, "ptclInfo has 52 registrations (found " + std::to_string(registrations2d().size()) + ")");
+		check(n2 == registrations2d(), "standinPcr2dNames() equals the literals of ptclInfo in effectMgr2D.cpp, in order (drift test)");
+		std::set<std::string> uniq(n2.begin(), n2.end()), main331(names.begin(), names.end());
+		check(uniq.size() == n2.size(), "the 2D names are distinct");
+		int shared = 0;
+		for (const std::string& s : n2) shared += main331.count(s) ? 1 : 0;
+		check(shared == 0, "no 2D name is also one of the 331");
 	}
 
 	// ---- effects.bun: type-0 entries under every name ------------------------------------------

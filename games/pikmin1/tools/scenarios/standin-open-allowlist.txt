@@ -53,6 +53,22 @@ dataDir/SndData/Banks/pikibank.bx
 # Ghost replay record: gameCoreSection.cpp opens it and checks for null.
 dataDir/ghost/record.gst
 
-# No cinema is allowlisted: the generator writes demo60 (the post-extinction
-# movie the sandbox plays on Day 1) and every cinema the disc boot opens
-# (standin-cinema.md).
+# No cinema is allowlisted for the boot: the generator writes demo60 (the
+# post-extinction movie the sandbox plays on Day 1) and every cinema the disc
+# boot opens (standin-cinema.md).
+# captain_death: a missing .cin is a zero-length movie (System::openFile returns
+# null, CinematicPlayer::loadCin returns early; coverage/README.md). The chain
+# needs none of their keys. The results backdrop demo36 is written, because the
+# results screen stays up only while that movie is active.
+dataDir/cinemas/demo52.cin
+dataDir/cinemas/demo32.cin
+dataDir/cinemas/demo56.cin
+dataDir/cinemas/demo84.cin
+
+# captain_death: the three textures EffectMgr2D registers that effects.bun does
+# not hold (the file-select and results screens build the 2D effect manager when
+# ogScrFileSelectMgr is constructed). loadTexture returns null for them; the
+# stand-in particles (effects.bun, standinPcr2dNames) are inert and never draw.
+dataDir/effects/tex/waku.bti
+dataDir/effects/tex/waku02.bti
+dataDir/effects/tex/waku03.bti

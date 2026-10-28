@@ -79,7 +79,7 @@ below, and that every `cinemas/` path in the boot manifest is a stand-in file.
 
 ## Stand-in set
 
-No actors, so no model or animation is opened. Every cut plays once, so a movie
+No actors, so no model or animation is opened. Every cut plays once (demo36 ends in a loop), so a movie
 ends without a skip. Each scene is a short dolly towards the origin (or towards
 the target, for a Localized movie), 30 degrees, with one white light. The
 cameras, lights, lengths and frames are invented. The `.dsk` paths of the disc
@@ -93,6 +93,7 @@ boot are the ones listed in `boot-manifest.txt`.
 | `demo45.cin` + 2 scenes (40 + 40) | Pikmin into the Onion, Forest of Hope | HideNavi, NaviNoAI | none |
 | `demo04.cin` + 1 scene (330) | Red Onion discovery (`DEMOID_FindRedOnyon`; the sandbox translates `DEMOID_FindOnyon` to it) | Localized, HideNavi, NaviNoAI | red Onion Boot at 10, EmitCone at 300; `TextDemo` `TUT_RedOnion` (1) at 310 |
 | `demo06.cin` + 1 scene (100) | Blue Onion discovery (`DEMOID_FindBlueOnyon`, started untranslated by `DEMOFLAG_DiscoverBlueOnyon`); used by `onion_skip` | Localized, HideNavi, NaviNoAI | blue Onion Boot at 10, EmitCone at 90; no text key (its screen, `tu_tx22`, is not a stand-in) |
+| `demo36.cin` + 2 scenes (30 + 10) | End-of-day results backdrop (`DEMOID_EndOfDayResults`, started by `DayOverModeState::initialisePhaseTwo` with the results window); used by `captain_death` | NonGameMovie | none. The first cut plays once, the second loops (`CINMODE_LoopScene`) until `exitDayEnd` drops the movie, as the disc's does (a 420-frame cut and a 10-frame loop). The results window stays up only while a movie is active: with no demo36 the phases advance on the next ticks and the day leaves for `GameExit` |
 
 The discovery key frames follow the Onion's boot motion. Boot starts the motion
 (info colour + 3), and its `KEY_Action0` emits the first seed. Red keeps the
