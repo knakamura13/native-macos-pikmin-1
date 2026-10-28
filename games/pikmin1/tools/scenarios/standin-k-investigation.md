@@ -10,8 +10,9 @@ runs give the same K.
 | Disc (VERSION_GPIE01_01, Forest of Hope) | 13 | 14 |
 | Stand-ins (sandbox) | 12 | 23 |
 
-The stand-ins are unchanged, because the difference does not come from a
-stand-in parameter, animation or timing value.
+At that point the stand-ins were unchanged, because the difference does not
+come from a stand-in parameter, animation or timing value. The sandbox walls
+were fitted later; see "Fitted sandbox walls" below.
 
 ## What is the same on both trees
 
@@ -63,12 +64,88 @@ The disc's 13 and 14 are close only by chance. In seconds the two grabs take
   the #72 overlay result (disc tree with the stand-in `effects.bun`: K = 8 at
   30 Hz).
 
+## Fitted sandbox walls (after the particle RNG change)
+
+With the particle draws on the cosmetic stream (`standin-particle-rng.md`), the
+disc K is 15 / 18. The stand-in generator now builds the sandbox with four
+short posts across the walk instead of the wall at x = 700
+(`kSandboxWalls` in `standin_generator.cpp`), and the stand-in K equals the
+disc K.
+
+RelWithDebInfo, macOS, `nectar --scenario throw_release`, 3 runs per cell, all
+runs equal and passing. The disc tree is the install with the particle RNG
+change; the stand-in data is `nectar_standin_generator` output.
+
+| Tree | 30 Hz before | 60 Hz before | 30 Hz after | 60 Hz after |
+|---|---|---|---|---|
+| Disc (Forest of Hope) | 15, 15, 15 | 18, 18, 18 | 15, 15, 15 | 18, 18, 18 |
+| Stand-ins (sandbox) | 12, 12, 12 | 23, 23, 23 | 15, 15, 15 | 18, 18, 18 |
+
+"Before" is `ae235144`. The game binary is the same before and after (only
+stand-in data changed), so the disc row is one set of runs.
+
+The walls (centre lines, thickness 40, height 150; the captain starts at the
+origin and walks to -z):
+
+| Post | a (x, z) | b (x, z) |
+|---|---|---|
+| 1 | (-20, -445) | (-2, -426) |
+| 2 | (60, -517) | (42, -482) |
+| 3 | (21, -466) | (-4, -455) |
+| 4 | (73, -486) | (45, -471) |
+
+### How the posts set K
+
+Temporary per-tick tracing (removed before commit) showed:
+
+- The captain reaches the posts in the last second of the 4 s walk and is
+  deflected between them. Collision is resolved per tick, so he ends the walk
+  at z = -510 at 30 Hz and at z = -483 at 60 Hz.
+- The squad trails, as on open ground. At 60 Hz the captain is further back, so
+  the nearest Pikmin is closer when A is pressed: 76 units at 30 Hz, 52 units
+  at 60 Hz. It walks to the hand around the posts.
+
+The disc reaches its K from a different situation. The trace of the disc run
+shows the captain walking about 1.3 s, sliding along a wall, and stopping
+about 220 units from the start. The squad catches up, then switches to
+`BreakwallMode` (a Forest of Hope gate), and returns in `PIKISTATE_Emotion`.
+A is pressed when the first Pikmin is Normal in the plate again, from rest:
+62 units at 30 Hz, 39 units at 60 Hz. The sandbox has no gate, so it matches
+the resulting K, not the squad behaviour.
+
+### How the posts were found
+
+The posts are fitted by search, not derived from the disc. Each layout was
+generated, then run at 30 and 60 Hz (about 2,900 layouts):
+
+- One wall across the walk at 200 to 650 units and -60 to 60 degrees: K pairs
+  (30 Hz / 60 Hz) up to 13 / 23. A straight wall stops the captain early, a
+  Pikmin settles within the 15-unit grab range, and K = 1 (fails K >= 3).
+- One to three random long walls: no pair with K30 >= 13 and K60 <= 21. On open
+  ground K60 is close to twice K30.
+- A stopper wall plus three to five posts: pairs such as 15 / 22 and 16 / 15.
+  Small random moves around the closest layouts gave six layouts in range,
+  including 15 / 18. Its stopper was then removed: the captain does not reach
+  it, and K stays 15 / 18.
+
+### Limits
+
+- The match is fragile. Moving every post end by about 2 units (40 random
+  moves) gave pairs from 8 / 17 to 15 / 29; only 3 of 40 stayed in range and passed.
+- A change to the squad or captain AI, to collision, or to the sim RNG draws
+  can move the stand-in K and the disc K independently. Re-measure both after
+  such a change, and re-fit the posts if the stand-in K must match again.
+- Matching K does not mean the grab starts from the same distance or state as
+  on the disc (76 / 52 units moving, against 62 / 39 units from rest).
+
 ## Consequences
 
-- Matching K within one tick would mean building sandbox terrain that copies
-  the Forest of Hope wall and its RNG-dependent behaviour of the squad. It would
-  also mean drawing the disc's particle RNG sequence, which needs every disc
-  emitter's rates and jitter flags. That is disc data.
+- (Written before the particle RNG change and the fitted walls.) Matching K
+  within one tick would mean building sandbox terrain that copies the Forest
+  of Hope wall and its RNG-dependent behaviour of the squad. It would also mean
+  drawing the disc's particle RNG sequence, which needs every disc emitter's
+  rates and jitter flags. That is disc data. The particle draws have since
+  moved, and the fitted walls match K without copying the squad behaviour.
 - Stand-in K is stable, and the scenario asserts only behaviour. Both trees
   pass.
 - Moving particle draws to the cosmetic stream would remove the effect-content
