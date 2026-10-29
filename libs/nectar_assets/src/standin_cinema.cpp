@@ -293,6 +293,11 @@ std::vector<Movie> movies()
 		once.keys       = { notify(kMovieCmdStartTotalResults, 0, 27), notify(kMovieCmdFadeIn, 0, 0) };
 		loop.startFrame = 27;
 		loop.endFrame   = 30;
+		loop.flags      = kCutLoop;
+		m.cinema.cuts   = { once, loop };
+		list.push_back(m);
+	}
+
 	// The Main Engine reaching the ship on the Impact Site (DEMOFLAG_CollectEngine's
 	// movie 20, DEMOID_CollectPartPractice, demo20). The engine is sucked into the
 	// ship while it plays (PelletGoalState::exec, UfoItem::finishSuck). The disc's
