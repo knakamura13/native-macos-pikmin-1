@@ -13,11 +13,11 @@ It fails (exit 1) when
   - a directory is missing, or holds no .hash.log,
   - a scenario has a log on some OS and none on another,
   - a log is empty, or
-  - two OSes wrote different lines for the same scenario.
+  - two OSes wrote different bytes for the same scenario.
 For each scenario that differs it prints the first differing line (the tick and
-which of the hash columns differ) and every OS's value. A trailing CR is ignored:
-the game opens the log in text mode, so MinGW writes CRLF line ends and the
-other two OSes LF. Nothing else is normalised.
+which of the hash columns differ) and every OS's value. Nothing is normalised:
+the files must be byte-identical, line ends included (the game writes the log
+in binary mode, so it is LF on every OS).
 
 Line format (pc_port/netplay/pc_state_hash.h): <tick> <total> <navi> <piki>
 <teki> <item> <world> <rng> <mode>, each hash 16 hex digits.
@@ -32,12 +32,11 @@ COLUMNS = ["tick", "total", "navi", "piki", "teki", "item", "world", "rng", "mod
 
 
 def read_lines(path):
+    """The file split at LF, exactly as written: a CR stays in its line, and a
+    file that ends in LF ends in one empty element. An empty file gives []."""
     with open(path, "rb") as f:
         data = f.read().decode("utf-8", errors="replace")
-    lines = data.split("\n")
-    if lines and lines[-1] == "":
-        lines.pop()
-    return [line.rstrip("\r") for line in lines]
+    return data.split("\n") if data else []
 
 
 def collect(directory):
@@ -124,14 +123,21 @@ def main():
             continue
         number, row = first_difference(per_os)
         if number is None:
-            count = len(next(iter(per_os.values())))
+            count = len(next(iter(per_os.values()))) - 1
             rows.append((scenario, "same", f"{count} lines"))
             continue
         present = [line for line in row.values() if line is not None]
-        columns = differing_columns(present) if len(present) > 1 else []
-        tick = (present[0].split() or ["?"])[0] if present else "?"
-        shown = ", ".join(c for c in columns if c != "tick") or "line count"
-        detail = f"first difference at line {number} (tick {tick}), columns: {shown}"
+        values = [line.rstrip("\r") for line in present]
+        if len(set(values)) == 1 and len(present) == len(row):
+            # The same hashes, written with different line ends.
+            crlf = sorted(name for name, line in row.items() if line.endswith("\r"))
+            detail = (f"line {number}: same hashes, different line ends "
+                      f"({', '.join(crlf)} wrote CR before the LF)")
+        else:
+            columns = differing_columns(values) if len(values) > 1 else []
+            tick = (values[0].split() or ["?"])[0] if values else "?"
+            shown = ", ".join(c for c in columns if c != "tick") or "line count"
+            detail = f"first difference at line {number} (tick {tick}), columns: {shown}"
         lengths = {name: len(lines) for name, lines in per_os.items()}
         if len(set(lengths.values())) > 1:
             detail += "; line counts " + ", ".join(f"{n}={c}" for n, c in sorted(lengths.items()))
@@ -144,15 +150,6 @@ def main():
     same = sum(1 for _s, state, _d in rows if state == "same")
     print(f"{args.label}: {len(scenarios)} scenarios on {', '.join(sources)}; "
           f"{same} identical, {len(scenarios) - same} not")
-    for name, found in logs.items():
-        with_cr = 0
-        for scenario in scenarios:
-            if scenario in found:
-                with open(found[scenario], "rb") as f:
-                    if b"\r" in f.read():
-                        with_cr += 1
-        if with_cr:
-            print(f"  note: {name} wrote CRLF line ends in {with_cr} of {len(scenarios)} logs (ignored)")
     for scenario, state, detail in rows:
         if state == "same":
             print(f"  same      {scenario}: {detail}")

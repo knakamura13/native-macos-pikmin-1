@@ -136,43 +136,17 @@ ctest --test-dir build/pikmin1-scenarios-jaudio --output-on-failure -R '^scenari
 `pc_jaudio_integration_test` (label `game-assets`) still needs real sound data;
 `-LE game-assets` leaves it out.
 
-### Proposed CI step (not applied)
+### CI
 
-`.github/workflows/ci.yml` is not changed here. A job step after the OFF
-scenario steps could be:
-
-```yaml
-#      - name: Configure Pikmin 1 scenarios (native JAudio)
-#        if: ${{ !cancelled() && !contains(env.SCENARIO_SKIP_OS, runner.os) }}
-#        run: |
-#          cmake -S games/pikmin1 -B build/pikmin1-scenarios-jaudio -G Ninja \
-#            -DCMAKE_BUILD_TYPE="$BUILD_TYPE" \
-#            -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
-#            -DPIKMIN_NATIVE_JAUDIO=ON -DPIKMIN_BUILD_SCENARIOS=ON \
-#            $PLATFORM_FLAGS
-#
-#      - name: Build Pikmin 1 scenarios (native JAudio)
-#        id: build-scen-jaudio
-#        if: ${{ !cancelled() && !contains(env.SCENARIO_SKIP_OS, runner.os) }}
-#        run: cmake --build build/pikmin1-scenarios-jaudio --parallel --target pikmin_pc nectar_standin_generator nectar_audio_writer_test -- -k 0
-#
-#      - name: Test Pikmin 1 scenarios (native JAudio)
-#        if: ${{ !cancelled() && steps.build-scen-jaudio.outcome == 'success' }}
-#        env:
-#          SDL_AUDIODRIVER: dummy
-#          LIBGL_ALWAYS_SOFTWARE: "1"
-#          GALLIUM_DRIVER: llvmpipe
-#        run: |
-#          if [ "$RUNNER_OS" = "Windows" ]; then
-#            cp /mingw64/bin/opengl32.dll /mingw64/bin/libgallium_wgl.dll build/pikmin1-scenarios-jaudio/bin/
-#          fi
-#          RUN="ctest --test-dir build/pikmin1-scenarios-jaudio --output-on-failure --timeout 600 -R ^scenario_|^nectar_audio_writer_test$ -LE game-assets"
-#          if [ "$RUNNER_OS" = "Linux" ]; then xvfb-run -a $RUN; else $RUN; fi
-```
-
-These mirror the three OFF scenario steps. They roughly double the scenario
-build time per OS (ccache shares little, since `PIKI_USE_JAUDIO` changes the
-compile definitions of every game file). Not run on Linux or Windows.
+`.github/workflows/ci.yml` job `jaudio-scenarios` is this configuration on
+Linux, macOS and Windows (MinGW-w64): the build above without
+`nectar_audio_writer_test` (the main jobs already run it), then
+`ctest -R ^scenario_(boot_smoke|throw_release|day30_clock)_ -E _disc`
+(7 entries with the generator) with the same environment as the OFF scenario step.
+Each OS is its own build directory, since `PIKI_USE_JAUDIO` changes the compile
+definitions of every game file and ccache shares little with the OFF build. The
+job uploads its state-hash logs, and `scenario-hash-compare` checks that they
+equal the OFF build's logs and each other (README, "CI").
 
 ## What remains
 
@@ -185,5 +159,6 @@ compile definitions of every game file). Not run on Linux or Windows.
 - **Event actions never finish.** The sysevent children ignore their command
   queues, so an event slot never reports done (`TrackReceive`,
   `MML_StopEventAction`). The v1 scenarios do not depend on it.
-- **Only macOS was run.** The writer and generator are platform-neutral C++, but
-  the JAudio-ON build was not compiled on Linux or Windows.
+- **Platforms.** The CI job above compiles and runs the JAudio-ON build on all
+  three OSes. The disc-data run (`_disc` entries, real sound banks) was done on
+  macOS only.
