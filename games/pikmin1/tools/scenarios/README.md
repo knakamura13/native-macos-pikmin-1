@@ -335,11 +335,18 @@ trees on both (by default `sandbox_objects.mod` and `sandbox_all_objects.mod`
 differed), and the hash logs of all 18 stand-in scenario entries, the object
 stages included, are byte-identical on the two; all 19 stand-in entries pass on
 both. K is 15 at 30 Hz and 18 at 60 Hz in every build, on the stand-in tree
-and on a real install (macOS only).
+and on a real install.
 
-Not measured: Windows (MinGW-w64). Its libm uses x87 transcendentals, which is
-what the software libm exists to replace, so the same result is expected but was
-not observed. Remaining assumptions: compile-time folding of a math call on
+On a real install (RelWithDebInfo, option ON), the six disc runs give the same
+per-tick hashes on macOS arm64, Linux x86-64 and a MinGW-w64 Windows build
+under wine; the Windows log ends its lines in CRLF, so strip the CR before
+comparing. Recipes and results: [linux-disc-run.md](linux-disc-run.md) and
+[windows-disc-run.md](windows-disc-run.md).
+
+Not measured: Windows stand-in hash logs against macOS (CI runs the stand-in
+scenarios on Windows but compares no logs across OSes), and real Windows (the
+Windows run above is wine 9.0). MinGW's libm uses x87 transcendentals, which is what the
+software libm exists to replace. Remaining assumptions: compile-time folding of a math call on
 constant arguments is up to each compiler, and the sqrt, `frexpf` and `ldexpf`
 that stay with the platform are exact by IEEE 754.
 
