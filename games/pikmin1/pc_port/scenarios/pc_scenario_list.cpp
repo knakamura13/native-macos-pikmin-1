@@ -55,6 +55,10 @@ const std::vector<PcScenario*>& pc_scenario_all(void)
 		pc_scenario_make_day_end(),
 		pc_scenario_make_day_end_day29(),
 		pc_scenario_make_extinction_day30(),
+		pc_scenario_make_save_load(), pc_scenario_make_save_load_flags(), pc_scenario_make_results_nosave_map(),
+		pc_scenario_make_results_nosave_cardselect(), pc_scenario_make_pause_continue(), pc_scenario_make_permadeath_erase(),
+		pc_scenario_make_permadeath_unsaved(), pc_scenario_make_permadeath_bad_slot(), pc_scenario_make_permadeath_off(),
+		pc_scenario_make_card_errors(), pc_scenario_make_card_errors_saved(),
 		[] { static ExitZero s; return static_cast<PcScenario*>(&s); }(),
 	};
 	return all;

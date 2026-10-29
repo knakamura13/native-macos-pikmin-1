@@ -24,5 +24,16 @@ PcScenario* pc_scenario_make_onion_unlock_whistle(void);
 PcScenario* pc_scenario_make_day_end(void);
 PcScenario* pc_scenario_make_day_end_day29(void);
 PcScenario* pc_scenario_make_extinction_day30(void);
+PcScenario* pc_scenario_make_save_load(void);
+PcScenario* pc_scenario_make_save_load_flags(void);
+PcScenario* pc_scenario_make_results_nosave_map(void);
+PcScenario* pc_scenario_make_results_nosave_cardselect(void);
+PcScenario* pc_scenario_make_pause_continue(void);
+PcScenario* pc_scenario_make_permadeath_erase(void);
+PcScenario* pc_scenario_make_permadeath_unsaved(void);
+PcScenario* pc_scenario_make_permadeath_bad_slot(void);
+PcScenario* pc_scenario_make_permadeath_off(void);
+PcScenario* pc_scenario_make_card_errors(void);
+PcScenario* pc_scenario_make_card_errors_saved(void);
 
 #endif
