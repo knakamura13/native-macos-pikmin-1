@@ -20,8 +20,8 @@
 // advance, and a soft reset within the bounds.
 //   - permadeath_erase: the soft reset goes to CardSelect (1) and DayOverModeState
 //     never starts (no results, no day-end save); the "expedition lost" notice is
-//     queued (pc_erased_notice_open_if_queued; the other Permadeath variants queue
-//     it too, though they erase nothing). In the scratch directory exactly these change: the card file
+//     queued (pc_erased_notice_open_if_queued; the variants that erase nothing do
+//     not queue it). In the scratch directory exactly these change: the card file
 //     (changed), card0/days/slot1/ and its day04.bin and quicksave/2.qsv
 //     (removed); the card's stat record stays (its bytes hold the write time in
 //     seconds, so they may change). Nothing is added, slots A and C's day history
@@ -32,10 +32,10 @@
 //     block that was the spare, which slot B now reads from. Slot B's old block
 //     keeps its bytes (the delete supersedes it, as the original's delete does).
 //   - permadeath_unsaved: no card file at all. The run still leaves for CardSelect
-//     and queues the notice; the scratch directory is unchanged (no card file is
+//     with no notice; the scratch directory is unchanged (no card file is
 //     created, nothing is removed).
 //   - permadeath_bad_slot: the play state names slot 3 (out of range): nothing in
-//     the scratch directory changes; CardSelect, notice queued.
+//     the scratch directory changes; CardSelect, no notice.
 //   - permadeath_off: the same saves, a normal run: the death goes to
 //     DayOverModeState as in captain_death (the scenario passes when it starts) and
 //     the scratch directory is unchanged at that point.
@@ -148,8 +148,11 @@ public:
 				scenarioFailf(t, "a Permadeath death leaves for CardSelect (1)", "%s: section %d", mName, next);
 				return;
 			}
-			if (!pc_erased_notice_open_if_queued()) {
-				scenarioFailf(t, "the expedition-lost notice is queued", "%s: not queued", mName);
+			// The notice says the save is gone: queued only when one was erased.
+			const bool wantNotice = mVariant == Erase;
+			if (pc_erased_notice_open_if_queued() != wantNotice) {
+				scenarioFailf(t, wantNotice ? "the expedition-lost notice is queued" : "no expedition-lost notice when nothing was erased",
+				              "%s: queued %d", mName, (int)!wantNotice);
 				return;
 			}
 			if (mVariant == Erase ? checkErased(t) : checkUnchanged(t)) scenarioPass();
