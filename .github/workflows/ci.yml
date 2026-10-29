@@ -8,6 +8,13 @@ on:
   push:
     branches: [main, kyle-develop]
   workflow_dispatch:
+    inputs:
+      float_det:
+        description: >-
+          Scenario builds: PIKMIN_SCENARIO_FLOAT_DET. Untick it as a negative control: the
+          builds then keep the platform's floats and the cross-OS comparison must fail.
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -29,6 +36,8 @@ env:
   # Static skip list for scenario runs (see the gl-probe job): runner.os values
   # whose GL probe failed, each with a linked tracking issue. Empty today.
   SCENARIO_SKIP_OS: ""
+  # PIKMIN_SCENARIO_FLOAT_DET for the scenario builds; OFF only from a manual run.
+  FLOAT_DET: ${{ github.event.inputs.float_det == 'false' && 'OFF' || 'ON' }}
 
 jobs:
   build-and-test:
@@ -113,6 +122,7 @@ jobs:
             -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             -DPIKMIN_BUILD_LAUNCHER=ON -DPIKMIN_BUILD_TESTS=ON \
             -DPIKMIN_NATIVE_JAUDIO=OFF -DPIKMIN_BUILD_SCENARIOS=ON \
+            -DPIKMIN_SCENARIO_FLOAT_DET="$FLOAT_DET" \
             $PLATFORM_FLAGS
 
       # -k 0: report every compile error in one run, not only the first.
@@ -120,12 +130,13 @@ jobs:
         id: build-p1
         run: cmake --build build/pikmin1 --parallel -- -k 0
 
-      # Diagnostic (a trial on this branch): does the linked scenario binary have
-      # any x87 transcendental, fsqrt, FMA or CRT math import left, i.e. is the
-      # software libm complete? tools/netplay/fp_gate.py is the netplay build's gate.
+      # The scenario build's software libm must be complete: the linked binary
+      # may hold no x87 transcendental or fsqrt, no FMA and no CRT math import,
+      # which would give Windows different floats than macOS and Linux in code
+      # the scenarios do not reach. Same gate as the netplay build's
+      # (tools/netplay/fp_gate.py); the msys2 shell has no Python by default.
       - name: FP gate on the scenario binary (Windows)
         if: ${{ !cancelled() && runner.os == 'Windows' && steps.build-p1.outcome == 'success' }}
-        continue-on-error: true
         run: |
           pacman -S --noconfirm --needed mingw-w64-x86_64-python
           python games/pikmin1/tools/netplay/fp_gate.py --objdump "$(cygpath -m "$(which objdump)")" build/pikmin1/bin/nectar.exe
@@ -325,6 +336,7 @@ jobs:
             -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             -DPIKMIN_BUILD_LAUNCHER=OFF -DPIKMIN_BUILD_TESTS=ON \
             -DPIKMIN_NATIVE_JAUDIO=ON -DPIKMIN_BUILD_SCENARIOS=ON \
+            -DPIKMIN_SCENARIO_FLOAT_DET="$FLOAT_DET" \
             $PLATFORM_FLAGS
 
       - name: Build
