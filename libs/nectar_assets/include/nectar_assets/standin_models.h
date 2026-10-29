@@ -43,6 +43,9 @@ struct StandInModelSpec {
 	Rgba8 colour;              ///< color del material de todas las cajas
 	float halfSize = 5.0f;     ///< semilado de la caja de la raíz; las demás, la mitad
 	std::string collInfo;      ///< texto collinfo tras el bloque final ("" = sin partes de colisión)
+	/// The root box's triangles are also the model's collision (a platform, written with writePlatformMod): the
+	/// push box (objects/hinderrock/cube10.mod), which HinderRock turns into a DynBuildShape that Pikmin push against.
+	bool platform = false;
 
 	int jointCount() const { return int(parents.size()); }
 };

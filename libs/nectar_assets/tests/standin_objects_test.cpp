@@ -286,7 +286,8 @@ nectar::Model parsedModel(const nectar::StandInModelSpec& spec)
 {
 	Bytes bytes;
 	std::string err;
-	check(nectar::writeMod(nectar::buildStandInModel(spec), bytes, err), spec.path + ": writeMod: " + err);
+	const nectar::Model built = nectar::buildStandInModel(spec);
+	check(spec.platform ? nectar::writePlatformMod(built, bytes, err) : nectar::writeMod(built, bytes, err), spec.path + ": writeMod: " + err);
 	nectar::Model m;
 	check(nectar::parseMod(bytes.data(), bytes.size(), m, err), spec.path + ": parseMod: " + err);
 	return m;
@@ -331,7 +332,13 @@ void testProfiles()
 				// the disc's one descending list.
 				check(l.infoKeys[k].mFrameIndex >= 0 && l.infoKeys[k].mFrameIndex < int(l.animKeys.size()), who + ": info key points into the anim keys");
 			}
-			check(l.eventKeys.empty(), who + ": no event keys (sound and effect cues are not stand-in data)");
+			// Sound and effect cues are not stand-in data, except the profile's own effect events (the red Onion boot's).
+			check(l.eventKeys.size() == p.infos[i].effectKeys.size(), who + ": event keys only where the profile has effect events");
+			for (std::size_t k = 0; k < l.eventKeys.size() && k < p.infos[i].effectKeys.size(); k++) {
+				check(l.eventKeys[k].mFrameIndex == p.infos[i].effectKeys[k].first && l.eventKeys[k].mEventType == 1
+				          && l.eventKeys[k].mKeyType == p.infos[i].effectKeys[k].second,
+				      who + ": an action event key with the profile's frame and value, as AnimInfo::doread reads it");
+			}
 			for (int f : l.animKeys) check(f >= 0 && f < p.infos[i].frames, who + ": anim key inside the frame count (checkAnimData clamps otherwise)");
 			check(l.animKeys.size() >= 2 && l.animKeys.size() < 100, who + ": a start and an end anim key");
 		}
@@ -377,6 +384,17 @@ void testProfiles()
 	for (const auto& p : profiles) {
 		if (std::string(p.id) == "goal") {
 			check(p.joints == 13 && p.infos.size() == 13, "goal (the Onion): 13 joints, 13 infos");
+			// The red boot (info 4) carries the disc's effect events; value 2 opens the Onion's way point. No other info has any.
+			bool waypoint = false;
+			for (std::size_t i = 0; i < p.infos.size(); i++) {
+				if (i != 4) check(p.infos[i].effectKeys.empty(), "goal: only the red boot has event keys");
+				for (const auto& e : p.infos[i].effectKeys) waypoint = waypoint || (i == 4 && e.first == 221 && e.second == 2 && e.first < p.infos[i].frames);
+			}
+			check(waypoint && p.infos[4].effectKeys.size() == 5, "goal info 4 (red boot): five effect events, value 2 (the way point) at frame 221");
+			// Written as action event keys (type 1) with the value in mKeyType, as AnimInfo::doread reads them.
+			const nectar::StandInAnimSet& goal = nectar::standInObjectAnims()[2];
+			const auto& ev = goal.anims[4].info.eventKeys;
+			check(ev.size() == 5 && ev[2].frame == 221 && ev[2].eventType == 1 && ev[2].keyType == 2, "goal info 4: event key 2 written as action, value 2, frame 221");
 		}
 		if (std::string(p.id) == "pikihead") check(p.joints == 4 && p.infos.size() == 7, "pikihead (the sprout): 4 joints, 7 infos");
 		if (std::string(p.id) == "chappy") check(p.joints == 17 && p.infos.size() == 15, "chappy: 17 joints, 15 infos");
@@ -429,6 +447,20 @@ void testModels()
 		check(int(m.joints.size()) == spec.jointCount() && m.joints[0].parent == -1, spec.path + ": joint count and root");
 		for (int j = 0; j < spec.jointCount(); j++) check(m.joints[std::size_t(j)].parent == spec.parents[std::size_t(j)], spec.path + ": parent " + std::to_string(j));
 		check(!m.meshes.empty(), spec.path + ": has geometry");
+		if (spec.path == "dataDir/objects/hinderrock/cube10.mod") {
+			// The push box is solid (standin_world.cpp): the 12 triangles of a 120-unit block on joint 0, its side faces on
+			// the planes of the vtx parts at x and z +-60.
+			bool onFaces = m.collision.size() == 12;
+			for (const nectar::ModCollTri& t : m.collision) {
+				for (int v : t.v) {
+					const nectar::Vec3& p = m.positions[std::size_t(v)];
+					onFaces = onFaces && std::fabs(std::fabs(p.x) - 60.0f) < 1e-4f && std::fabs(std::fabs(p.z) - 60.0f) < 1e-4f;
+				}
+			}
+			check(spec.platform && onFaces, spec.path + ": a platform whose collision is the 120-unit block (x and z +-60)");
+		} else {
+			check(!spec.platform && m.collision.empty(), spec.path + ": no collision triangles (only the push box is a platform)");
+		}
 
 		g_haltMessage.clear();
 		std::vector<CollRead> parts = readColl(m.trailingIni);
@@ -463,10 +495,12 @@ struct TestPelletConfig : public Parameters {
 	    , mPelletColor(this, -1, 0, 0, "p09", "color")
 	    , mCarryMin(this, 1, 0, 0, "p01", "min pikis")
 	    , mCarryMax(this, 1, 0, 0, "p02", "max pikis")
+	    , mScale(this, 1.0f, 0.0f, 0.0f, "p10", "scale")
 	{
 	}
 	Parm<String> mPelletName;
 	Parm<int> mPelletType, mPelletColor, mCarryMin, mCarryMax;
+	Parm<f32> mScale;
 	std::uint32_t model = 0, shape = 0, unused = 0;
 	int joint = 0;
 };
@@ -504,7 +538,7 @@ void testPelletTables()
 	check(files[0].path == "dataDir/parms/pelMgr.bin", "pelMgr.bin path");
 	RamStream cfg = streamOf(files[0].bytes);
 	const int configs = cfg.readInt(); // PelletMgr::readConfigs
-	check(configs == 12, "twelve coloured pellet configs");
+	check(configs == 13, "twelve coloured pellet configs and the Main Engine");
 	std::set<std::string> ids, configShapes;
 	for (int i = 0; i < configs; i++) {
 		TestPelletConfig c;
@@ -516,6 +550,15 @@ void testPelletTables()
 		const std::string model = idString(c.model);
 		check(ids.insert(model).second, "config id " + model + " is unique");
 		configShapes.insert(idString(c.shape));
+		if (model == "ust5") {
+			// The disc's Main Engine config (standin_objects.cpp): a ship part (type 3), no colour, 20 to 40 carriers,
+			// scale 1.65, ship joint 3, its own shape.
+			check(i == configs - 1, "the Main Engine is the last config");
+			check(idString(c.shape) == "ust5" && idString(c.unused) == "none" && c.joint == 3, "Main Engine: shape ust5, no split, repair joint 3");
+			check(c.mPelletType() == 3 && c.mPelletColor() == -1 && c.mCarryMin() == 20 && c.mCarryMax() == 40 && c.mScale() == 1.65f,
+			      "Main Engine: type 3, colour -1, 20 to 40 carriers, scale 1.65 (the disc's)");
+			continue;
+		}
 		check(model.size() == 4 && (model[1] == 'b' || model[1] == 'r' || model[1] == 'y') && model[0] == 'p', "config id " + model + " is p<colour><number>");
 		check(idString(c.shape).rfind("pe", 0) == 0 && idString(c.unused) == "none" && c.joint == -1, "config " + model + ": shape pe**, no split, no repair joint");
 		const int want = model[1] == 'b' ? 0 : model[1] == 'r' ? 1 : 2;
@@ -583,6 +626,18 @@ struct GenParms : public Parameters {
 	{
 	}
 	Parm<int> p00, p01;
+};
+
+// GenObjectWorkObject's Parm fields (workObject.cpp:305-310), with its code defaults.
+struct WorkGenParms : public Parameters {
+	WorkGenParms()
+	    : Parameters("work")
+	    , p02(this, 10, 0, 100, "p02", "pushers")
+	    , p03(this, 30.0f, 0.0f, 400.0f, "p03", "speed")
+	{
+	}
+	Parm<int> p02;
+	Parm<f32> p03;
 };
 
 struct ReadGen {
@@ -800,7 +855,7 @@ void testWorld()
 void testWorldGenerators()
 {
 	using Spec = nectar::ObjectGenSpec;
-	std::vector<Spec> specs(4);
+	std::vector<Spec> specs(5);
 	specs[0].kind      = Spec::Plant;
 	specs[0].plantType = 11;
 	specs[1].kind      = Spec::Work;
@@ -812,13 +867,32 @@ void testWorldGenerators()
 	specs[2].shape     = "bridge 13";
 	specs[3].kind      = Spec::Boss;
 	specs[3].bossType  = 8;
-	const Bytes file   = nectar::writeObjectGenFile(specs);
+	// A move stone with its own parameters, as the tutorial stand-in stage writes the disc's (10 pushers, speed 50).
+	specs[4].kind         = Spec::Work;
+	specs[4].name         = "move stone";
+	specs[4].shape        = "stone 10";
+	specs[4].stoneTo      = { 4.0f, 5.0f, 6.0f };
+	specs[4].stonePushers = 10;
+	specs[4].stoneSpeed   = 50.0f;
+	const Bytes file      = nectar::writeObjectGenFile(specs);
+
+	// Without stonePushers the bytes are what they were before the field existed (no object parameters).
+	{
+		Spec plain       = specs[1];
+		Spec withDefault = specs[1];
+		withDefault.stoneSpeed = 99.0f; // ignored while stonePushers < 0
+		check(nectar::writeObjectGen(plain) == nectar::writeObjectGen(withDefault), "a move stone without stonePushers writes no parameters");
+	}
 
 	nectar::GenFile parsed;
 	std::string err;
 	check(nectar::parseGen(file.data(), file.size(), parsed, err), "parseGen of plant, work and boss generators: " + err);
-	check(parsed.generators.size() == 4, "four generators");
-	if (parsed.generators.size() != 4) return;
+	check(parsed.generators.size() == 5, "five generators");
+	if (parsed.generators.size() != 5) return;
+	const nectar::GenParam* pushers = parsed.generators[4].object.param(0x70303200u); // 'p02'
+	const nectar::GenParam* speed   = parsed.generators[4].object.param(0x70303300u); // 'p03'
+	check(pushers && pushers->asInt() == 10 && speed && speed->asFloat() == 50.0f, "parseGen: the move stone's p02 10 and p03 50");
+	check(parsed.generators[1].object.params.empty(), "parseGen: the plain move stone has no object parameters");
 	check(nectar::genIdString(parsed.generators[0].object.kind) == "plnt" && parsed.generators[0].object.type == 11, "plant type 11");
 	check(nectar::genIdString(parsed.generators[1].object.kind) == "work" && parsed.generators[1].object.name == "move stone", "move stone");
 	check(parsed.generators[2].object.name == "bridge test", "bridge");
@@ -828,8 +902,9 @@ void testWorldGenerators()
 	RamStream in = streamOf(file);
 	readGenId(in);
 	for (int i = 0; i < 4; i++) in.readFloat();
-	check(in.readInt() == 4, "count");
-	for (int g = 0; g < 4; g++) {
+	check(in.readInt() == 5, "count");
+	for (int g = 0; g < 5; g++) {
+		bool objParmsRead = false;
 		readGenId(in);
 		readGenId(in);
 		readGenId(in);
@@ -847,14 +922,24 @@ void testWorldGenerators()
 			in.readString(name);
 			in.readString(shape);
 			if (std::string(name.mString) == "move stone") {
-				check(in.readFloat() == 1.0f && in.readFloat() == 2.0f && in.readFloat() == 3.0f, "a move stone's destination");
+				const float x = in.readFloat(), y = in.readFloat(), z = in.readFloat();
+				check((x == 1.0f && y == 2.0f && z == 3.0f) || (x == 4.0f && y == 5.0f && z == 6.0f), "a move stone's destination");
+				// GenObjectWorkObject's own Parms: the code defaults unless the generator carries them.
+				WorkGenParms w;
+				w.read(in);
+				const bool own = x == 4.0f;
+				check(own ? (w.p02() == 10 && w.p03() == 50.0f) : (w.p02() == 10 && w.p03() == 30.0f),
+				      own ? "the game reads the move stone's 10 pushers and speed 50" : "a plain move stone keeps the defaults 10 and 30");
+				objParmsRead = true;
 			}
 		} else if (kind == "boss") {
 			check(version == 2, "boss is version 2");
 			check((static_cast<std::uint32_t>(in.readInt()) & 0xF) == 8u, "boss type in the low four bits");
 		}
-		GenParms objParms;
-		objParms.read(in);
+		if (!objParmsRead) {
+			GenParms objParms;
+			objParms.read(in);
+		}
 		readGenId(in); // pint
 		readGenId(in);
 		for (int i = 0; i < 3; i++) in.readFloat();

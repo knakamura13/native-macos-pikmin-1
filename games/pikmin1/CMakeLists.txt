@@ -459,7 +459,10 @@ if (PIKMIN_BUILD_SCENARIOS)
         pc_port/scenarios/scenario_captain_death_day30.cpp
         pc_port/scenarios/scenario_no_day_limit.cpp
         pc_port/scenarios/scenario_challenge.cpp
-        pc_port/scenarios/scenario_onion_day3.cpp)
+        pc_port/scenarios/scenario_onion_day3.cpp
+        pc_port/scenarios/scenario_tutorial_skip.cpp
+        pc_port/scenarios/scenario_tutorial_firsts.cpp
+        pc_port/scenarios/scenario_tutorial_day1.cpp)
 endif()
 
 include_directories(
@@ -2045,7 +2048,7 @@ if(PIKMIN_BUILD_SCENARIOS)
     # src/jaudio/pikiseq.c is the game's BARC table for SndData/Seqs/pikiseq.arc
     # (data only), compiled with this build's PIKMIN_GAME_VERSION so the
     # stand-in .arc matches the executable's layout (standin-audio.md).
-    add_executable(nectar_standin_generator tools/scenarios/standin_generator.cpp tools/scenarios/standin_objects_stage.cpp tools/scenarios/standin_all_objects_stage.cpp src/jaudio/pikiseq.c)
+    add_executable(nectar_standin_generator tools/scenarios/standin_generator.cpp tools/scenarios/standin_objects_stage.cpp tools/scenarios/standin_all_objects_stage.cpp tools/scenarios/standin_practice_stage.cpp src/jaudio/pikiseq.c)
     # Source-level include path (every target here already has include/), so
     # the generator's own empty include list stays free of the game headers.
     set_source_files_properties(src/jaudio/pikiseq.c
@@ -2195,7 +2198,10 @@ if(PIKMIN_BUILD_SCENARIOS)
             ending_bad_day30:sandbox:30,60 ending_neutral_day30:sandbox:30,60 ending_happy:sandbox:30,60
             ending_happy_skip:sandbox:30,60 captain_death_day30:sandbox:30,60
             challenge_captain_death:sandbox:30,60 challenge_extinction:sandbox:30,60
-            day_end_no_day_limit:sandbox_objects:30,60 challenge_day_end:sandbox_objects:30,60)
+            day_end_no_day_limit:sandbox_objects:30,60 challenge_day_end:sandbox_objects:30,60
+            # The tutorial stand-in stage (stages/practice.ini, stage id Practice at index 0,
+            # tools/scenarios/standin_practice_stage.h): the tutorial-only milestones.
+            tutorial_skip:practice:30,60 tutorial_firsts:practice:30,60 tutorial_day1:practice:30,60)
         string(REPLACE ":" ";" parts "${entry}")
         list(GET parts 0 scenario)
         list(GET parts 1 stage)

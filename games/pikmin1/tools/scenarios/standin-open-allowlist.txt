@@ -40,12 +40,14 @@ dataDir/stages/sandbox_onions/1.gen
 dataDir/stages/sandbox_onions/2.gen
 dataDir/stages/sandbox_onions/init.gen
 dataDir/stages/sandbox_onions/plants.gen
+# The tutorial stage (standin_practice_stage.h) writes default.gen, init.gen and
+# the Day 1 file 0.gen; plants.gen is guarded like the others.
+dataDir/stages/practice/plants.gen
 
 # Parameter files CoreNode::load skips silently when missing (node.cpp); every
 # value keeps its code default. key.bin: the throw key stays A, which
-# throw_release asserts. demo, sound: no demo flags or sound constants are read
-# by a v1 scenario.
-dataDir/parms/demo.bin
+# throw_release asserts. sound: no sound constants are read by a scenario.
+# (demo.bin is written since the tutorial scenarios: the disc's trigger radii.)
 dataDir/parms/sound.bin
 dataDir/parms/key.bin
 dataDir/camera/camepara.bin
@@ -117,6 +119,23 @@ dataDir/cinemas/demo76.cin
 # the post-extinction bonus-seed movie for each Onion colour with no Pikmin (DEMOID_Unk64Cat,
 # Impact Site's demo64; gameCoreSection.cpp). The disc's has BonusPiki Actions only; the
 # scenarios spawn their own Pikmin and need no seeds.
+# The tutorial scenarios (stages/practice.ini). demo03 is the Day 1 wake-up
+# (DEMOID_OlimarWakeUp, NewPikiGameSetupSection); the disc's has one Notify key,
+# the TUT_Awakening text at its end. The runner's intro gate would skip it.
+dataDir/cinemas/demo03.cin
+# tutorial_firsts: the movies of DEMOFLAG_ApproachSeed (demo07) and
+# DEMOFLAG_ApproachEngine (demo16). The scenario asserts the flags and the
+# timer Navi::demoCheck sets, not the movies; the disc's carry one Notify key
+# each, a TextDemo (TUT_FirstSeed, TUT_FoundEngine), not covered.
+dataDir/cinemas/demo07.cin
+dataDir/cinemas/demo16.cin
+# tutorial_day1: the movies of DEMOFLAG_CollectFirstPellet (demo14) and
+# DEMOFLAG_StartBoxPush (demo15), asserted by their flags the same way; the disc's
+# carry a TextDemo each (TUT_Pelette, TUT_StoneHint2), not covered. The day-end
+# movies it reaches (demo28, demo32, demo84) and the waku textures are allowlisted
+# above for the other day ends.
+dataDir/cinemas/demo14.cin
+dataDir/cinemas/demo15.cin
 
 # captain_death: the three textures EffectMgr2D registers that effects.bun does
 # not hold (the file-select and results screens build the 2D effect manager when
@@ -137,3 +156,7 @@ dataDir/screen/eng_tex/end_navi.bti
 dataDir/screen/eng_tex/rocket2.bti
 dataDir/screen/eng_tex/c_star.bti
 dataDir/screen/eng_tex/sun_64.bti
+# tutorial_skip (and the engine carried to the ship): the Main Engine's part
+# achievement (PC_ACH_PART_MAIN_ENGINE) queues a toast whose icon is
+# screen/tex/image012.bti (pc_achievement_icon). Tolerated the same way.
+dataDir/screen/eng_tex/image012.bti

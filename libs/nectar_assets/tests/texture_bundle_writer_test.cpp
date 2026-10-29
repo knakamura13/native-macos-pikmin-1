@@ -407,6 +407,7 @@ int main()
 		check(paths.count("consFont.bti") && paths.count("effects/shadow.txe") && paths.count("intro/nintendo.bti")
 		          && paths.count("effects/tex/effects.bun") && paths.count("screen/eng_tex/screen.bun"),
 		      "required boot files present");
+		check(paths.count("intro/map0.bti") && paths.count("intro/map1.bti"), "the area banners of the Impact Site (tutorial stage) and the Forest of Hope");
 		check(!paths.count("effects/halowhit.txe") && !paths.count("effects/pcr/effects.bun"), "halowhit stays absent; pcr bundle belongs to #72");
 	}
 

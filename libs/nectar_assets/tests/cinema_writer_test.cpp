@@ -473,8 +473,11 @@ int main(int argc, char** argv)
 			// demo36 (the results backdrop) ends with a looping cut on purpose: it keeps the results screen up
 			// until exitDayEnd drops it, as the disc's does. Every other stand-in ends on its own.
 			// demo73 (the bad ending's escape) and demo77 (the neutral and happy endings' space flight)
-			// do the same for the final results window.
-			if ((f.path == "dataDir/cinemas/demo36.cin" || f.path == "dataDir/cinemas/demo73.cin" || f.path == "dataDir/cinemas/demo77.cin") && &c == &r.cuts.back())
+			// do the same for the final results window, and demo20 (the Main Engine reaching the ship)
+			// until its own TextDemo key skips the scene, as the disc's does.
+			if ((f.path == "dataDir/cinemas/demo36.cin" || f.path == "dataDir/cinemas/demo73.cin" || f.path == "dataDir/cinemas/demo77.cin"
+			     || f.path == "dataDir/cinemas/demo20.cin")
+			    && &c == &r.cuts.back())
 				check(c.flags == nectar::kCutLoop, f.path + ": the last cut loops until the results window closes it");
 			else
 				check(c.flags == nectar::kCutPlayOnce, f.path + ": every cut plays once, so the movie ends without a skip");
@@ -568,6 +571,19 @@ int main(int argc, char** argv)
 		}
 		check(special >= 0 && fadeOut >= 0 && special < fadeOut && specialAt == fadeOutAt + 2, "demo26: SpecialDayEnd listed before FadeOut, two frames after it");
 		check(specialAt >= 30, "demo26: SpecialDayEnd late enough to leave a skip window before it");
+		// demo17 (scenario tutorial_day1): the ship's Henka, then ForceDayEnd, then the TUT_GetEngine text, in the disc's order.
+		int henka = -1, dayEnd = -1, text = -1;
+		for (const auto& f : files) {
+			if (f.path != "dataDir/cinemas/demo17.cin") continue;
+			const ReadCin r = loadCin(f.text);
+			for (const auto& c : r.cuts)
+				for (const ReadKey& k : c.keys) {
+					if (k.type == nectar::kCinEventAction && k.cmd == nectar::kDemoSenderUfo && k.value == nectar::kDemoUfoHenka) henka = k.frame;
+					if (k.type == nectar::kCinEventNotify && k.cmd == nectar::kMovieCmdForceDayEnd) dayEnd = k.frame;
+					if (k.type == nectar::kCinEventNotify && k.cmd == nectar::kMovieCmdTextDemo && k.value == 9) text = k.frame;
+				}
+		}
+		check(henka >= 0 && henka < dayEnd && dayEnd < text, "demo17: the ship's Henka, ForceDayEnd, then TUT_GetEngine (9)");
 	}
 	std::vector<nectar::StandInCinemaFile> again;
 	check(nectar::writeStandInCinemas(again, err) && again.size() == files.size(), "second build");

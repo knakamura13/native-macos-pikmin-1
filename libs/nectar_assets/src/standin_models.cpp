@@ -309,6 +309,17 @@ Model buildStandInModel(const StandInModelSpec& spec)
 		joint.matPolys.push_back({ j, j });
 		m.joints.push_back(std::move(joint));
 	}
+	if (spec.platform && !m.meshes.empty()) {
+		// The root box's triangles, as rock (the code standin_world.cpp's platform models use).
+		for (const ModMtxGroup& g : m.meshes[0].groups) {
+			for (const ModTriangle& t : g.tris) {
+				ModCollTri c;
+				c.code = 0x20000000u;
+				for (int k = 0; k < 3; k++) c.v[k] = t.v[k].pos;
+				m.collision.push_back(c);
+			}
+		}
+	}
 	m.trailingIni = spec.collInfo;
 	return m;
 }

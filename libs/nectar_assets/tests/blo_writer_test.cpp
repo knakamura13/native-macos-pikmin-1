@@ -358,6 +358,8 @@ std::map<std::string, LayoutReq> requirements()
 	                       "re_j_00.blo", "re_n1_00.blo", "re_g_00.blo", "re_q_00.blo" })
 		m[f].reqs = { { "tx00", 'A' } }; // tx00..tx19 are optional and any type (the disc has a picture in tu_tx37_01); the stand-in has one text box
 	m["tu_tx31.blo"].reqs = { { "tx00", 'A' } }; // captain_damage: TUT_APunchUFO's page
+	// The tutorial scenarios: TUT_NukiAndFree's two pages, TUT_GetEngine's page, the Day 1 diary entry's two pages.
+	for (const char* f : { "tu_tx38_00.blo", "tu_tx38_01.blo", "tu_tx15.blo", "re_a_00.blo", "re_a_01.blo" }) m[f].reqs = { { "tx00", 'A' } };
 
 	// captain_death: the results chain (ogResult.cpp, ogSave.cpp, ogMemChk.cpp, ogFileSelect.cpp ...).
 	// Tags built from NUL padding ('hai', 'fp') are written with tag3().
@@ -730,8 +732,8 @@ int main()
 	{
 		std::vector<nectar::StandinLayout> layouts = nectar::standinBloLayouts();
 		std::map<std::string, LayoutReq> reqs      = requirements();
-		check(layouts.size() == 51, "51 layouts: 12 on the boot path, 8 for day30_clock, 2 for the stand-in cinema text keys, 17 for captain_death, "
-		                            "1 for captain_damage, 2 diary pages for day_end, 4 for extinction_day30, 4 for challenge mode, 1 diary page for onion_day3");
+		check(layouts.size() == 56, "56 layouts: 12 on the boot path, 8 for day30_clock, 2 for the stand-in cinema text keys, 17 for captain_death, "
+		                            "1 for captain_damage, 2 diary pages for day_end, 4 for extinction_day30, 4 for challenge mode, 1 diary page for onion_day3, 5 for the tutorial scenarios");
 		const char* bootOrder[] = { "black.blo", "pause.blo", "pause_ok.blo", "gameover.blo", "gameove2.blo", "count.blo",
 			                        "con01.blo", "sund.blo",  "account.blo",  "play09.blo",   "play10.blo",   "play_day.blo" };
 		for (size_t i = 0; i < 12 && i < layouts.size(); i++) check(layouts[i].file == bootOrder[i], std::string("load order: ") + bootOrder[i]);

@@ -37,6 +37,7 @@
 #include "nectar_mapcore/map.h"
 #include "standin_all_objects_stage.h"
 #include "standin_objects_stage.h"
+#include "standin_practice_stage.h"
 
 #include <cstdint>
 #include <cstdio>
@@ -171,8 +172,9 @@ bool sandboxMap(Tree& tree, std::string& error)
 // list nodes without a null check, #64), then the sandbox as the sixth. The
 // sandbox has no `id` line, so it is STAGE_TESTMAP (5): not the tutorial (the
 // clock runs), no zone banner, music falls back to stage 0. `hidden` keeps it out
-// of the in-game map select. Only `file` must match; the story stage .ini files
-// are never opened because no scenario enters them on stand-ins.
+// of the in-game map select. Only `file` must match. Of the story stages only
+// the first, stages/practice.ini (id 0, index 0: the tutorial), has stand-in
+// files (standin_practice_stage.h); the other four are never opened.
 bool stagesIni(Tree& tree, std::string& error)
 {
 	std::vector<nectar::StagesEntry> entries;
@@ -283,6 +285,20 @@ bool parmFiles(Tree& tree, std::string& error)
 		      parmInt("p19", 5),        // _154, UFO level 2 part count (code 6)
 		  } } },
 		// CPlate (cPlate.cpp): where the squad stands behind the captain.
+		// DemoParms (gameDemo.cpp): the trigger radii and timers of the tutorial's
+		// demo flags. All five differ from the code default (150, 100, 6, 30, 150)
+		// except p03, so the file carries the disc's (parms/demo.bin, read-only,
+		// 2026-10-28). Only the tutorial scenarios reach them: the red Onion, seed and
+		// engine checks of Navi::demoCheck run on stage Practice (or in the tutorial)
+		// only, and p03 (the DEMOFLAG_Unk9 timer, onion_unlock) is the code default.
+		{ "dataDir/parms/demo.bin",
+		  { {
+		      parmFloat("p00", 60.0f), // mOnionBootTriggerRadius (code 150): DiscoverRedOnyon
+		      parmFloat("p01", 25.0f), // mSeedDemoTriggerRadius (code 100): ApproachSeed
+		      parmFloat("p02", 40.0f), // mSeedDemoWaitTime (code 6): the NoPikminTimeout timer
+		      parmFloat("p03", 30.0f), // _30, the DEMOFLAG_Unk9 timer (code 30)
+		      parmFloat("p04", 40.0f), // mDemoTriggerRadius (code 150): ApproachEngine, part discovery
+		  } } },
 		{ "dataDir/parms/cunit.bin",
 		  { {
 		      parmFloat("p00", 17.5f), // mStartOffset (code 30)
@@ -442,7 +458,8 @@ bool buildTree(Tree& tree, std::string& error)
 {
 	tree.clear();
 	return parmFiles(tree, error) && archives(tree, error) && stagesIni(tree, error) && sandboxMap(tree, error) && siblingStandIns(tree, error)
-	    && standInCinemas(tree, error) && audioStandIns(tree, error) && standin::addObjectsStage(tree, error) && standin::addAllObjectsStage(tree, error);
+	    && standInCinemas(tree, error) && audioStandIns(tree, error) && standin::addObjectsStage(tree, error) && standin::addAllObjectsStage(tree, error)
+	    && standin::addPracticeStage(tree, error);
 }
 
 /// FNV-1a 64 over every path and its bytes, in path order.
@@ -483,7 +500,6 @@ const Allowed kManifestAllowlist[] = {
 	// tekikeys/ and tekipara/ are all in the tree.
 	// Silent when missing: CoreNode::load and the null-checked opens keep the
 	// code defaults (see standin-open-allowlist.txt for each).
-	{ "dataDir/parms/demo.bin", "demo flag parameters, skipped when missing" },
 	{ "dataDir/parms/sound.bin", "sound constants, skipped when missing" },
 	{ "dataDir/parms/key.bin", "key config, skipped when missing; the throw key stays A" },
 	{ "dataDir/camera/camepara.bin", "camera parameters, skipped when missing" },

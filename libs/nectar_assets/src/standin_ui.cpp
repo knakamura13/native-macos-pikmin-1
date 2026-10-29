@@ -448,6 +448,13 @@ std::vector<StandinLayout> standinBloLayouts()
 		k.add(with(pane("best"), { pic("b_00") }));
 		out.push_back(layout("cha_best.blo", k));
 	}
+	// The tutorial scenarios (tools/scenarios/standin_practice_stage.h): DEMOFLAG_Pluck15thPikmin
+	// opens TUT_NukiAndFree, two pages (ogTutorialData.cpp bloFile_NukiAndFree); the ship-upgrade
+	// movie after the Main Engine (stand-in demo17) opens TUT_GetEngine (bloFile_GetEngine); the
+	// tutorial's day end writes the Day 1 diary entry RESFLAG_EndFirstDay, two pages (ogResult.cpp
+	// bloFile_Res_Table: re_a_00, re_a_01).
+	for (const char* f : { "tu_tx38_00.blo", "tu_tx38_01.blo", "tu_tx15.blo", "re_a_00.blo", "re_a_01.blo" })
+		out.push_back(tutorialPage(f));
 
 	return out;
 }

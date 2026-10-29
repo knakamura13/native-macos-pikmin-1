@@ -78,6 +78,13 @@ StandInAnimSet buildSet(const ObjectAnimProfile& p)
 			previousKey = r.frame;
 			a.info.infoKeys.push_back(r);
 		}
+		for (const auto& e : in.effectKeys) {
+			AnimKeyRecord r;
+			r.frame     = e.first;
+			r.eventType = 1; // ANIMEVENT_Action: PaniAnimator::checkEventKeys sends KEY_PlayEffect with mKeyType as its value
+			r.keyType   = std::uint8_t(e.second);
+			a.info.eventKeys.push_back(r);
+		}
 		a.frameCount = in.frames;
 		a.measured   = true; // length and keys come from the disc
 		s.anims.push_back(std::move(a));
@@ -239,7 +246,8 @@ bool writeStandInObjectModels(std::vector<StandInModelFile>& out, std::string& e
 		StandInModelFile f;
 		f.path = spec.path;
 		std::string err;
-		if (!writeMod(buildStandInModel(spec), f.bytes, err)) {
+		const Model model = buildStandInModel(spec);
+		if (!(spec.platform ? writePlatformMod(model, f.bytes, err) : writeMod(model, f.bytes, err))) {
 			error = spec.path + ": " + err;
 			return false;
 		}
@@ -294,7 +302,7 @@ bool writeStandInPelletTables(std::vector<StandInAnimFile>& out, std::string& er
 	const Size sizes[] = { { 1, "01", "pe01" }, { 5, "05", "pe05" }, { 10, "10", "pe10" }, { 20, "20", "pe20" } };
 
 	BeWriter cfg;
-	cfg.s32(int(std::size(kinds) * std::size(sizes)));
+	cfg.s32(int(std::size(kinds) * std::size(sizes)) + 1); // + the Main Engine, below
 	for (const Kind& k : kinds) {
 		for (const Size& z : sizes) {
 			const std::string name = std::string(k.name) + " pellet " + std::to_string(z.number);
@@ -314,6 +322,25 @@ bool writeStandInPelletTables(std::vector<StandInAnimFile>& out, std::string& er
 			cfg.s32(-1);
 		}
 	}
+	// The Main Engine ('ust5', the shape soto5 above), the one ship part the
+	// tutorial stand-in stage places (tools/scenarios/standin_practice_stage.h).
+	// Unlike the pellets above, every value is the disc's: the VERSION_GPIE01_01
+	// install's parms/pelMgr.bin, config 23 of 62, read once (read-only,
+	// 2026-10-28): type 3 (ship part), colour -1, 20 to 40 carriers, dynamics on
+	// with 10 / 4 / 4, seeds 1 / 1, scale 1.65, carry-info height 30, sounds 1 and
+	// 1, and ship joint 3 to repair. The carriers and the scale decide how many
+	// Pikmin carry it and how fast, which the tutorial scenarios depend on.
+	if (!putParams(cfg,
+	               { parmString("x99", "ufo : soto5"), parmInt("p00", 3), parmInt("p09", -1), parmInt("p01", 20), parmInt("p02", 40),
+	                 parmInt("p03", 1), parmFloat("p04", 10.0f), parmFloat("p05", 4.0f), parmInt("p08", 4), parmInt("p06", 1), parmInt("p07", 1),
+	                 parmFloat("p10", 1.65f), parmFloat("p11", 30.0f), parmInt("p12", 1), parmInt("p13", 1) },
+	               error)) {
+		return false;
+	}
+	putReversedId(cfg, "ust5");
+	putReversedId(cfg, "ust5");
+	putReversedId(cfg, "none");
+	cfg.s32(3);
 	out.push_back({ "dataDir/parms/pelMgr.bin", cfg.b });
 
 	// objects/pelAnim.bin: int count, then per info (PelletAnimInfo::read) the
@@ -457,7 +484,12 @@ std::vector<std::uint8_t> writeObjectGen(const ObjectGenSpec& g)
 			w.f32(g.stoneTo.y);
 			w.f32(g.stoneTo.z);
 		}
-		putGenParams(w, {});
+		if (g.stonePushers >= 0) {
+			// GenObjectWorkObject 'p02' (Pikmin needed to move it) and 'p03' (speed).
+			putGenParams(w, { parmInt("p02", g.stonePushers), parmFloat("p03", g.stoneSpeed) });
+		} else {
+			putGenParams(w, {});
+		}
 		break;
 	case ObjectGenSpec::Boss: // GenObjectBoss::readParameters, version 2: one word of flags (the boss in the low four bits)
 		putGenId(w, "boss");
