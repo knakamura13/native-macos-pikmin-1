@@ -364,7 +364,8 @@ file from Linux or Windows means the same as one from macOS:
   fuses a sine and a cosine of the same value.
 
 Release builds never set `PIKMIN_BUILD_SCENARIOS`, so their flags and libm are
-unchanged. A `PIKMIN_NETPLAY_BUILD` already has the first two and is left as is.
+unchanged. A `PIKMIN_NETPLAY_BUILD` already has the first two and, on Apple,
+links the same `__sincosf_stret`/`__sincos_stret` replacement.
 `-DPIKMIN_SCENARIO_FLOAT_DET=OFF` gives the platform's own floats again.
 
 Measured 2026-10-28: macOS arm64 (Apple clang, Release, Unix Makefiles) against
