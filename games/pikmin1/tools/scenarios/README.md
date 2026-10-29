@@ -326,7 +326,9 @@ The stand-in entries run through `run_standin_scenario.cmake`. It starts
 game tolerates missing and no scenario depends on, with the reason beside it.
 Under CTest it also passes `--state-hash-log` and writes
 `<build>/scenario-logs/scenario_<name>_<rate>.hash.log` and `.log` (CI uploads
-that folder when a test fails).
+every `.hash.log` on every run and the whole folder when a test fails; see
+[CI](#ci)). The hash log is one line per tick, written in binary mode, so it is
+LF-terminated on every OS and byte-identical when the floats are.
 
 ### CI
 
@@ -350,8 +352,123 @@ scenarios do not compete for the same cores).
   `runner.os` values whose GL probe failed. Listed OSes skip the scenario test
   step only; their build and unit tests still run. Add an OS only with a linked
   tracking issue.
-- The native JAudio scenario run in `standin-audio.md` is a proposal and is not
-  in CI; the `jaudio-build` job only compiles that configuration.
+- **FP gate (Windows only, a step in the same job)**: `tools/netplay/fp_gate.py`
+  disassembles the linked `nectar.exe` and fails on any x87 transcendental or
+  `fsqrt`, any FMA and any CRT math import. It checks that the software libm is
+  complete, for code the scenarios do not reach (MSYS2 has no Python by default;
+  the step installs `mingw-w64-x86_64-python`, about 35 s).
+
+Other jobs of the workflow:
+
+- **`jaudio-build`** (Linux only): compiles the release configuration (native
+  JAudio on, no scenarios).
+- **`jaudio-scenarios`** (Linux, macOS, Windows): `PIKMIN_NATIVE_JAUDIO=ON` with
+  `PIKMIN_BUILD_SCENARIOS=ON` in its own build directory, then
+  `ctest -R ^scenario_(boot_smoke|throw_release|day30_clock)_ -E _disc` (the
+  generator plus six scenarios, as in `standin-audio.md`). Same dependencies,
+  `-UWIN32`, Mesa DLLs and environment as the main job. Nothing is skipped on any OS.
+- **`gl-probe`** (each OS): the GL context probe described under [GL probe](#gl-probe).
+- **`scenario-hash-compare`**: see below.
+
+#### Cross-OS state hashes
+
+`build-and-test` and `jaudio-scenarios` upload `build/pikmin1/scenario-logs/*.hash.log`
+as artifacts on every run (`scenario-hash-logs-<OS>` and
+`scenario-hash-logs-jaudio-<OS>`, 14 days; about 2.6 MB per OS for the 30 logs of the
+main job and 0.5 MB for the 6 of the JAudio job, a zip of 380 KB and 100 KB).
+`scenario-hash-compare` downloads all six and runs
+`tools/scenarios/compare_hash_logs.py` three times: the main job's logs on the three
+OSes, the JAudio job's logs on the three OSes, and all six sets over the scenarios
+they share (native JAudio on against off). It compares bytes, with nothing
+normalised, and fails when
+a file differs (it prints the first differing line, its tick and which of the
+columns `total navi piki teki item world rng mode` differ, with every OS's line),
+when an OS has no log for a scenario another OS has, when a log is empty, and when
+an OS's job produced no logs at all (a cancelled job included). The job runs even
+when a build job failed, and is skipped only when the whole run is cancelled.
+
+Result (branch `wip/close-ci`, 2026-10-29; GitHub's `macos-26` with Apple clang
+21.0, `ubuntu-latest` as Ubuntu 24.04 with GCC 13.3, `windows-latest` with MSYS2
+MINGW64 GCC 16.2): in runs 40815424995 and 40817545929 (the final workflow) all 30
+stand-in scenario logs, and the 6 of
+the native JAudio builds, are **byte-identical on macOS, Linux and Windows**
+(2,594,893 bytes for the 30, sha1 `6d0bda3da4f1...`, on all three), and the
+JAudio-on logs equal the JAudio-off logs of the same scenarios on every OS.
+Run 40812788355 gave the same bytes on macOS and Linux. Its Windows logs had
+the same hashes but CRLF line ends: `pc_state_hash.cpp` opened the log with
+`fopen(path, "w")`, text mode, which MinGW expands, and the comparison of that run
+and of run 40814599756 still ignored a CR. The log is now opened with `"wb"`
+and the comparison ignores nothing (the readers, `tools/netplay/*.py` and the
+scenario determinism check, read text or split on whitespace and do not depend on
+the line end; `pc_input_log` and `pc_netplay_inlog` already use `"wb"`).
+
+Negative control: a manual run with `float_det` unticked
+(`gh workflow run ci.yml --ref <branch> -f float_det=false`, which passes
+`-DPIKMIN_SCENARIO_FLOAT_DET=OFF` to the scenario builds) must go red. Run
+40816367641 did: `scenario-hash-compare` failed with 0 of 30 identical across the
+three OSes (first differences at tick 9 to 30), and the Windows FP gate failed
+with 33 forbidden references (`fpatan`, `fsincos`, `fsqrt` in the MinGW libm,
+and `acos`, `asin`, `atan`, `log10`, `tan` imported from `msvcrt.dll`). Pairwise,
+with the option OFF: Linux against Windows 16 of 30 identical, macOS against
+either 0 of 30.
+
+#### macOS jobs cancelled with no runner
+
+Seen on 2026-10-28 (for example runs 40744496133 and 40684014259): a `macOS (arm64)`
+or `GL probe (macOS (arm64))` job ends `cancelled` 15 minutes (15:01 to 15:02) after
+the run started, with an empty `runner_name` and no steps. The job's annotation says
+"The job was not acquired by Runner of type hosted even after multiple attempts"
+and "Due to capacity constraints, jobs targeting macOS arm64 runners may experience
+longer queue times". The cause is GitHub's macOS arm64 runner capacity, not the
+workflow:
+
+- 7 of the 95 macOS jobs of the 51 runs up to then were cancelled this way, all
+  between 11:53 and 18:37 UTC on 2026-10-28; no Linux or Windows job (231 of
+  them) was ever without a runner, and the macOS queue time was about 0 before
+  and after (a run at 20:21 UTC the same day: 0.1 min; the runs of 2026-10-29
+  03:33 to 04:11 UTC: 2 s). Eight more macOS jobs in that window waited 5 to 10
+  minutes before they started (the last at 19:10 UTC) and then ran normally;
+  those queue times suggest retries at 5-minute spacing before the 15-minute
+  cancellation, which GitHub does not say.
+- It is not `timeout-minutes`: the main macOS job has 60 and was cancelled at 15,
+  and a timeout counts from the job's start, which never came.
+- It is not the `concurrency` group (`cancel-in-progress`). That cancels every
+  job of a run, with its runner, when a newer push or dispatch of the same PR or
+  ref replaces it: 42 of the 46 other cancelled jobs (all OSes) ended within 90 s
+  after a newer run on the same ref was created. The no-runner jobs were cancelled
+  when the other jobs of their run had already finished normally.
+- GitHub does not document the 15 minutes. It documents a 24-hour queue limit and,
+  for the Free plan, at most 5 concurrent macOS jobs for the whole account; waiting
+  for that limit queues, it does not cancel.
+
+Nothing in the workflow changes it. "Re-run failed jobs" re-acquires a runner (it
+worked on the second attempt of runs 40684014259 and 40731460450). Each macOS job is its own
+allocation and each run has three (`macOS (arm64)`, `GL probe (macOS (arm64))`,
+and `Native JAudio scenarios (macOS)`), so each one is another chance to hit it;
+folding the probe or the JAudio run into the main macOS job would leave one, at
+the cost of a longer job. Not tried.
+
+#### CI minutes added by the cross-OS work
+
+Job times from run 40814599756 (warm ccache, restored from the first run of the
+branch; run 40812788355 is the cold one). Only the jobs and steps this change
+added or widened:
+
+| Job or step | Cold | Warm |
+|-------------|------|------|
+| `Native JAudio scenarios (macOS)`, new | 4 min 35 s | 1 min 44 s |
+| `Native JAudio scenarios (Windows)`, new | 9 min 4 s | 4 min 31 s |
+| `Native JAudio scenarios (Linux)`, existing | 3 min 30 s | 2 min 16 s |
+| `Cross-OS scenario state hashes`, new | 7 s | 10 s |
+| Hash-log upload step, per build job | up to 8 s | up to 8 s |
+| Windows FP gate step | not in that run | about 35 s |
+
+That is about 7 more job-minutes per run when warm (macOS 2 + Windows 4.5 + FP
+gate, compare and uploads 1) and about 15 when cold, none of it on the critical
+path: the longest job is still `Windows (x86-64, MinGW-w64)` (7 min 24 s and
+8 min 23 s in two warm runs, 35 s of each the FP gate; 14 min 37 s cold). The macOS
+jobs started within 2 s of the run in all of these. On a public repository the
+minutes are free; on a private one a macOS minute counts 10 times.
 
 ### Cross-platform floats
 
@@ -395,16 +512,33 @@ and on a real install.
 
 On a real install (RelWithDebInfo, option ON), the six disc runs give the same
 per-tick hashes on macOS arm64, Linux x86-64 and a MinGW-w64 Windows build
-under wine; the Windows log ends its lines in CRLF, so strip the CR before
-comparing. Recipes and results: [linux-disc-run.md](linux-disc-run.md) and
+under wine (the log is now written in binary mode, so the files are
+byte-identical; the wine run predates that and had CRLF line ends). Recipes and results: [linux-disc-run.md](linux-disc-run.md) and
 [windows-disc-run.md](windows-disc-run.md).
 
-Not measured: Windows stand-in hash logs against macOS (CI runs the stand-in
-scenarios on Windows but compares no logs across OSes), and real Windows (the
-Windows run above is wine 9.0). MinGW's libm uses x87 transcendentals, which is what the
-software libm exists to replace. Remaining assumptions: compile-time folding of a math call on
-constant arguments is up to each compiler, and the sqrt, `frexpf` and `ldexpf`
-that stay with the platform are exact by IEEE 754.
+Windows (MinGW-w64) was measured on CI on 2026-10-29 (see [Cross-OS state
+hashes](#cross-os-state-hashes); MSYS2 MINGW64, GCC 16.2, Release): with the option
+ON its 30 logs are byte-identical to macOS's and Linux's, and the linked
+`nectar.exe` passes `fp_gate.py` (no x87 transcendental or `fsqrt`, no FMA, no CRT
+math import). Run 40816367641 built every scenario binary with the option OFF
+and compared against the option-ON logs of run 40815424995, per OS:
+
+| Option OFF | Identical to option ON | First difference |
+|------------|------------------------|------------------|
+| macOS (Apple clang 21) | 0 of 30 | tick 30 (30 Hz) or 23 (60 Hz), navi hash: arm64 FMA |
+| Linux (glibc, GCC 13.3) | 16 of 30 | `throw_release` at tick 56 (30 Hz) or 61 (60 Hz), piki hash: libm |
+| Windows (MinGW libm, GCC 16.2) | 30 of 30 | none |
+
+So Windows needed no change: even without the option its x87 libm (the binary
+then has 33 forbidden references, mostly `fpatan`, `fsincos` and `fsqrt` in the
+MinGW libm and five `msvcrt.dll` math imports) rounds to the same floats as the
+software libm for every argument these 30 scenarios pass. That is a result for
+these inputs, not a property of x87: with the option ON the FP gate keeps those
+instructions out of the binary. Compile-time folding of math calls on constant arguments was audited on
+2026-10-28: at all 30 sites the folded value equals the software libm's runtime
+result. The sqrt, `frexpf` and `ldexpf` that stay with the platform are exact by
+IEEE 754. Real Windows hardware is not measured (CI uses Windows runners; the disc
+run above is wine 9.0).
 
 ## The scenarios
 
