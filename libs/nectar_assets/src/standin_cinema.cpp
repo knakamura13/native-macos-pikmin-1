@@ -234,6 +234,55 @@ std::vector<Movie> movies()
 		m.cinema.cuts = { once, loop };
 		list.push_back(m);
 	}
+
+	// The last ship upgrade (DEMOID_ShipUpgradeLast, demo26, untranslated): queued by
+	// PlayerState::preloadHenkaMovie when a delivery brings the 30th part. Its Notify key
+	// MOVIECMD_SpecialDayEnd is the happy ending's trigger (GameMovieInterface::parse:
+	// forceDayEnd, mIsDayEndTriggered, ENDING_Happy). The disc's demo26 (read-only,
+	// 2026-10-28): one 530-frame cut played once with a ship Action (sender 1, event 2) at
+	// 180, then SpecialDayEnd at 521 and FadeOut at 519, listed in that order; the movie also
+	// shows the field Pikmin (Show/Update flags) near the ship. The stand-in keeps the two
+	// Notify keys, their file order and their two-frame gap, on an invented 60-frame scene; the
+	// ship Action is left out (no ship on the stand-in stages; DemoEventMgr::act ignores it
+	// without one). Used by ending_happy and ending_happy_skip: a START skip replays the keys in
+	// frame order (FadeOut, then SpecialDayEnd; pc_cine_skip_order_test has the disc frames).
+	{
+		Movie m;
+		m.cin           = "dataDir/cinemas/demo26.cin";
+		m.cinema.flags  = hideNavi;
+		m.cinema.scenes = { "cinemas/demo26/demo26_1.dsk" };
+		m.sceneFrames   = { 60 };
+		CinCut cut;
+		cut.endFrame  = 60;
+		cut.keys      = { notify(kMovieCmdSpecialDayEnd, 0, 52), notify(kMovieCmdFadeOut, 0, 50) };
+		m.cinema.cuts = { cut };
+		list.push_back(m);
+	}
+
+	// Flying through space (DEMOID_EndingSpace, demo77, untranslated): the neutral ending's
+	// phase three and the happy ending's phase four (DayOverModeState), each right after
+	// makeTotalScoreWindow. Like demo73, the movie starts the final results window with its
+	// StartTotalResults key and then loops until the window is done: in the neutral ending
+	// DayOverModeState::update leaves for GameExit when the window reports done in phase three,
+	// and runs phase four (GameExit, window unread) as soon as no movie is active. The disc's
+	// (read-only, 2026-10-28): NonGameMovie, one scene, a 1199-frame cut played once with FadeIn
+	// at 0 and StartTotalResults at 1197, then the same scene's frames 1197-1199 in a loop, with
+	// the space backdrop, Olimar and the ship as actors. Same shape here, shorter, no actors.
+	{
+		Movie m;
+		m.cin           = "dataDir/cinemas/demo77.cin";
+		m.cinema.flags  = kCinNonGameMovie;
+		m.cinema.scenes = { "cinemas/demo77/demo77.dsk" };
+		m.sceneFrames   = { 30 };
+		CinCut once, loop;
+		once.endFrame   = 30;
+		once.keys       = { notify(kMovieCmdStartTotalResults, 0, 27), notify(kMovieCmdFadeIn, 0, 0) };
+		loop.startFrame = 27;
+		loop.endFrame   = 30;
+		loop.flags      = kCutLoop;
+		m.cinema.cuts   = { once, loop };
+		list.push_back(m);
+	}
 	return list;
 }
 

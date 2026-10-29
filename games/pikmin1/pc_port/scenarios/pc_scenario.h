@@ -32,6 +32,10 @@ public:
 	virtual bool supportsRate(int /*ticksPerSecond*/) const { return true; }
 	// True for runner self-tests (exit_zero): selectable by name, left out of the usage list.
 	virtual bool testOnly() const { return false; }
+	// True to start in challenge mode: pc_scenario_pre_stage then takes CardSelect's
+	// challenge path (gameflow.mIsChallengeMode, PlayerState::setChallengeMode) instead of
+	// forcing story mode (coverage/terminals.md T17, T18).
+	virtual bool challengeMode() const { return false; }
 	// Runs once when the stage is ready, before tick 0.
 	virtual void onStageReady() { }
 	// Fills pad 0 for this tick; pads 1-3 arrive neutral. Called every tick, before the sim.
@@ -95,5 +99,19 @@ bool scenarioCheckAnimMgrPreconditions(unsigned tick);
 // below the animator's frame count.
 class Navi;
 bool scenarioCheckThrowWaitPreconditions(unsigned tick, Navi* navi);
+
+// Read access to NewPikiGame's file-static windows (defined in newPikiGame.cpp, scenario
+// builds only). Null when the game has no such window at the moment.
+namespace zen {
+struct DrawGameOver;
+struct DrawFinalResult;
+struct DrawCMresult;
+} // namespace zen
+zen::DrawGameOver* pc_scenario_gameover_window(void);
+zen::DrawFinalResult* pc_scenario_total_window(void);
+zen::DrawCMresult* pc_scenario_challenge_window(void);
+// Text windows createTutorialWindow has opened since the process started; with a
+// non-null lastTextId, the EnumTutorial of the last one (-1 before the first).
+int pc_scenario_text_windows_opened(int* lastTextId);
 
 #endif

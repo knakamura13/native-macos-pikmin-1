@@ -79,7 +79,7 @@ below, and that every `cinemas/` path in the boot manifest is a stand-in file.
 
 ## Stand-in set
 
-No actors, so no model or animation is opened. Every cut plays once (demo36 and demo73 end in a loop), so a movie
+No actors, so no model or animation is opened. Every cut plays once (demo36, demo73 and demo77 end in a loop), so a movie
 ends without a skip. Each scene is a short dolly towards the origin (or towards
 the target, for a Localized movie), 30 degrees, with one white light. The
 cameras, lights, lengths and frames are invented. The `.dsk` paths of the disc
@@ -97,6 +97,8 @@ boot are the ones listed in `boot-manifest.txt`.
 | `demo47.cin` + 1 scene (60) | Day end after an extinction (`DEMOID_ExtDayEnd`, translated per stage; the sandbox falls back to Impact Site, demo47) | HideNavi, NaviNoAI | FadeIn at 0, FadeOut at 50, `ForceResults` at 57 |
 | `demo36.cin` + 2 scenes (30 + 10) | End-of-day results backdrop (`DEMOID_EndOfDayResults`, started by `DayOverModeState::initialisePhaseTwo` with the results window); used by `captain_death` | NonGameMovie | none. The first cut plays once, the second loops (`CINMODE_LoopScene`) until `exitDayEnd` drops the movie, as the disc's does (a 420-frame cut and a 10-frame loop). The results window stays up only while a movie is active: with no demo36 the phases advance on the next ticks and the day leaves for `GameExit` |
 | `demo73.cin` + 2 scenes (30 + 10) | Bad ending, Olimar fails to escape (`DEMOID_BadEndingFailEscape`, untranslated, started by `DayOverModeState::initialisePhaseTwo` on Day 30 with fewer than 25 parts); used by `extinction_day30` | NonGameMovie | `StartTotalResults` (12) at 27 in the first cut, which plays once; the second loops until the final results window reports done and `DayOverModeState::update` skips the scene. The disc's (read-only, 2026-10-28): NonGameMovie, a 449-frame cut with the key at 446, then a 4-frame loop, with the results backdrop and ship actors. Without it the window is built but never started and the phases run on |
+| `demo26.cin` + 1 scene (60) | The last ship upgrade (`DEMOID_ShipUpgradeLast`, untranslated), queued by `PlayerState::preloadHenkaMovie` when the next part is the 30th; used by `ending_happy` and `ending_happy_skip` | HideNavi, NaviNoAI | `SpecialDayEnd` (13) at 52, then FadeOut at 50, in that file order. The disc's (read-only, 2026-10-28): one 530-frame cut with a ship Action (sender 1, event 2) at 180, `SpecialDayEnd` at 521 and FadeOut at 519 in that order, and flags that also show the field Pikmin near the ship. The stand-in keeps the two Notify keys, their order and their two-frame gap, so a skip's frame-order replay puts FadeOut first; the ship Action is left out (no ship on the stand-in stages, and `DemoEventMgr::act` ignores it without one). Without the key the movie ends with no ending |
+| `demo77.cin` + 1 scene (30) | Flying through space (`DEMOID_EndingSpace`, untranslated): the neutral ending's phase three and the happy ending's phase four, each right after `makeTotalScoreWindow`; used by `ending_neutral_day30` and `ending_happy` | NonGameMovie | FadeIn at 0 and `StartTotalResults` at 27 in a cut played once, then frames 27-30 of the same scene in a loop. The disc's (read-only, 2026-10-28): the same shape on 1199 frames (`StartTotalResults` at 1197, the loop on 1197-1199), with the space backdrop, Olimar and the ship as actors. Without the key the window is never started and the loop never ends; without the loop the neutral ending runs phase four (GameExit) with the window unread |
 
 The discovery key frames follow the Onion's boot motion. Boot starts the motion
 (info colour + 3), and its `KEY_Action0` emits the first seed. Red keeps the
@@ -338,3 +340,38 @@ set those container bits) and demo69 (the bad ending's first movie; the disc's
 has Action keys only). demo74 (Olimin) is not
 opened: `MoviePlayer::startMovie` returns before it when the stage has no red
 Onion.
+
+## Endings and challenge mode (2026-10-28)
+
+`scenario_ending_day30.cpp` (`ending_bad_day30`, `ending_neutral_day30`),
+`scenario_ending_happy.cpp` (`ending_happy`, `ending_happy_skip`),
+`scenario_captain_death_day30.cpp`, `scenario_no_day_limit.cpp` and
+`scenario_challenge.cpp` (`challenge_day_end`, `challenge_captain_death`,
+`challenge_extinction`). Stand-in only. What they open that the tree did not have:
+
+- demo26 and demo77 (table above). Their keys and shapes come from the disc's
+  files, read with a scratch script; no disc text, geometry or actor is used.
+- The Day 30 sunset text `TUT_BadEnding` is `tu_tx35.blo` (`ogTutorialData.cpp`
+  `bloFile_BadEnding`); that page already existed as a one-box tutorial page.
+- The challenge-mode HUD, `play_cha.blo` (`DrawGameInfo::DrawGameInfo(MODE_Challenge)`):
+  the same lookups as `play_day.blo` except the date (`dc_*`, story mode only).
+  Without it challenge mode panics at the stage load (`Cannot open file`).
+- The challenge results window (`DrawCMresult`, built by
+  `DayOverModeState::initialisePhaseTwo` in challenge mode): `cha_re.blo` (`titl` with
+  its `mark`, the score digits `bigl` ... `sbir`, the course names `p_m0`-`p_m4`, the
+  record mark `bi_w`, the graph area `g_sp`), `cha_rank.blo` (`rank` holding `1ban` ...
+  `5ban`, each with `Ni_l`, `Ni_c`, `Ni_r` and the new-rank mark `mN_w`) and
+  `cha_best.blo` (`best` with one `b_00`). Its save step reuses `cha_sav2`, `ac_chui`
+  and `data_m`. Every tag and type the code asks for is also on the disc's files
+  (`nectar_blo_writer_test` with `NECTAR_DISC_DATA`: 50 layouts, 0 problems). `pk..`
+  panes (PikaAlphaMgr) are left out, as elsewhere.
+
+Left missing on purpose, each a zero-length movie whose keys no chain step needs
+(allowlisted): demo114 (the neutral ending's phase two; the disc's has a ship Action
+and FadeOut), demo75, demo113 and demo76 (the happy ending's phases one to three;
+ship Actions, FadeIn and FadeOut), demo85 and demo86 (the yellow and blue Onion
+flights, which challenge mode starts because it owns every Onion) and demo64 (the
+bonus-seed movie finalSetup plays in challenge mode for each owned Onion with no
+Pikmin; BonusPiki Actions only). Also allowlisted: the toast icons of the other
+ending achievements (`rocket2.bti`, `c_star.bti`, `sun_64.bti`, like `end_navi.bti`)
+and the day files `sandbox/11.gen` and `12.gen`.

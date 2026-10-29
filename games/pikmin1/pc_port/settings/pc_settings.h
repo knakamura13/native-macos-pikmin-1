@@ -78,6 +78,7 @@ void pc_settings_scenario_enable(void);
 void pc_settings_scenario_set_fps_mode(int fpsMode);
 void pc_settings_scenario_set_infinite_day(int on);
 void pc_settings_scenario_set_whistle_pluck(int on);
+void pc_settings_scenario_set_no_day_advance(int on); ///< the "No Day Limit" cheat
 void pc_settings_scenario_set_window_size(int width, int height);
 #endif
 int pc_settings_get_eternal_night(void);

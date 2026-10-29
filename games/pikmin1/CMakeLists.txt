@@ -453,7 +453,12 @@ if (PIKMIN_BUILD_SCENARIOS)
         pc_port/scenarios/scenario_coop.cpp
         pc_port/scenarios/pc_scenario_note.cpp pc_port/scenarios/scenario_save_common.cpp pc_port/scenarios/scenario_save_load.cpp
         pc_port/scenarios/scenario_results_exit.cpp pc_port/scenarios/scenario_pause_continue.cpp
-        pc_port/scenarios/scenario_permadeath.cpp pc_port/scenarios/scenario_card_errors.cpp)
+        pc_port/scenarios/scenario_permadeath.cpp pc_port/scenarios/scenario_card_errors.cpp
+        pc_port/scenarios/scenario_ending_day30.cpp
+        pc_port/scenarios/scenario_ending_happy.cpp
+        pc_port/scenarios/scenario_captain_death_day30.cpp
+        pc_port/scenarios/scenario_no_day_limit.cpp
+        pc_port/scenarios/scenario_challenge.cpp)
 endif()
 
 include_directories(
@@ -2136,7 +2141,13 @@ if(PIKMIN_BUILD_SCENARIOS)
     foreach(entry save_load:sandbox_objects:30,60 save_load_flags:sandbox_objects:30,60
             results_nosave_map:sandbox_objects:30 results_nosave_cardselect:sandbox_objects:30
             card_errors:sandbox_objects:30 card_errors_saved:sandbox_objects:30 pause_continue:sandbox:30,60
-            permadeath_erase:sandbox:30,60 permadeath_unsaved:sandbox:30 permadeath_bad_slot:sandbox:30 permadeath_off:sandbox:30)
+            permadeath_erase:sandbox:30,60 permadeath_unsaved:sandbox:30 permadeath_bad_slot:sandbox:30 permadeath_off:sandbox:30
+            # Endings, the last day, No Day Limit and challenge mode (terminals.md T07-T10,
+            # T12, T17, T18): bounds in seconds, movies and windows advance per tick.
+            ending_bad_day30:sandbox:30,60 ending_neutral_day30:sandbox:30,60 ending_happy:sandbox:30,60
+            ending_happy_skip:sandbox:30,60 captain_death_day30:sandbox:30,60
+            challenge_captain_death:sandbox:30,60 challenge_extinction:sandbox:30,60
+            day_end_no_day_limit:sandbox_objects:30,60 challenge_day_end:sandbox_objects:30,60)
         string(REPLACE ":" ";" parts "${entry}")
         list(GET parts 0 scenario)
         list(GET parts 1 stage)

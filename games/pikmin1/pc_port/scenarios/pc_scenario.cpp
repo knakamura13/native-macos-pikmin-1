@@ -27,9 +27,11 @@
 #include "PaniAnimator.h"
 #include "PaniPikiAnimator.h"
 #include "GameStat.h"
+#include "GlobalGameOptions.h"
 #include "Piki.h"
 #include "NaviMgr.h"
 #include "PikiMgr.h"
+#include "PlayerState.h"
 #include "gameflow.h"
 #include "jaudio/piki_scene.h"
 #include "netplay/pc_coop_switch.h"
@@ -774,6 +776,17 @@ void pc_scenario_pre_stage(void)
 		scenarioFailf(0, "stage in stages.ini", "no stage with file '%s'", sStageFile.c_str());
 		// Booting on with no stage would dereference it; the verdict is already set.
 		terminate(PC_SCENARIO_EXIT_FAIL);
+	}
+	if (sScenario->challengeMode()) {
+		// CardSelect's challenge path (cardSelect.cpp): the flag, then every demo flag and
+		// every Onion (PlayerState::setChallengeMode). A challenge course always has a chid
+		// (stages.ini); the stand-in stages have none, and DayOverModeState indexes the
+		// hiscore table with it (GamePrefs::checkIsHiscore), so the stage stands in for
+		// Impact Site's course.
+		gameflow.mIsChallengeMode = TRUE;
+		playerState->setChallengeMode();
+		if (flowCont.mCurrentStage->mChalStageID >= CHALSTAGE_COUNT) flowCont.mCurrentStage->mChalStageID = CHALSTAGE_Practice;
+		std::printf("[scenario] challenge mode, challenge course %d\n", (int)flowCont.mCurrentStage->mChalStageID);
 	}
 	// The day is consumed by GameCoreSection's constructor (generator file and
 	// RNG reseed), so it is set here and not in the stage-ready hook.

@@ -472,8 +472,9 @@ int main(int argc, char** argv)
 			check(c.scene >= 0 && c.scene < int(r.scenes.size()), f.path + ": cut scene in range");
 			// demo36 (the results backdrop) ends with a looping cut on purpose: it keeps the results screen up
 			// until exitDayEnd drops it, as the disc's does. Every other stand-in ends on its own.
-			// demo73 (the bad ending's escape) does the same for the final results window.
-			if ((f.path == "dataDir/cinemas/demo36.cin" || f.path == "dataDir/cinemas/demo73.cin") && &c == &r.cuts.back())
+			// demo73 (the bad ending's escape) and demo77 (the neutral and happy endings' space flight)
+			// do the same for the final results window.
+			if ((f.path == "dataDir/cinemas/demo36.cin" || f.path == "dataDir/cinemas/demo73.cin" || f.path == "dataDir/cinemas/demo77.cin") && &c == &r.cuts.back())
 				check(c.flags == nectar::kCutLoop, f.path + ": the last cut loops until the results window closes it");
 			else
 				check(c.flags == nectar::kCutPlayOnce, f.path + ": every cut plays once, so the movie ends without a skip");
@@ -534,6 +535,29 @@ int main(int argc, char** argv)
 					if (k.type == nectar::kCinEventNotify && k.cmd == nectar::kMovieCmdStartTotalResults) starts += i == 0 ? 1 : 100;
 		}
 		check(starts == 1, "demo73 starts the final results window once, from its first cut");
+		// demo77 (scenarios ending_neutral_day30, ending_happy): the same shape as demo73.
+		int starts77 = 0;
+		for (const auto& f : files) {
+			if (f.path != "dataDir/cinemas/demo77.cin") continue;
+			const ReadCin r = loadCin(f.text);
+			check(r.cuts.size() == 2 && r.cuts[1].flags == nectar::kCutLoop, "demo77: a cut played once, then a loop");
+			for (std::size_t i = 0; i < r.cuts.size(); i++)
+				for (const ReadKey& k : r.cuts[i].keys)
+					if (k.type == nectar::kCinEventNotify && k.cmd == nectar::kMovieCmdStartTotalResults) starts77 += i == 0 ? 1 : 100;
+		}
+		check(starts77 == 1, "demo77 starts the final results window once, from its first cut");
+		// demo26 (scenarios ending_happy, ending_happy_skip): SpecialDayEnd once, listed before
+		// FadeOut and two frames after it, as on the disc, so a skip's frame-order replay
+		// (pc_cine_sort_skip_keys) reorders them.
+		const auto k26 = keysOf("dataDir/cinemas/demo26.cin");
+		int special = -1, fadeOut = -1, specialAt = -1, fadeOutAt = -1;
+		for (std::size_t i = 0; i < k26.size(); i++) {
+			if (k26[i].type != nectar::kCinEventNotify) continue;
+			if (k26[i].cmd == nectar::kMovieCmdSpecialDayEnd) special = int(i), specialAt = k26[i].frame;
+			if (k26[i].cmd == nectar::kMovieCmdFadeOut) fadeOut = int(i), fadeOutAt = k26[i].frame;
+		}
+		check(special >= 0 && fadeOut >= 0 && special < fadeOut && specialAt == fadeOutAt + 2, "demo26: SpecialDayEnd listed before FadeOut, two frames after it");
+		check(specialAt >= 30, "demo26: SpecialDayEnd late enough to leave a skip window before it");
 	}
 	std::vector<nectar::StandInCinemaFile> again;
 	check(nectar::writeStandInCinemas(again, err) && again.size() == files.size(), "second build");

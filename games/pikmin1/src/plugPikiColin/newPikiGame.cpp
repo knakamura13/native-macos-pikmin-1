@@ -193,6 +193,20 @@ static bool sGamecoreLive = false;
 /// Text ("tutorial") pop-ups/overlays.
 static zen::ogScrTutorialMgr* tutorialWindow;
 
+#if PIKI_SCENARIOS
+// Read access for --scenario (pc_scenario.h); nothing here changes the game.
+static int sScenarioTextWindows = 0;
+static int sScenarioLastTextId  = -1;
+zen::DrawGameOver* pc_scenario_gameover_window(void) { return gameoverWindow; }
+zen::DrawFinalResult* pc_scenario_total_window(void) { return totalWindow; }
+zen::DrawCMresult* pc_scenario_challenge_window(void) { return challengeWindow; }
+int pc_scenario_text_windows_opened(int* lastTextId)
+{
+	if (lastTextId) *lastTextId = sScenarioLastTextId;
+	return sScenarioTextWindows;
+}
+#endif
+
 /// Whether or not to play the parts discovery jingle (when walking close to them for the first time).
 static bool hasDemoSound;
 
@@ -802,6 +816,10 @@ static void createTutorialWindow(int textID, int ufoPartID, bool hasAudio)
 
 	tutorialWindow = new zen::ogScrTutorialMgr;
 	tutorialWindow->start((zen::ogScrTutorialMgr::EnumTutorial)textID);
+#if PIKI_SCENARIOS
+	sScenarioTextWindows++;
+	sScenarioLastTextId = textID;
+#endif
 
 	// restore movie heap settings
 	gsys->getHeap(SYSHEAP_Movie)->setAllocType(oldMovieAlloc);
