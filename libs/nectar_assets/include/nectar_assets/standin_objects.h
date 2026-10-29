@@ -15,7 +15,11 @@
 // each KEY_* event sits on) and the 'p00'/'spd' parameters, and per model the
 // joint count. They are in standin_object_profiles.cpp. No curves, names,
 // event-key records (sound and effect cues) or geometry are copied: every info
-// is a static identity animation on the model's joints, named by this file.
+// is a static identity animation on the model's joints, named by this file. The
+// one exception is the red Onion's boot motion, which keeps the disc's five
+// effect events because one of them reopens the Onion's route way point
+// (ObjectAnimInfoProfile::effectKeys). The Main Engine's pellet config is the
+// disc's too (writeStandInPelletTables).
 
 #include "nectar_assets/mod.h"
 #include "nectar_assets/standin_anims.h"

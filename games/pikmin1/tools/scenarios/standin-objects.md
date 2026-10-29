@@ -37,13 +37,15 @@ weights, the plants' light-flare groups and anything else.
 | 48 `.anm` bundles and their AnimMgr tables (`anims.bin`, `.key`, `gate.bin`, `whiteN.bin`, `plants/*.bin`, `ufoparts/*.bin`, `ufo0705.bin`) | The 47 of the boot manifest and `gt_hard.anm` (counted on the generated tree, 2026-10-28; this file's own writer covers the 46 object sets, the manifest's Pikmin set is not checked here). Each info is a static identity DCK with the disc's frame count and keys, under invented names (`<id>_<nn>.dck`). |
 | `ufoparts/naka1.mod`, `naka4.mod`, `naka7.mod` | One joint, one `cent` sphere. The disc's pellet table loads them by id. |
 | `tekis/chappy/chappy.mod` | 17 joints and the disc's collision parts (`cent`, `head`, `body`, `slot`, `lleg`, `rleg`). |
-| `parms/pelMgr.bin` | Twelve pellet configs: blue, red and yellow at 1, 5, 10 and 20. The carry numbers are this file's own, not the disc's. |
+| `parms/pelMgr.bin` | Twelve pellet configs: blue, red and yellow at 1, 5, 10 and 20. The carry numbers are this file's own, not the disc's. Then the Main Engine's, all the disc's (Tutorial stage, below). |
 | `objects/pelAnim.bin` | 23 shape infos: the four pellets, the 16 ship parts the game always loads, and `un01`, `un04`, `un07`. With it the game loads those 20 resident shapes at stage start, as on the disc. |
 
 Choices worth knowing:
 
-- Event keys are dropped. They only produce sound and effect cues
-  (`PaniAnimator` maps them to `KEY_PlaySound` and `KEY_PlayEffect`).
+- Event keys are dropped. They mostly produce sound and effect cues
+  (`PaniAnimator` maps them to `KEY_PlaySound` and `KEY_PlayEffect`). Not all:
+  the Onion's boot effect value 2 reopens its route way point, so the red boot
+  keeps its five (Tutorial stage, below).
 - One disc list is not ascending by frame (the Onion's `flowrot`: loop start,
   loop end, then an `Action0` on an earlier frame). `checkConstantKeys` fires such
   a key on the same animate call as the one before it, so the stand-in points it
@@ -162,6 +164,64 @@ the printed speed at the start of Bury is 1.8 to 3.1 instead of 0.0 (30 Hz, re-r
 2026-10-28); the height gap is still 0.0 because the seeds first bury on the
 floor, so this stage cannot show the mid-air case.
 
+## Tutorial stage (`stages/practice.ini`)
+
+`tools/scenarios/standin_practice_stage.{h,cpp}`. The Impact Site's own file name,
+which the stand-in `stages.ini` already listed first with `id 0`, so the game takes
+it as `STAGE_Practice` at index 0 and a new game's Day 1 there is the tutorial
+(`isTutorial()`). Used by `tutorial_skip`, `tutorial_firsts` and `tutorial_day1`.
+The other stages are unchanged.
+
+What is placed, and in which file, follows the disc's `stages/practice/` (read
+once, read-only, 2026-10-28; kinds, names and parameters, no positions):
+
+| File | Generators |
+|------|------------|
+| `default.gen` | The red Onion (item `goal`, colour 1, facing 100), the blue and yellow Onions (colours 0 and 2, facing 180 and 320; generators not named `next`, so `GenObjectItem::birth` makes them only for an owned colour: never on a new game), the ship (item `ufo`, facing 256). |
+| `init.gen` | The Main Engine (pellet `ust5`) and the push box (`move stone`, shape `stone 10`, `p02` 10 Pikmin, `p03` speed 50, pushed 270 units towards -z, unrotated). |
+| `0.gen` (Day 1) | One red 1-pellet (`pr01`). The disc's has four, two red 5-pellets and four pellet posies. |
+
+The positions are invented: a flat 1,600-unit floor, the captain at the origin, the
+red Onion, the pellet and the box on one side, the engine and the ship on the
+other, each far from the others' trigger radii and outside the route grid.
+
+The route grid is 3 by 3 (`routeStep` 400). A carry plans its route with
+`PathFinder::findSyncOnyon`, the original depth-first search with no visited set:
+on the mapcore default (150-unit steps with diagonals, 81 points here) one pellet's
+route search did not end in two minutes (a `sample` of the process showed
+`selectWayOnyon` recursion). An Onion, the ship or the box on a route line blocked
+the carriers (`TUT_Rute` opened), so all of them sit outside the grid.
+
+What this stage needed that the tree did not have, each with the disc's numbers:
+
+- `parms/demo.bin` (`standin_generator.cpp`): the demo-flag radii and timer, 60,
+  25, 40 s, 30, 40 (code defaults 150, 100, 6, 30, 150). Before it was allowlisted
+  as missing. Read only by tutorial and stage-gated checks; every other hash log is
+  unchanged.
+- The Main Engine's config in `parms/pelMgr.bin` (`standin_objects.cpp`): the disc's
+  config 23 (type 3, colour -1, 20 to 40 carriers, dynamics 10 / 4 / 4, seeds 1 / 1,
+  scale 1.65, height 30, sounds 1 / 1, ship joint 3). Every stage now registers it
+  as a ship part at load; `ship_parts` skips registered ids, so it reports one part
+  registered by the tree.
+- The push box is solid: `objects/hinderrock/cube10.mod` is a platform whose
+  collision is the 120-unit block its four `vtx` parts (the disc's, at +-60) bound
+  (`StandInModelSpec::platform`, `standin_world.cpp`). Without it the pushers walked
+  into the box, left `HinderRock::getPlaneFlag`'s face and dropped out of ActPush,
+  and the box moved 7 units. The every-object stage's box is solid too; its hash log
+  is unchanged.
+- The Pikmin PickLoop motion (info 68) has the disc's timing (`standin_anims.h`): 30
+  frames, KEY_Action0 at 10 (`ActTransport::animationKeyUpdated`, which
+  `ActTransport::doLift` waits for), loop 13 to 18, KEY_Action1 at 20. Before it no
+  pellet could be lifted on the stand-in tree.
+- The red Onion's boot motion (goal info 4) carries the disc's five effect events
+  (`ObjectAnimInfoProfile::effectKeys`): value 2 at frame 221 reopens the Onion's
+  route way point, which the boot closed (`GoalItem::startAI`); 4 starts the colour
+  fade; 0, 1 and 3 are particles. Without it a booted red Onion accepts no pellet.
+  The blue and yellow boots keep none (no scenario boots them and then carries).
+- `intro/map0.bti` (the Impact Site's area banner, null-checked).
+
+`stages/practice/plants.gen` is allowlisted (guarded, as for the sandboxes).
+
 ## What remains
 
 - A surface that makes a seed land on a steep edge (the real #65 case).
@@ -172,6 +232,6 @@ floor, so this stage cannot show the mid-air case.
 - Models exist only for the objects in the boot manifest; the 23 other enemies, the
   other bosses, the other plants and the slopes have none.
 - The plants' light-flare groups (`hae`) are not stand-ins.
-- Event keys (sounds, effects) are not stand-ins.
+- Event keys (sounds, effects) are not stand-ins, except the red Onion boot's (above).
 - Disc-only checks: a `_disc` variant of `sprout_landing` does not exist, because
   the stage does not exist on a real install.

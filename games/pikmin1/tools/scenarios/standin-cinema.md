@@ -96,6 +96,8 @@ boot are the ones listed in `boot-manifest.txt`.
 | `demo46.cin` + 1 scene (60) | Pikmin extinction (`DEMOID_Extinction`), Localized at the captain | Localized, HideNavi, NaviNoAI | FadeOut at 40; `GameEndCondition` (PikminZero) and `CleanupDayEnd` at 57 |
 | `demo47.cin` + 1 scene (60) | Day end after an extinction (`DEMOID_ExtDayEnd`, translated per stage; the sandbox falls back to Impact Site, demo47) | HideNavi, NaviNoAI | FadeIn at 0, FadeOut at 50, `ForceResults` at 57 |
 | `demo36.cin` + 2 scenes (30 + 10) | End-of-day results backdrop (`DEMOID_EndOfDayResults`, started by `DayOverModeState::initialisePhaseTwo` with the results window); used by `captain_death` | NonGameMovie | none. The first cut plays once, the second loops (`CINMODE_LoopScene`) until `exitDayEnd` drops the movie, as the disc's does (a 420-frame cut and a 10-frame loop). The results window stays up only while a movie is active: with no demo36 the phases advance on the next ticks and the day leaves for `GameExit` |
+| `demo20.cin` + 1 scene (122) | The Main Engine reaching the ship on the Impact Site (DEMOFLAG_CollectEngine's movie 20, `DEMOID_CollectPartPractice`); used by `tutorial_day1` | HideNavi, NaviNoAI | `TextDemo` `TUT_GetParts` (17) at 118 in a cut played once, then a 2-frame loop. With the ship text type CollectEngine the key opens no window: `GameMovieInterface::parse` skips the scene, which ends the loop. The disc's: a 218-frame cut with the key at 216, then a 2-frame loop. The engine is sucked in while it plays (about 2 s); with no demo20 the movie is zero-length and demo17 ends the day before the ship has the engine |
+| `demo17.cin` + 1 scene (60) | The ship's first upgrade on the Impact Site (`DEMOID_ShipUpgradePractice`, queued by `PlayerState::preloadHenkaMovie`); used by `tutorial_day1` | HideNavi, NaviNoAI | The ship's Henka Action (sender 1, event 2) at 10, `ForceDayEnd` (2) at 50, `TextDemo` `TUT_GetEngine` (9, stand-in `tu_tx15`) at 57. The disc's (read-only, 2026-10-28): 40, 356 and 378 in a 380-frame cut, then a 2-frame loop, with ship actors. This key is what ends the tutorial's Day 1: its clock never reaches sunset |
 | `demo73.cin` + 2 scenes (30 + 10) | Bad ending, Olimar fails to escape (`DEMOID_BadEndingFailEscape`, untranslated, started by `DayOverModeState::initialisePhaseTwo` on Day 30 with fewer than 25 parts); used by `extinction_day30` | NonGameMovie | `StartTotalResults` (12) at 27 in the first cut, which plays once; the second loops until the final results window reports done and `DayOverModeState::update` skips the scene. The disc's (read-only, 2026-10-28): NonGameMovie, a 449-frame cut with the key at 446, then a 4-frame loop, with the results backdrop and ship actors. Without it the window is built but never started and the phases run on |
 
 The discovery key frames follow the Onion's boot motion. Boot starts the motion
@@ -150,6 +152,17 @@ tutorial pages, like `tu_tx00`.
   K is 16 / 18, the same as the merged tree before `onion_skip` was added. The
   merged tree's gate re-fit, not the cinemas, set those values
   (`standin-k-investigation.md`).
+
+## The tutorial's movies (2026-10-28)
+
+The tutorial scenarios (`stages/practice.ini`) play demo04 (the red Onion, above),
+demo20 and demo17 (above) and the results backdrop demo36. The Day 1 wake-up
+(demo03) and the flag movies demo07 (ApproachSeed), demo09 (the first red pluck),
+demo14 (CollectFirstPellet), demo15 (StartBoxPush) and demo16 (ApproachEngine) are
+not written: each plays as a zero-length movie (allowlisted), and the scenarios
+assert the flags and the state the code sets, not the movies. Their text keys on
+the disc (TUT_Awakening, TUT_FirstSeed, TUT_GetPikmin, TUT_Pelette,
+TUT_StoneHint2, TUT_FoundEngine) are not covered.
 
 ## Allowlist changes
 
