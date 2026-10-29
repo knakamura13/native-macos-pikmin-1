@@ -6,6 +6,8 @@
 
 #include <SDL.h>
 
+#include <atomic>
+#include <cmath>
 #include <csignal>
 #include <cstdarg>
 #include <cstdio>
@@ -18,6 +20,7 @@
 #include <chrono>
 
 #include "FlowController.h"
+#include "KeyConfig.h"
 #include "MoviePlayer.h"
 #include "Animator.h"
 #include "Navi.h"
@@ -29,8 +32,11 @@
 #include "PikiMgr.h"
 #include "gameflow.h"
 #include "jaudio/piki_scene.h"
+#include "netplay/pc_coop_switch.h"
 #include "netplay/pc_input_log.h"
 #include "netplay/pc_netplay_det.h"
+#include "netplay/pc_netplay_pad.h"
+#include "netplay/pc_netplay_present.h"
 #include "netplay/pc_state_hash.h"
 #include "Dolphin/pad.h"
 #include "pc_permadeath.h"
@@ -73,6 +79,42 @@ unsigned sBootTicks        = 0;
 unsigned sTick             = 0; // ticks since the stage became ready
 std::string sStageFile     = kDefaultStageFile;
 std::filesystem::path sScratchDir; // NECTAR_SAVE_DIR for this run, removed at exit
+
+// Hand-off (issue #76). --scenario-handoff: the scripted part runs in a visible
+// window at real-time pacing, and scenarioHandOff() gives the game to the
+// player. --scenario-realtime: real-time pacing alone.
+bool sHandoffRequested = false;
+bool sRealtime         = false;
+bool sHandedOff        = false;
+unsigned sProviderCalls = 0; // scripted-provider calls, for the hand-off probe
+// The watchdog thread reads this when it wakes; the hand-off disarms it.
+std::atomic<bool> sWatchdogArmed { true };
+
+// Window size of a visible real-time run when PIKMIN_SCENARIO_WINDOW is unset.
+constexpr int kPlayWindowWidth  = 1280;
+constexpr int kPlayWindowHeight = 720;
+
+// PIKMIN_SCENARIO_HANDOFF_PROBE=1 with --scenario-handoff (check_scenario_handoff.cmake):
+// a headless check that the hand-off gives the game to the real input path.
+// The window stays hidden; a virtual SDL game controller with its left stick
+// held up stands in for the player's.
+struct HandoffProbe {
+	bool active = false;
+	SDL_Joystick* pad = nullptr;
+	unsigned loopTicks = 0;      // ticks since the probe started (boot included)
+	int realStickY = 0;          // what the window read from the controller this tick, before the provider
+	int scriptedStickY = 0;      // what the scripted provider wrote this tick
+	bool providerRan = false;    // the provider ran this tick
+	unsigned overridden = 0;     // scripted ticks where the controller was up and the game read the scripted pad
+	unsigned callsAtHandOff = 0;
+	unsigned after = 0;          // ticks since the hand-off
+	unsigned realRead = 0;       // of those, ticks where the game read the controller's stick
+	Vector3f startPos;
+	std::chrono::steady_clock::time_point handOffTime;
+	bool done = false;
+};
+HandoffProbe sProbe;
+constexpr int kProbeStickThreshold = 50; // the stick held up reads about 127
 
 // Environment variables the game reads that change the sim, the input or the
 // exit path. A scenario run starts without them (PIKMIN_INPUT_REPLAY is
@@ -203,6 +245,7 @@ void startWatchdog(const char* name)
 	std::string scenarioName = name;
 	std::thread([scenarioName, seconds]() {
 		std::this_thread::sleep_for(std::chrono::seconds(seconds));
+		if (!sWatchdogArmed.load()) return; // the game was handed to the player
 		std::fprintf(stderr, "[scenario] FAIL %s: wall-clock watchdog after %ld s\n", scenarioName.c_str(), seconds);
 		terminate(PC_SCENARIO_EXIT_FAIL); // flushes, then _Exit; no atexit handlers
 	}).detach();
@@ -211,7 +254,7 @@ void startWatchdog(const char* name)
 void usage(const char* msg)
 {
 	std::fprintf(stderr, "[scenario] %s\n", msg);
-	std::fprintf(stderr, "usage: nectar --scenario <name> [--scenario-tick-rate 30|60] [--scenario-visible]\n");
+	std::fprintf(stderr, "usage: nectar --scenario <name> [--scenario-tick-rate 30|60] [--scenario-visible] [--scenario-realtime] [--scenario-handoff]\n");
 	std::fprintf(stderr, "scenarios:");
 	for (PcScenario* s : pc_scenario_all()) {
 		if (!s->testOnly()) std::fprintf(stderr, " %s", s->name());
@@ -219,9 +262,10 @@ void usage(const char* msg)
 	std::fprintf(stderr, "\n");
 }
 
-void providerThunk(PcInputPad pads[4])
+void provideScriptedPads(PcInputPad pads[4])
 {
-	if (sScenario == nullptr) return;
+	// Co-op: pad 1 is the second captain's and is connected from the start.
+	if (sScenario->coop()) pads[1].err = pc_input_log::kErrConnected;
 	// Pad 0 is the captain's. Before the stage is ready the pad stays neutral.
 	if (!sStageReady || sVerdict) return;
 	if (!sIntroDone) {
@@ -235,6 +279,23 @@ void providerThunk(PcInputPad pads[4])
 		return;
 	}
 	sScenario->providePads(sTick, pads[0]);
+	if (sScenario->coop()) sScenario->providePad1(sTick, pads[1]);
+}
+
+void providerThunk(PcInputPad pads[4])
+{
+	if (sScenario == nullptr) return;
+	++sProviderCalls;
+	if (sProbe.active) {
+		// The polled pads still hold what the window read this tick; the
+		// provider's pads replace them when this returns (pc_input_log.cpp).
+		sProbe.realStickY = pc_netplay_pad_status()[0].stickY;
+	}
+	provideScriptedPads(pads);
+	if (sProbe.active) {
+		sProbe.scriptedStickY = pads[0].stickY;
+		sProbe.providerRan    = true;
+	}
 }
 
 // PIKMIN_SCENARIO_STATE_STATS (any value): per state id of the captain and of
@@ -374,6 +435,157 @@ void finish(int code)
 	pc_window_request_close();
 }
 
+std::chrono::steady_clock::time_point sIntroDoneTime;
+
+double secondsSince(std::chrono::steady_clock::time_point t)
+{
+	return std::chrono::duration<double>(std::chrono::steady_clock::now() - t).count();
+}
+
+// The probe's own verdict. The hand-off already set sVerdict (no scenario check
+// runs after it), so this sets the code and closes the window directly.
+void probeVerdict(int code)
+{
+	sProbe.done = true;
+	sVerdict    = true;
+	sExitCode   = code;
+	std::fflush(stdout);
+	std::fflush(stderr);
+	pc_window_request_close();
+}
+
+void probeFail(const char* expected, const char* fmt, ...)
+{
+	char buf[256];
+	va_list ap;
+	va_start(ap, fmt);
+	std::vsnprintf(buf, sizeof buf, fmt, ap);
+	va_end(ap);
+	std::fprintf(stderr, "[scenario-probe] FAIL %s: expected %s, observed %s\n", sScenario ? sScenario->name() : "?", expected, buf);
+	probeVerdict(PC_SCENARIO_EXIT_FAIL);
+}
+
+// A virtual game controller, opened by the game's own hot-plug path
+// (SDL_CONTROLLERDEVICEADDED, pc_controller_open_slot) like a real one. Its left
+// stick is held up from the first tick to the end of the run; A is pressed for
+// the first ticks so the pad claims player 1 (pc_auto_promote_pad) even when a
+// real controller is connected. Before the hand-off the scripted pad replaces
+// both.
+void probeAttachPad()
+{
+#if SDL_VERSION_ATLEAST(2, 24, 0)
+	SDL_VirtualJoystickDesc desc;
+	SDL_zero(desc);
+	desc.version     = SDL_VIRTUAL_JOYSTICK_DESC_VERSION;
+	desc.type        = SDL_JOYSTICK_TYPE_GAMECONTROLLER;
+	desc.naxes       = SDL_CONTROLLER_AXIS_MAX;
+	desc.nbuttons    = SDL_CONTROLLER_BUTTON_MAX;
+	desc.axis_mask   = (1u << SDL_CONTROLLER_AXIS_MAX) - 1u;
+	desc.button_mask = (1u << SDL_CONTROLLER_BUTTON_MAX) - 1u;
+	desc.name        = "Scenario hand-off probe pad";
+	const int index  = SDL_JoystickAttachVirtualEx(&desc);
+	sProbe.pad       = index >= 0 ? SDL_JoystickOpen(index) : nullptr;
+	if (!sProbe.pad) {
+		probeFail("a virtual SDL game controller", "SDL_JoystickAttachVirtualEx/SDL_JoystickOpen failed: %s", SDL_GetError());
+		return;
+	}
+	SDL_JoystickSetVirtualAxis(sProbe.pad, SDL_CONTROLLER_AXIS_LEFTY, -32768); // SDL: negative Y is up
+	SDL_JoystickSetVirtualButton(sProbe.pad, SDL_CONTROLLER_BUTTON_A, 1);
+	std::printf("[scenario-probe] virtual game controller attached (device %d), left stick up\n", index);
+#else
+	probeFail("SDL 2.24 or later for a virtual game controller", "SDL %d.%d.%d", SDL_MAJOR_VERSION, SDL_MINOR_VERSION, SDL_PATCHLEVEL);
+#endif
+}
+
+Navi* probeCaptain() { return naviMgr ? naviMgr->getNavi() : nullptr; }
+
+// Every tick end of a probe run, boot included.
+void probeTick()
+{
+	if (sProbe.done) return;
+	++sProbe.loopTicks;
+	if (!sProbe.pad) {
+		probeAttachPad();
+		return;
+	}
+#if SDL_VERSION_ATLEAST(2, 24, 0)
+	if (sProbe.loopTicks == 6) SDL_JoystickSetVirtualButton(sProbe.pad, SDL_CONTROLLER_BUTTON_A, 0);
+#endif
+	// The pad the game read this tick (the polled pads are not written during the tick).
+	const int read = pc_netplay_pad_status()[0].stickY;
+	if (!sHandedOff) {
+		if (sProbe.providerRan && sProbe.realStickY >= kProbeStickThreshold) {
+			if (read != sProbe.scriptedStickY) {
+				probeFail("before the hand-off the game reads the scripted pad, not the controller", "stick Y read %d, scripted %d, controller %d", read,
+				          sProbe.scriptedStickY, sProbe.realStickY);
+				return;
+			}
+			++sProbe.overridden;
+		}
+		sProbe.providerRan = false;
+		return;
+	}
+	++sProbe.after;
+	if (sProviderCalls != sProbe.callsAtHandOff) {
+		probeFail("after the hand-off the scripted input provider is never called", "%u calls after it", sProviderCalls - sProbe.callsAtHandOff);
+		return;
+	}
+	if (pc_netplay_deterministic() || pc_netplay_unthrottled()) {
+		probeFail("deterministic and unthrottled mode off after the hand-off", "deterministic %d, unthrottled %d", (int)pc_netplay_deterministic(),
+		          (int)pc_netplay_unthrottled());
+		return;
+	}
+	if (read >= kProbeStickThreshold) ++sProbe.realRead;
+	const unsigned span = 2u * (unsigned)sTicksPerSecond;
+	if (sProbe.after < span) return;
+	const double elapsed = secondsSince(sProbe.handOffTime);
+	Navi* navi           = probeCaptain();
+	Vector3f d           = navi ? navi->mSRT.t - sProbe.startPos : Vector3f(0.0f, 0.0f, 0.0f);
+	const float moved    = std::sqrt(d.x * d.x + d.z * d.z);
+	const char* saveDir  = std::getenv("NECTAR_SAVE_DIR");
+	std::printf("[scenario-probe] %u ticks after the hand-off in %.2f s: controller stick read on %u ticks, captain moved %.1f units\n", span, elapsed,
+	            sProbe.realRead, moved);
+	if (sProbe.realRead < span * 3 / 4) {
+		probeFail("after the hand-off the game reads the controller (stick Y >= 50 on at least 3/4 of the ticks)", "%u of %u ticks", sProbe.realRead, span);
+		return;
+	}
+	if (moved < 30.0f) {
+		probeFail("the controller's stick walks the captain at least 30 units in 2 s", "%.1f units", moved);
+		return;
+	}
+	if (elapsed < 0.8 * span / sTicksPerSecond) {
+		probeFail("real-time pacing after the hand-off (2 s of ticks take at least 1.6 s)", "%.2f s", elapsed);
+		return;
+	}
+	if (!saveDir || sScratchDir.empty() || std::filesystem::path(saveDir) != sScratchDir) {
+		probeFail("NECTAR_SAVE_DIR is still the scratch save dir", "%s", saveDir ? saveDir : "(unset)");
+		return;
+	}
+	std::printf("[scenario-probe] PASS %s: scripted pad won on %u ticks before the hand-off; after it the controller drove the captain at real-time pacing\n",
+	            sScenario->name(), sProbe.overridden);
+	probeVerdict(PC_SCENARIO_EXIT_PASS);
+}
+
+// At the hand-off, before the first player tick.
+void probeOnHandOff()
+{
+	const unsigned scripted = sTick; // ticks since the intro, this one included
+	const double elapsed    = secondsSince(sIntroDoneTime);
+	std::printf("[scenario-probe] hand-off: the scripted pad won over the controller on %u ticks; %u scripted ticks after the intro in %.2f s\n",
+	            sProbe.overridden, scripted, elapsed);
+	if (sProbe.overridden < 10) {
+		probeFail("the controller reaches the window's pad read on at least 10 scripted ticks before the hand-off", "%u ticks", sProbe.overridden);
+		return;
+	}
+	if (scripted >= (unsigned)sTicksPerSecond && elapsed < 0.8 * scripted / sTicksPerSecond) {
+		probeFail("real-time pacing of the scripted part", "%u ticks in %.2f s", scripted, elapsed);
+		return;
+	}
+	sProbe.callsAtHandOff = sProviderCalls;
+	sProbe.handOffTime    = std::chrono::steady_clock::now();
+	if (Navi* navi = probeCaptain()) sProbe.startPos = navi->mSRT.t;
+}
+
 } // namespace
 
 int pc_scenario_parse_argv(int argc, char** argv)
@@ -401,6 +613,10 @@ int pc_scenario_parse_argv(int argc, char** argv)
 			}
 		} else if (std::strcmp(argv[i], "--scenario-visible") == 0) {
 			visible = true;
+		} else if (std::strcmp(argv[i], "--scenario-realtime") == 0) {
+			sRealtime = true;
+		} else if (std::strcmp(argv[i], "--scenario-handoff") == 0) {
+			sHandoffRequested = true;
 		} else {
 			for (const char* flag : kRejectedFlags) {
 				if (rejected == nullptr && std::strcmp(argv[i], flag) == 0) rejected = flag;
@@ -423,9 +639,22 @@ int pc_scenario_parse_argv(int argc, char** argv)
 		usage("unknown scenario");
 		return PC_SCENARIO_EXIT_USAGE;
 	}
+	if (sHandoffRequested && !sScenario->handsOff()) {
+		usage((std::string("--scenario-handoff: ") + name + " has no hand-off point").c_str());
+		return PC_SCENARIO_EXIT_USAGE;
+	}
 	if (!sScenario->supportsRate(rate)) {
 		std::printf("[scenario] %s does not support %d ticks per second; skipping\n", name, rate);
 		return PC_SCENARIO_EXIT_SKIP;
+	}
+	// The hand-off is played: a visible window at real-time pacing. The probe
+	// (check_scenario_handoff.cmake) runs the same path with the window hidden.
+	if (const char* probe = std::getenv("PIKMIN_SCENARIO_HANDOFF_PROBE"); sHandoffRequested && probe && std::strcmp(probe, "1") == 0) {
+		sProbe.active = true;
+	}
+	if (sHandoffRequested) {
+		sRealtime = true;
+		visible   = !sProbe.active;
 	}
 
 	// Data gate, as --audio-self-test does: the caller's environment names the
@@ -457,6 +686,11 @@ int pc_scenario_parse_argv(int argc, char** argv)
 			return PC_SCENARIO_EXIT_USAGE;
 		}
 	}
+	// A run someone watches or plays gets a normal window, not the 64x36 default.
+	if (windowWidth == 0 && visible && sRealtime) {
+		windowWidth  = kPlayWindowWidth;
+		windowHeight = kPlayWindowHeight;
+	}
 
 	sActive         = true;
 	sTicksPerSecond = rate;
@@ -480,13 +714,28 @@ int pc_scenario_parse_argv(int argc, char** argv)
 	installFatalSignalHandlers();
 	startWatchdog(name);
 	pc_netplay_det_scenario_enable();
+	pc_netplay_det_scenario_set_realtime(sRealtime);
+	if (sScenario->coop()) {
+		// As the title's 2P choice: two captains (Olimar, Louie) for every day of
+		// the run, and the split screen's two views per tick instead of the
+		// deterministic two-pass frame (pc_netplay_present.h).
+		PcCoopSwitch sw;
+		sw.coop = true;
+		pc_coop_switch_apply(sw);
+		pc_netplay_present_scenario_split_views(1);
+	}
+	// A virtual controller in a hidden window: SDL drops joystick input of an
+	// unfocused application unless told otherwise.
+	if (sProbe.active) SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
 	pc_settings_scenario_enable();
 	pc_settings_scenario_set_fps_mode(rate == 60 ? 1 : 0);
 	if (windowWidth > 0) pc_settings_scenario_set_window_size(windowWidth, windowHeight);
 	pc_gfx_set_min_render_size(1, 1); // the window size, below the player's 160x120 floor
 	pc_window_set_hidden(!visible);
 	pc_input_log_set_provider(providerThunk);
-	std::printf("[scenario] %s at %d ticks per second, stage %s, data %s\n", name, rate, sStageFile.c_str(), dataDir);
+	std::printf("[scenario] %s at %d ticks per second, stage %s, data %s%s%s%s%s\n", name, rate, sStageFile.c_str(), dataDir,
+	            sRealtime ? ", real-time pacing" : "", sHandoffRequested ? ", hand-off to the player" : "", sProbe.active ? " (probe, hidden)" : "",
+	            sScenario->coop() ? ", co-op split screen" : "");
 	return -1;
 }
 
@@ -557,7 +806,10 @@ void pc_scenario_on_stage_ready(void)
 
 void pc_scenario_on_tick_end(void)
 {
-	if (!sActive || sVerdict) return;
+	if (!sActive) return;
+	if (sProbe.active) probeTick();
+	// After a hand-off sVerdict is set too: no scenario code and no check runs.
+	if (sVerdict) return;
 	if (!sStageReady) {
 		if (++sBootTicks > kBootTickBudget) scenarioFailf(sBootTicks, "stage ready within boot budget", "%u boot ticks without the stage-ready hook", sBootTicks);
 		return;
@@ -567,8 +819,9 @@ void pc_scenario_on_tick_end(void)
 		const bool movie  = gameflow.mMoviePlayer && gameflow.mMoviePlayer->mIsActive;
 		const bool walk   = navi && navi->getCurrState() && navi->getCurrState()->getID() == 0;
 		if (!movie && !gameflow.mIsUIOverlayActive && walk) {
-			sIntroDone = true;
-			sTick      = 0;
+			sIntroDone     = true;
+			sTick          = 0;
+			sIntroDoneTime = std::chrono::steady_clock::now();
 			std::printf("[scenario] intro done after %u ticks\n", sIntroTicks);
 			if (!scenarioCheckAnimMgrPreconditions(0)) return;
 			sScenario->onStageReady();
@@ -620,6 +873,43 @@ void scenarioFailf(unsigned tick, const char* expected, const char* fmt, ...)
 	std::vsnprintf(buf, sizeof buf, fmt, ap);
 	va_end(ap);
 	scenarioFail(tick, expected, buf);
+}
+
+void scenarioHandOff(void)
+{
+	if (!sActive || sVerdict) return;
+	if (!sHandoffRequested) {
+		std::printf("[scenario] %s reached its hand-off point at tick %u\n", sScenario->name(), sTick);
+		scenarioPass();
+		return;
+	}
+	printStateStats();
+	// From here closing the window is the end of the run, with exit 0; no
+	// scenario code, invariant check or watchdog can end it.
+	sHandedOff     = true;
+	sVerdict       = true;
+	sExitCode      = PC_SCENARIO_EXIT_PASS;
+	sWatchdogArmed = false;
+	if (sProbe.active) probeOnHandOff();
+	pc_input_log_set_provider(nullptr);
+	pc_netplay_det_scenario_hand_off();
+	std::printf("[scenario] hand-off: %s at tick %u (intro %u ticks). The keyboard, mouse and controllers drive the game; the watchdog and the checks "
+	            "are off; saves go to %s and settings are not saved. Close the window to end.\n",
+	            sScenario->name(), sTick, sIntroTicks, sScratchDir.string().c_str());
+	std::fflush(stdout);
+}
+
+bool pc_scenario_handed_off(void) { return sHandedOff; }
+
+void scenarioApplyDiscKeyBindings(void)
+{
+	KeyConfig* k           = KeyConfig::_instance;
+	k->mThrowKey.mBind     = KBBTN_A;
+	k->mSetCursorKey.mBind = KBBTN_B;
+	k->mExtractKey.mBind   = KBBTN_A;
+	k->mAttackKey.mBind    = KBBTN_A;
+	k->mDisbandKey.mBind   = KBBTN_X;
+	k->mMenuKey.mBind      = KBBTN_Y;
 }
 
 bool scenarioCheckAnimMgrPreconditions(unsigned tick)

@@ -72,6 +72,8 @@ PIKMIN_SCENARIO_STAGE=stages/sandbox.ini \
 | `--scenario <name>` | Scenario to run: `boot_smoke`, `throw_release`, `day30_clock`, `extinction`, `captain_death`, `day_end`, `day_end_day29`, `extinction_day30`, `onion_unlock`, `onion_unlock_whistle`, `captain_damage`, `ship_parts`, `sprout_landing`, `onion_skip`, `container_menu` or `objects_smoke`. The last three need an object stage (`PIKMIN_SCENARIO_STAGE`, see the table below). |
 | `--scenario-tick-rate 30\|60` | Ticks per second. Default `30`. Any other value (or a missing one) exits 2. |
 | `--scenario-visible` | Show the window. Default is hidden. A visible window is also positioned and may move the real mouse pointer (see [Mouse pointer](#mouse-pointer)). |
+| `--scenario-realtime` | Pace the ticks in real time at the tick rate (the fixed-step scheduler) instead of unthrottled. Deterministic mode stays on, so the per-tick state is the same (`scenario_realtime_determinism_first_yellow_30`). With `--scenario-visible` the window defaults to 1280x720. |
+| `--scenario-handoff` | Play from the scenario's hand-off point: a visible 1280x720 window, real-time pacing, then the game is handed to the real keyboard, mouse and controllers. Only for scenarios that declare one (`free_play`, `first_yellow`); any other exits 2. See [Free play and hand-off](#free-play-and-hand-off). |
 
 | Environment variable | Meaning |
 |----------------------|---------|
@@ -81,7 +83,8 @@ PIKMIN_SCENARIO_STAGE=stages/sandbox.ini \
 | `PIKMIN_SCENARIO_WATCHDOG_SECONDS` | Wall-clock limit in seconds, default 540. A value that is not a positive integer is ignored. |
 | `PIKMIN_SCENARIO_STATE_STATS` | Any value. With the verdict, prints per state id of the captain and of the Pikmin the longest uninterrupted stay in ticks and the entry count (`[scenario-states]` lines). A state stuck on an animation key the stand-ins lack shows as a long stay. |
 | `PIKMIN_LOG_FILE_OPENS` | File path. Appends `<game path>\t<OK\|FAILED>` per `DVDOpen`. Works in any build, used to make the boot manifest. The file is appended to, so use a fresh path per run. |
-| `PIKMIN_SCENARIO_WINDOW` | Window size `WxH`, default `64x36`. The scene renders at the same size (render scale 1, no 160x120 floor). Anything but two positive integers up to 8192 exits 2. See [Window size](#window-size). |
+| `PIKMIN_SCENARIO_WINDOW` | Window size `WxH`, default `64x36` (`1280x720` for a visible real-time run: `--scenario-handoff`, or `--scenario-realtime` with `--scenario-visible`). The scene renders at the same size (render scale 1, no 160x120 floor). Anything but two positive integers up to 8192 exits 2. See [Window size](#window-size). |
+| `PIKMIN_SCENARIO_HANDOFF_PROBE` | `1` with `--scenario-handoff`: the headless hand-off check that `check_scenario_handoff.cmake` runs (hidden window, a virtual SDL game controller, a PASS or FAIL line from the probe, then exit). Test use only. |
 
 A scenario run forces its own conditions:
 
@@ -108,6 +111,11 @@ A scenario run forces its own conditions:
   (`kClearedEnv` in `pc_scenario.cpp`: `PIKMIN_INPUT_RECORD`, `PIKMIN_UNLOCK_ALL`,
   `PIKMIN_COOP`, `PIKMIN_COOP_CAPTAINS`, `PIKMIN_REPLAY_TEST`, `PIKMIN_NO_H4M`,
   `PIKMIN_NETPLAY_EXIT_AFTER_TICKS` and three `PIKMIN_NETPLAY_TEST_*` variables).
+
+`--scenario-realtime` and `--scenario-handoff` change only the pacing (the
+fixed-step scheduler instead of unthrottled). After a hand-off the game is no
+longer deterministic and nothing is checked; see
+[Free play and hand-off](#free-play-and-hand-off) for what stays.
 
 ### Window size
 
@@ -146,9 +154,9 @@ compare, or with `--scenario-visible` to watch a run at a readable size.
 
 | Code | Meaning |
 |------|---------|
-| `0` | Pass. |
-| `1` | A check failed (one `[scenario] FAIL ...: expected ..., observed ...` line on stderr), the boot never reached the stage, the stage name is not in `stages.ini`, the watchdog fired, or the process ended before a verdict. |
-| `2` | Unknown scenario, bad arguments or a rejected flag, or a data directory that is set but cannot be entered. Before any window exists. |
+| `0` | Pass. After a `--scenario-handoff`, closing the window (or any normal exit). |
+| `1` | A check failed (one `[scenario] FAIL ...: expected ..., observed ...` line on stderr), the boot never reached the stage, the stage name is not in `stages.ini`, the watchdog fired, or the process ended before a verdict (closing the window before the hand-off included). |
+| `2` | Unknown scenario, bad arguments or a rejected flag, `--scenario-handoff` with a scenario that has no hand-off point, or a data directory that is set but cannot be entered. Before any window exists. |
 | `4` | Window or GL context creation failed (from the code; not reproduced, because this Mac has a GL context). |
 | `77` | Skip: `PIKMIN_SCENARIO_DATA_DIR` unset or empty, no `assets/dataDir/parms/gamePrms.bin`, or the scenario does not support the rate (no scenario refuses a rate today). |
 
@@ -162,13 +170,15 @@ Three rules keep an abnormal exit from reading as a pass:
   `--netplay-host`, `--netplay-join`, `--netplay-host-ice`, `--netplay-join-ice`,
   `--netplay-exit-after-ticks` and `--input-replay` (plus `PIKMIN_INPUT_REPLAY`).
   `--input-record` stays allowed and records the scripted pads. The list is
-  `kRejectedFlags` in `pc_scenario.cpp`.
+  `kRejectedFlags` in `pc_scenario.cpp`. Co-op is a property of the scenario
+  (`PcScenario::coop`, see [Co-op scenarios](#co-op-scenarios)), not of the
+  flags, which stay rejected.
 - A wall-clock watchdog fails the run with exit 1 and prints
   `[scenario] FAIL <name>: wall-clock watchdog after N s` (default 540 s,
   override with `PIKMIN_SCENARIO_WATCHDOG_SECONDS`). It sits under the CTest
   timeout of 600 s. On this Mac a stand-in scenario takes 1 to 2 s, so the
   default is a bound for slow runners (the source comment says the slowest takes
-  about 85 s on software GL; that was not measured here).
+  about 85 s on software GL; that was not measured here). A hand-off disarms it.
 - Any `exit()` before a verdict is a failure. The exit handler is armed once
   argument and data checks pass. `System::halt` and `PPCHalt` call `exit(0)`,
   which would otherwise pass. A GL context failure records exit 4 first, so the
@@ -220,6 +230,11 @@ code or timing the 30 Hz run does not. The disc entries keep `boot_smoke`,
 | `onion_unlock`, `onion_unlock_whistle` | 30, 60 | Same reason as `container_menu`: the captain's walk to each sprout (`Navi::updateWalkAnimation`), `NaviNukuAdjustState`'s odometer window (0.4 s) and the 40-frame stand-in pluck motions run on frame-time arithmetic, so each pluck lands on different ticks per rate; read from code, not shown to fail at either rate. |
 | `objects_smoke` | 30 | Loads the every-object stage and counts the enemies born; neither depends on the tick rate. |
 | `ship_parts` | 30, 60 | Nothing in `getUfoParts` depends on the rate (it is direct calls, one part per tick); both rates are kept because the run costs half a second and the intro gate and the tick counter differ (intro 15 ticks on the stand-ins, 45 on the disc). Not shown to fail at either rate. |
+| `first_yellow` | 30, 60 | The captain's walk to the sprout runs on frame-time arithmetic (`Navi::updateWalkAnimation`, as in `onion_unlock`), so where and when he stops differs per rate: parked at 2.00 s at both, 8.3 units from the sprout at 30 Hz and 9.0 at 60 Hz. |
+| `coop_smoke` | 30, 60 | The rate is boot configuration, as for `boot_smoke`; each rate must boot two captains and draw split screen. |
+| `coop_look` | 30 | `mLookTimer` counts `updateLook` calls, one per tick with the gate, at any rate; the view loop does not read the rate. |
+| `scenario_handoff_free_play` | 30, 60 | The probe checks real-time pacing, and the fixed-step deadline is per rate. |
+| `scenario_handoff_first_yellow` | 30 | The hand-off path is `free_play`'s; `first_yellow`'s scripted walk is covered at both rates by its own entries. |
 
 Wall time of every stand-in entry, one run at a time on an M3 Max, `/usr/bin/time -p`
 (2026-10-28, base `ee769374`; the last three rows on base `a1065fef`, CTest's own per-test time, `-j 1`). "GPU" is the Mac's own GL, "software" is Apple's
@@ -237,6 +252,9 @@ software run are byte-identical for every entry.
 | `container_menu` | 363 / 726 | 1.1 s / 1.5 s | 2.5 s / 4.1 s |
 | `objects_smoke` | 299 / none | 1.0 s / none | 2.3 s / none |
 | `ship_parts` | 30 / 30 | 0.7 s / 0.5 s (CTest wall time, 2026-10-28; not the `/usr/bin/time -p` method above) | not measured |
+| `first_yellow` | 60 / 120 | 0.7 s / 0.8 s (CTest wall time, `-j 3`, 2026-10-28) | not measured |
+| `coop_smoke` | 118 / 238 | 0.7 s / 0.7 s (CTest wall time, `-j 3`, 2026-10-28) | not measured |
+| `coop_look` | 53 / none | 0.5 s / none (CTest wall time, `-j 3`, 2026-10-28) | not measured |
 
 The object stage costs nothing at load any more: `sprout_landing` (287 ticks, 0.8 s)
 and `day30_clock` on the plain stage (277 ticks, 0.8 s) take the same time. The 17 s
@@ -251,17 +269,21 @@ Routes); the time left is per-tick rendering, which grows with the tick count.
 | `scenario_determinism_<name>_<rate>` | stand-in tree | none | EC-60. `boot_smoke`, `throw_release` and `day30_clock` at 30 and 60 (6 entries). `check_scenario_determinism.cmake` runs the scenario twice with `--state-hash-log` and fails if the two per-tick hash logs differ (the first differing line is printed). No scenario change. 1200 s timeout, `stages/sandbox.ini`. |
 | `scenario_determinism_negative_boot_smoke_30` | stand-in tree | none | Negative control for the entry above: the second run boots `stages/sandbox_objects.ini`, and the test passes only if the logs differ (`-DEXPECT_DIFFER=1`, no `WILL_FAIL`). The runner clears `PIKMIN_NETPLAY_TEST_PREROLL_RAND`, so that variable cannot perturb a scenario run. |
 | `scenario_gamestat_invariant_fail` | stand-in tree | none | Negative control for the GameStat invariant check (see below): the test-only scenario `gamestat_corrupt` raises `workPikis[Blue]` by 3 at tick 5 with no Pikmin behind it; `check_scenario_exit.cmake` asserts exit 1 and the `FAIL gamestat_corrupt tick 5` line. |
+| `scenario_first_yellow_<rate>`, `scenario_coop_smoke_<rate>`, `scenario_coop_look_30` | stand-in tree | none | As `scenario_<name>_<rate>`, at the rates in [Tick rates](#tick-rates). `first_yellow` passes at its hand-off point (no `--scenario-handoff`). |
+| `scenario_handoff_free_play_30`, `_60`, `scenario_handoff_first_yellow_30` | a private copy of the stand-in tree | none | `check_scenario_handoff.cmake`, see [The hand-off check](#the-hand-off-check). About 6 to 8 s each: the scripted part and 2 s after the hand-off run in real time. 600 s timeout. |
+| `scenario_realtime_determinism_first_yellow_30` | stand-in tree | none | `check_scenario_determinism.cmake` with `-DSECOND_ARGS=--scenario-realtime`: the per-tick state hash log of a real-time run equals the unthrottled one. |
+| `scenario_exit_handoff_unsupported` | none | none | `--scenario-handoff` with `boot_smoke` (no hand-off point) exits 2 with `boot_smoke has no hand-off point`. |
 
 Which stage each stand-in entry boots:
 
 | Scenarios | `PIKMIN_SCENARIO_STAGE` |
 |-----------|-------------------------|
-| `boot_smoke`, `throw_release`, `day30_clock`, `captain_death`, `extinction_day30`, `day_end`, `day_end_day29`, `onion_unlock`, `onion_unlock_whistle`, `captain_damage`, `ship_parts` | `stages/sandbox.ini` |
-| `sprout_landing`, `onion_skip`, `container_menu` | `stages/sandbox_objects.ini`, the opt-in second stage with a cliff, an Onion, sprouts, a pellet and an enemy. See `standin-objects.md` for what the object stand-ins are, what was read from the disc and what remains, and `standin-cinema.md` for `onion_skip`. |
+| `boot_smoke`, `throw_release`, `day30_clock`, `captain_death`, `extinction_day30`, `day_end`, `day_end_day29`, `onion_unlock`, `onion_unlock_whistle`, `captain_damage`, `ship_parts`, `coop_smoke`, `coop_look` | `stages/sandbox.ini` |
+| `sprout_landing`, `onion_skip`, `container_menu`, `first_yellow`; the hand-off checks (`free_play`, `first_yellow`) | `stages/sandbox_objects.ini`, the opt-in second stage with a cliff, an Onion, sprouts, a pellet and an enemy. See `standin-objects.md` for what the object stand-ins are, what was read from the disc and what remains, and `standin-cinema.md` for `onion_skip`. |
 | `objects_smoke` | `stages/sandbox_all_objects.ini`, one of each plant, bridge, gate, boss and eight enemies. |
 
-`sprout_landing`, `onion_skip`, `container_menu`, `onion_unlock`, `onion_unlock_whistle` and `objects_smoke` have no `_disc` entry: their
-stages do not exist on a real install.
+`sprout_landing`, `onion_skip`, `container_menu`, `onion_unlock`, `onion_unlock_whistle`, `first_yellow` and `objects_smoke` have no `_disc` entry: their
+stages do not exist on a real install. `coop_smoke` and `coop_look` have none either: they were not run on a real install.
 
 The stand-in entries run through `run_standin_scenario.cmake`. It starts
 `nectar`, keeps the scenario's exit code, and additionally fails the test on any
@@ -362,6 +384,11 @@ that stay with the platform are exact by IEEE 754.
 | `day_end_day29` | Day 29, object stage | `day_end` on the last ordinary day: `cleanupDayEnd` sets `RESFLAG_FinalDay`, so the diary entry is `re_g_00`; the day becomes 30 and the exit is still MapSelect. Same ticks as `day_end` at 30 Hz. |
 | `extinction_day30` | Day 30 | Every Pikmin dies on the last day (T05, EC-12). Three blue Pikmin are killed as in `extinction`. Asserted, each within a bound in seconds: PikiZero; `GAMEEND_PikminExtinction` with demo46 playing; demo46's own key resets the flag to `GAMEEND_None` while demo46 still plays and the clock is still below the end hour (the Day 30 branch of `GameMovieInterface::parse`); `DayOverModeState` follows at once and sets the clock to 19:00; the bad ending runs (demo73 with the final results window, which A presses take through the scores, the parts list and the options save, up at least 4 s); the soft reset goes to `ONEPLAYER_GameExit` within 60 s of demo73. Throughout: demo47 (ExtDayEnd) never starts, the flag is set once, the day stays 30, `mEndingType` stays None. A build without the Day 30 test at NPG:3323 fails with `demo47 started`. At 30 Hz: flag t=35, reset t=93, demo73 t=97, GameExit t=517; at 60 Hz: 35, 150, 157, 966. Needs the stand-in demo73 and the results screens (`standin-cinema.md`). |
 
+| `free_play` | Day 2, any stage | No assertions. Applies the disc's key bindings and Infinite Day (which holds Days 2 to 29), then hands off on the first tick after the intro. Headless it passes at tick 0; it exists to be played (`--scenario-handoff`) and for the hand-off check. |
+| `first_yellow` | Day 1, object stage | The moment before the first yellow Pikmin (issue #76). The captain walks with the stick to the stage's yellow sprout at (-20, 180) and stops: in Walk, within 1 unit of one spot for 0.5 s, within 15 units of the sprout (the pluck reach, NaviMgr p62) and facing it within 30 degrees, within 15 s of tick 0 and 3 s of coming within 12 units. Yellow must still be undiscovered: the sprout can be plucked, `DEMOFLAG_PluckYellowPikmin` and the Yellow container and display bits are clear, no yellow Pikmin is on the field. Then the hand-off point (a pass without `--scenario-handoff`). The next A press is the first yellow pluck, which `onion_unlock` checks. The stand-in tree has no yellow Onion or discovery movie (demo05). Parked at 2.00 s at both rates. |
+| `coop_smoke` | Day 1, co-op | Two captains in split screen (see [Co-op scenarios](#co-op-scenarios)), each driven by its own pad. 2 s with pad 0 east and pad 1 north: captain 1 travels at least 40 units east and captain 2 at least 40 units north, each less than half that across its direction (measured: 248 and 227). Then 2 s with pad 0 released and pad 1 south: over the last 1.5 s captain 1 moves less than 5 units (measured 0) and captain 2 at least 30 units south (measured 196). Both end in Walk. |
+| `coop_look` | Day 1, co-op | The split-screen head-look fix (c53ce41e, upstream PR #228; `coverage/render-sim-coupling.md`, Co-op fix). Subjects: both captains (`Navi::updateHeadMatrix`) and one blue Pikmin in Free mode (`ViewPiki::refresh`). Once both captains are in Walk and not looking, each subject gets a look at a fixed point with `mLookTimer` 12; after every tick each timer must be exactly one lower with the target kept, and on the twelfth tick each look must end (no target, timer 0). Two rounds. Negative control (2026-10-28, local, not committed): with `pc_coop_first_view_pass()` returning true all three timers read 10 one tick after the start and the run fails at that tick, which also shows the two views per tick run. |
+
 `throw_release` measures K at run time and never hard-codes it. On this tree both
 the stand-in sandbox and a real install give K = 15 at 30 Hz and 18 at 60 Hz
 (measured 2026-10-28), but the stand-in gate is fitted to land there
@@ -381,6 +408,14 @@ from `PcScenario` (`pc_scenario.h`):
 | `onStageReady()` | Runs once, after the intro gate, before tick 0. Spawn objects here. |
 | `providePads(tick, pad0)` | Fills pad 0 for this tick, before the sim. Pads 1 to 3 are neutral. |
 | `onTick(tick)` | Runs after each tick's sim. Call `scenarioPass()`, or `scenarioFail()` / `scenarioFailf()` with expected and observed text. |
+| `coop()` | True for a two-captain split-screen scenario (see [Co-op scenarios](#co-op-scenarios)). |
+| `providePad1(tick, pad1)` | Co-op only: fills pad 1, the second captain's, after `providePads`. |
+| `handsOff()` | True for a scenario that calls `scenarioHandOff()`; only those accept `--scenario-handoff`. |
+
+`scenarioHandOff()` marks the hand-off point: with `--scenario-handoff` the
+player takes over there, otherwise it is a pass. `scenarioApplyDiscKeyBindings()`
+sets the disc's `parms/key.bin` bindings, which the stand-in tree lacks (pluck
+on A, not B).
 
 The scenario reads game objects directly (`naviMgr`, `pikiMgr`, `gameflow`).
 Never call `exit()`. Report only through the verdict functions.
@@ -412,6 +447,154 @@ only if it works on a real install, the disc list. Then run it once on the
 stand-in tree.
 Expect a missing-file abort or null dereference if it needs something the tree
 lacks; see [Adding a stand-in file](#adding-a-stand-in-file).
+
+## Free play and hand-off
+
+Issue #76. `--scenario-handoff` plays a scenario's scripted part in a visible
+window at real-time pacing and then gives you the game at the point the
+scenario declares. Two scenarios have one:
+
+- `free_play`: the stage you name, Day 2, Infinite Day on so the clock never
+  runs out. You get control right after the stage's intro.
+- `first_yellow`: the object stage, Day 1. The captain walks to the yellow
+  sprout and stops in front of it. You get control there: press A (the pluck
+  button) for the first yellow Pikmin.
+
+### Play it
+
+Build once, from the repository root (any build folder works; this one is used
+below). Ninja is optional:
+
+```sh
+cmake -S games/pikmin1 -B build/pikmin1-play -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+    -DPIKMIN_NATIVE_JAUDIO=OFF -DPIKMIN_BUILD_SCENARIOS=ON
+cmake --build build/pikmin1-play --target pikmin_pc nectar_standin_generator -j 4
+build/pikmin1-play/nectar_standin_generator build/pikmin1-play/scenario-data
+```
+
+The generator writes the stand-in tree (no disc data). Then, still from the
+repository root:
+
+```sh
+# The moment before the first yellow Pikmin:
+PIKMIN_SCENARIO_DATA_DIR="$PWD/build/pikmin1-play/scenario-data" \
+PIKMIN_SCENARIO_STAGE=stages/sandbox_objects.ini \
+    build/pikmin1-play/bin/nectar --scenario first_yellow --scenario-handoff
+
+# Free play on the object stage (or stages/sandbox.ini, stages/sandbox_all_objects.ini):
+PIKMIN_SCENARIO_DATA_DIR="$PWD/build/pikmin1-play/scenario-data" \
+PIKMIN_SCENARIO_STAGE=stages/sandbox_objects.ini \
+    build/pikmin1-play/bin/nectar --scenario free_play --scenario-handoff
+```
+
+Add `--scenario-tick-rate 60` for 60 ticks per second, and
+`PIKMIN_SCENARIO_WINDOW=1920x1080` (any `WxH`) for another window size; the
+default is 1280x720. The terminal shows `[scenario] hand-off: ...` when the game
+is yours. If the window opened behind another one, click it so it has the
+keyboard. Close the window, or press Ctrl+C in the terminal, to end; after the
+hand-off the exit code is 0. (Checked 2026-10-28 on macOS with SIGTERM after a
+hand-off, and SIGINT on a run without one: both take the normal quit path.)
+
+The generator and the two play commands were run as written on 2026-10-28
+from the repository root (macOS arm64, Unix Makefiles, a scratch build folder
+configured as above plus `-DPIKMIN_BUILD_TESTS=ON` in place of
+`build/pikmin1-play`; the configure and build lines themselves were not run in
+that folder), with
+`PIKMIN_SCENARIO_HANDOFF_PROBE=1` added so no window opened; the visible run
+was checked separately (see [The hand-off check](#the-hand-off-check)).
+
+What the run does and does not touch:
+
+- Saves (the memory card, the day history, achievements, the shader cache) go
+  to the run's scratch folder, `nectar-scenario-<name>-<rate>-<pid>` under the
+  system temp folder (the terminal prints it as `[scenario] save dir`), never to
+  your real save folder. It is deleted when the game exits; set
+  `PIKMIN_SCENARIO_KEEP_SAVE_DIR=1` to keep it.
+- Settings: `pikmin_settings.conf` is neither read nor written. You play with
+  the defaults (as on a fresh install), plus the scenario's own: windowed, vsync
+  off, the frame rate from `--scenario-tick-rate`, Whistle Pluck off and, in
+  `free_play`, Infinite Day on. Changes in the F1 menu last until you close the
+  window; the frame rate, Infinite Day and Whistle Pluck do not change from the
+  menu.
+- Keys: the disc's game bindings (pluck and throw on A, whistle on B); the
+  stand-in tree has no `parms/key.bin`. Keyboard, mouse and controller bindings
+  are the port's defaults.
+- No audio: the run uses SDL's dummy audio driver, and a
+  `PIKMIN_NATIVE_JAUDIO=OFF` build has the legacy facade anyway.
+- No disc data: the stand-in models are flat colours, the animations are
+  stand-ins and most movies and screens are missing or plain
+  ([Limitations](#limitations)). The stand-in tree has no yellow Onion and no
+  yellow discovery movie.
+
+What happens at the hand-off (`scenarioHandOff`, `pc_scenario.cpp`): the
+scripted input provider is detached, so the game reads the real keyboard,
+mouse and controllers; deterministic mode ends (wall-clock tick length, the
+normal random numbers, the mouse-menu clicks that deterministic mode turns off),
+the watchdog is disarmed, and no scenario code or invariant check runs again.
+The scratch save folder and the settings layer stay.
+
+Not verified: what follows the end of a day, a Pikmin extinction, the
+captain's death or a quit from the pause menu after a hand-off. Each of these
+goes on to the results and then the map select or the title, and the stand-in
+tree has no map select, file select or title screens
+(`coverage/terminals.md`, section 2), so expect the run to stop there with a
+missing-file abort. `free_play`'s Infinite Day keeps sunset away;
+`first_yellow` runs Day 1, whose clock is not held.
+
+### The hand-off check
+
+`check_scenario_handoff.cmake` (CTest `scenario_handoff_<name>_<rate>`) runs
+`--scenario-handoff` headless with `PIKMIN_SCENARIO_HANDOFF_PROBE=1`. The probe
+keeps the window hidden and attaches a virtual SDL game controller (SDL 2.24 or
+later) with its left stick held up, which the game opens through its own
+hot-plug path like a real pad. In the run it asserts:
+
+- before the hand-off, on every scripted tick where the window read the
+  controller's stick (at least 10), the game read the scripted pad instead;
+- the scripted part after the intro is paced in real time (only checked when
+  it lasts at least a second: 60 ticks took 2.03 s in `first_yellow`);
+- after the hand-off the scripted provider is never called, deterministic and
+  unthrottled mode are off, the game reads the controller's stick on at least
+  3/4 of the ticks (60 of 60 measured), the captain walks at least 30 units in
+  2 s (about 300 measured) and those 2 s of ticks take at least 1.6 s (2.00 s);
+- `NECTAR_SAVE_DIR` is still the scratch folder.
+
+The script gives the run a private copy of the stand-in tree, an empty working
+directory and empty `HOME`, `TMPDIR` (`TMP`, `TEMP`), `LOCALAPPDATA`, `APPDATA`
+and `XDG_*` folders, and turns Mesa's shader disk cache off (a driver cache).
+After the run the data copy must be unchanged (file list, sizes, MD5), the
+working directory and `HOME` empty, `TMPDIR` must hold only the scratch save
+folder (with `card0`), and the executable's folder must have gained none of
+`save/`, `shader_cache/`, `card0/`, `card1/`, `pikmin_settings.conf` or
+`pikmin_achievements.txt`.
+
+Negative controls (2026-10-28, local, not committed): with the provider left
+attached at the hand-off the probe fails with `after the hand-off the scripted
+input provider is never called ... 1 calls after it`; a file written into the
+working directory (the data folder) and one written into `$HOME` at the
+hand-off each fail the script by name.
+
+Not covered by the check: a visible window (it was run once by hand: a 1280x720
+drawable, the process still running 4 s after the hand-off, exit 0 on SIGTERM,
+the scratch folder removed), the real keyboard and mouse (SDL cannot inject
+keyboard state; the controller path is the one checked), Linux and Windows.
+
+## Co-op scenarios
+
+A scenario with `coop()` true runs local co-op: the runner arms it as the
+title's 2P choice does (`pc_coop_switch_apply`: pending co-op, Olimar and
+Louie), so `GameCoreSection` builds two captains and the second camera. Pad 1
+is connected and filled by `providePad1`; the intro gate presses only pad 0.
+
+Scenarios run in deterministic mode, which draws the netplay two-pass frame:
+one full-screen view of the local captain, so split screen's two views never
+run (`detSingleView` in `newPikiGame.cpp`). A co-op scenario therefore turns the
+two-pass frame off (`pc_netplay_present_scenario_split_views`), and the view
+loop draws both views each tick as ordinary local co-op does. The sim stays
+deterministic: fixed tick, sim RNG, the visibility pins. `coop_smoke` and
+`coop_look` each give byte-identical state hash logs on two runs (checked by
+hand with `check_scenario_determinism.cmake`, not registered). The flags
+`--coop` and `--coop-direct` stay rejected.
 
 ## Stand-in assets
 

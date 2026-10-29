@@ -195,7 +195,7 @@ A reusable check for all of them: "message(MOVIECMD_TextDemo, id) opens `tutoria
 | MD5 | All Onions / All Flowers / Unlock Zones cheats | ON2/ST8 | High | `courseOpen` has side effects every call (`playerState.cpp:313-318`). |
 | MD6 | Randomizer | `pc_port/randomizer/pc_randomizer*.cpp` (logic, apply, audit, catalog); `pc_randomizer_menu_pending` forces tutorial skip (`cardSelect.cpp:607 (CardSelectSetupSection::update)`) | High | Seed -> placement is pure logic. The audit file likely already supports a unit test; this slice did not read it (budget). Needs a follow-up: is it deterministic across platforms, does it keep each part reachable. |
 | MD7 | Piki limit setting | ON6, ST7 (cap 20 add), AC7 | M | |
-| MD8 | Co-op / VS / mission (cutscene suppression) | `gameCoreSection.cpp:1720,1830 (pcVsSetupBases; pcMissionSetup)`: all demo flags preset; `PelletGoalState::init` skips ship story under VS/mission `pelletState.cpp:248-253` | M | `--coop/--vs-map/--mission-map` are rejected by the scenario runner (README), so not reachable. Out of scope. |
+| MD8 | Co-op / VS / mission (cutscene suppression) | `gameCoreSection.cpp:1720,1830 (pcVsSetupBases; pcMissionSetup)`: all demo flags preset; `PelletGoalState::init` skips ship story under VS/mission `pelletState.cpp:248-253` | M | `--coop/--vs-map/--mission-map` are rejected by the scenario runner (README). Co-op is reachable since 2026-10-28 through a co-op scenario (`PcScenario::coop`; `coop_smoke`, `coop_look`), which does not check this cutscene suppression; VS and mission are not reachable. Not covered. |
 
 ## 2. Gaps in the harness that this slice needs (ordered by value)
 

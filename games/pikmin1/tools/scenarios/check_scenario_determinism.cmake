@@ -3,7 +3,10 @@
 # hash logs differ. Needs no scenario change: the runner already forces netplay
 # deterministic mode and the pad script is the scenario's own. Called by CTest as:
 #   cmake -DGAME=<nectar> -DSCENARIO=<name> -DRATE=<30|60> -DWORK_DIR=<dir>
-#         [-DSECOND_ENV=<VAR=value>] [-DEXPECT_DIFFER=1] -P check_scenario_determinism.cmake
+#         [-DSECOND_ENV=<VAR=value>] [-DSECOND_ARGS=<arguments>] [-DEXPECT_DIFFER=1]
+#         -P check_scenario_determinism.cmake
+# SECOND_ARGS adds arguments to the second run only (--scenario-realtime: the
+# real-time pacing must not change the per-tick state).
 # Both runs must exit 0 and write the same non-empty log. Negative control:
 # SECOND_ENV sets one environment variable for the second run only, and
 # EXPECT_DIFFER=1 inverts the comparison (passes only when the logs differ).
@@ -29,13 +32,17 @@ foreach(run 1 2)
         string(REGEX MATCH "^([^=]+)=(.*)$" _m "${SECOND_ENV}")
         set(ENV{${CMAKE_MATCH_1}} "${CMAKE_MATCH_2}")
     endif()
+    set(extra)
     if(run EQUAL 1)
         set(log "${log_a}")
     else()
         set(log "${log_b}")
+        if(DEFINED SECOND_ARGS)
+            set(extra ${SECOND_ARGS})
+        endif()
     endif()
     execute_process(
-        COMMAND "${GAME}" --scenario "${SCENARIO}" --scenario-tick-rate "${RATE}" --state-hash-log "${log}"
+        COMMAND "${GAME}" --scenario "${SCENARIO}" --scenario-tick-rate "${RATE}" --state-hash-log "${log}" ${extra}
         OUTPUT_VARIABLE out
         ERROR_VARIABLE out
         RESULT_VARIABLE rc)

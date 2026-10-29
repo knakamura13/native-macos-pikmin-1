@@ -20,8 +20,8 @@ Short answer:
   structure (AI culling and the head look gated by camera visibility and distance)
   is the original game's; the aspect input is the port's.
 - **Local co-op split screen:** the world is drawn twice per tick, so the look
-  timer runs at twice the rate and the second view's camera decides the AI
-  culling. Code read only; scenarios cannot run co-op.
+  timer ran at twice the rate (fixed, see "Co-op fix"; checked by the `coop_look`
+  scenario) and the second view's camera decides the AI culling (unchanged).
 
 No game code changed. A fix would change normal-play results (see Decision).
 
@@ -92,7 +92,7 @@ whether `updateLook` ran on a tick changes how many sim draws happen later.
 | Render scale | No effect | No effect | - |
 | Hidden, minimized or visible window | No effect on the tick structure | No effect | - |
 | Vsync, frame pacing, CPU load | One draw per tick either way; but `mDeltaTime` is the wall clock (clamped to 1/30 s), so slow frames change the whole sim | No effect: fixed tick length, one tick per loop | Wall clock, normally steady |
-| Co-op split screen | Two draws per tick: `updateLook` twice, last view's culling wins | Rejected (`--coop`) | No co-op |
+| Co-op split screen | Two draws per tick: `updateLook` twice before the fix, once after; last view's culling wins | A co-op scenario (`PcScenario::coop`) turns the two-pass frame off and draws both views; the pins still decide culling; `coop_look` checks one look step per tick | No co-op |
 
 The draw count per tick and the frame timing cannot change the look chain in
 single-player. The camera can, as on GameCube, and the window aspect can, unlike
@@ -155,8 +155,9 @@ captain, so its result does not depend on the aspect even with live culling.
 3. Normal play with uneven frame times: `mDeltaTime` follows the wall clock, so
    render cost changes the sim through the tick length. Original structure; on
    PC render cost varies more.
-4. Local co-op split screen: `updateLook` twice per tick and the second view's
-   culling and LOD. Inferred from the code, not run.
+4. Local co-op split screen: `updateLook` twice per tick (fixed; `coop_look`
+   shows it with the gate removed: the look timer drops by two per tick) and the
+   second view's culling and LOD (inferred from the code, not run).
 5. Scenarios and netplay (deterministic mode): never. The policy pins remove the
    camera, and the fixed tick removes the timing.
 
@@ -243,11 +244,19 @@ hash logs that `ctest` writes are identical, K = 15 / 18, and the
 identical on the stand-in and the disc tree at 64x36 and 640x480. A
 throwaway harness ran the view loop with the real `pc_coop.h` gate: a
 10-tick look ends at tick 5 with two ungated views and at tick 10 with the
-gate. Real co-op play was not run (scenarios reject `--coop`).
+gate. Real co-op play was not run (scenarios rejected `--coop`).
+
+Since 2026-10-28 the `coop_look` scenario (`scenario_coop_look_30`) runs it in
+the game: two captains in split screen with both views drawn each tick (the
+deterministic two-pass frame off for co-op scenarios, `tools/scenarios/README.md`,
+Co-op scenarios), and a 12-tick look on each captain and on a Free blue Pikmin.
+Each timer drops by one per tick and each look ends on tick 12, in two rounds.
+With `pc_coop_first_view_pass()` forced true (local, not committed) all three
+timers read 10 after the first tick and the scenario fails there.
 
 ## Regression coverage
 
-No new test. The deterministic pins are already unit-tested by
+The co-op look fix: `coop_look` (above). Otherwise no new test. The deterministic pins are already unit-tested by
 `pc_netplay_policy_test` (`pc_netplay_sim_visible`, `pc_netplay_sim_lod_distance`
 on and off). A stand-in hash comparison across window aspects would pass even
 with the pins removed (the sandbox is aspect-insensitive, table above), so it

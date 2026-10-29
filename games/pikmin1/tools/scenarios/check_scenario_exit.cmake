@@ -3,7 +3,7 @@
 # Called by CTest as:
 #   cmake -DGAME=<nectar> -DSCENARIO=<name> -DEXPECT=<code> [-DRATE=<30|60>]
 #         [-DUNSET_ENV=<var>] [-DEXPECT_OUTPUT=<regex>] [-DFORBID_OUTPUT=<regex>]
-#         -P check_scenario_exit.cmake
+#         [-DARGS=<extra arguments, ;-separated>] -P check_scenario_exit.cmake
 # The test passes only when the exit code equals EXPECT (no WILL_FAIL), the
 # output matches EXPECT_OUTPUT and does not match FORBID_OUTPUT.
 cmake_minimum_required(VERSION 3.16)
@@ -21,7 +21,7 @@ if(DEFINED UNSET_ENV)
 endif()
 
 execute_process(
-    COMMAND "${GAME}" --scenario "${SCENARIO}" --scenario-tick-rate "${RATE}"
+    COMMAND "${GAME}" --scenario "${SCENARIO}" --scenario-tick-rate "${RATE}" ${ARGS}
     OUTPUT_VARIABLE out
     ERROR_VARIABLE out
     RESULT_VARIABLE rc)

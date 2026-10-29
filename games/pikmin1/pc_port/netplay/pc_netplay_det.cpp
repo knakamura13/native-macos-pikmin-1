@@ -70,9 +70,21 @@ unsigned readU32Env(const char* name, unsigned fallback)
 #if PIKI_SCENARIOS
 // --scenario: deterministic, unthrottled, seed pinned to 0 in code so an
 // ambient PIKMIN_NETPLAY_* variable cannot leak into a run.
-static bool sScenarioForced = false;
+static bool sScenarioForced   = false;
+static bool sScenarioRealtime = false;
 
 void pc_netplay_det_scenario_enable(void) { sScenarioForced = true; }
+
+void pc_netplay_det_scenario_set_realtime(bool on) { sScenarioRealtime = on; }
+
+void pc_netplay_det_scenario_hand_off(void)
+{
+	sScenarioForced = false;
+	sDeterministic  = false;
+	sUnthrottled    = false;
+	std::printf("[netplay-det] deterministic mode OFF (scenario hand-off)\n");
+	std::fflush(stdout);
+}
 #endif
 
 void pc_netplay_det_init(int argc, char** argv)
@@ -89,7 +101,7 @@ void pc_netplay_det_init(int argc, char** argv)
 #if PIKI_SCENARIOS
 	if (sScenarioForced) {
 		sDeterministic = true;
-		sUnthrottled   = true;
+		sUnthrottled   = !sScenarioRealtime;
 	}
 #endif
 	// Both RNG streams are main-thread only; remember which thread that is.
