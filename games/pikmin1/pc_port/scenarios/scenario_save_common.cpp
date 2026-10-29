@@ -83,6 +83,9 @@ FileMap listSaveDir()
 	if (root.empty()) return files;
 	for (auto it = fs::recursive_directory_iterator(root, ec); !ec && it != fs::recursive_directory_iterator(); it.increment(ec)) {
 		const std::string rel = fs::relative(it->path(), root, ec).generic_string();
+		// The GL shader cache also lives in the save dir; Mesa (Linux CI) writes to it
+		// mid-run, macOS and Windows drivers do not. It is not save data.
+		if (rel == "shader_cache" || rel.rfind("shader_cache/", 0) == 0) continue;
 		if (it->is_directory(ec)) {
 			files[rel + "/"] = 0;
 		} else {
