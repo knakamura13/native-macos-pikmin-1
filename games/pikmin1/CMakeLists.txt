@@ -448,7 +448,8 @@ if (PIKMIN_BUILD_SCENARIOS)
         pc_port/scenarios/scenario_captain_damage.cpp
         pc_port/scenarios/scenario_onion_unlock.cpp
         pc_port/scenarios/scenario_day_end.cpp
-        pc_port/scenarios/scenario_extinction_day30.cpp)
+        pc_port/scenarios/scenario_extinction_day30.cpp
+        pc_port/scenarios/scenario_tutorial_skip.cpp)
 endif()
 
 include_directories(
@@ -2009,7 +2010,7 @@ if(PIKMIN_BUILD_SCENARIOS)
     # src/jaudio/pikiseq.c is the game's BARC table for SndData/Seqs/pikiseq.arc
     # (data only), compiled with this build's PIKMIN_GAME_VERSION so the
     # stand-in .arc matches the executable's layout (standin-audio.md).
-    add_executable(nectar_standin_generator tools/scenarios/standin_generator.cpp tools/scenarios/standin_objects_stage.cpp tools/scenarios/standin_all_objects_stage.cpp src/jaudio/pikiseq.c)
+    add_executable(nectar_standin_generator tools/scenarios/standin_generator.cpp tools/scenarios/standin_objects_stage.cpp tools/scenarios/standin_all_objects_stage.cpp tools/scenarios/standin_practice_stage.cpp src/jaudio/pikiseq.c)
     # Source-level include path (every target here already has include/), so
     # the generator's own empty include list stays free of the game headers.
     set_source_files_properties(src/jaudio/pikiseq.c
@@ -2120,6 +2121,26 @@ if(PIKMIN_BUILD_SCENARIOS)
                 FIXTURES_REQUIRED scenario_standin_tree
                 WORKING_DIRECTORY "${PIKMIN_STANDIN_DATA}"
                 ENVIRONMENT "PIKMIN_SCENARIO_DATA_DIR=${PIKMIN_STANDIN_DATA};PIKMIN_SCENARIO_STAGE=stages/sandbox_all_objects.ini"
+                TIMEOUT 600)
+        endforeach()
+    endforeach()
+
+    # The tutorial stand-in stage (stages/practice.ini, stage id Practice at index
+    # 0, tools/scenarios/standin_practice_stage.h): the tutorial-only milestones.
+    # No disc entry. 30 and 60 (tools/scenarios/README.md, "Tick rates").
+    foreach(scenario tutorial_skip)
+        foreach(rate 30 60)
+            add_test(NAME scenario_${scenario}_${rate}
+                COMMAND ${CMAKE_COMMAND}
+                    -DGAME=$<TARGET_FILE:${NECTAR_GAME}>
+                    -DSCENARIO=${scenario} -DRATE=${rate}
+                    -DALLOWLIST=${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/standin-open-allowlist.txt
+                    -DLOG_DIR=${CMAKE_CURRENT_BINARY_DIR}/scenario-logs
+                    -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/run_standin_scenario.cmake)
+            set_tests_properties(scenario_${scenario}_${rate} PROPERTIES
+                FIXTURES_REQUIRED scenario_standin_tree
+                WORKING_DIRECTORY "${PIKMIN_STANDIN_DATA}"
+                ENVIRONMENT "PIKMIN_SCENARIO_DATA_DIR=${PIKMIN_STANDIN_DATA};PIKMIN_SCENARIO_STAGE=stages/practice.ini"
                 TIMEOUT 600)
         endforeach()
     endforeach()

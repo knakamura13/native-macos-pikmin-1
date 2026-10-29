@@ -31,12 +31,14 @@ dataDir/stages/sandbox_all_objects/plants.gen
 # day_end_day29 on Day 29 (object stage). Guarded like the others.
 dataDir/stages/sandbox/29.gen
 dataDir/stages/sandbox_objects/28.gen
+# The tutorial stage (standin_practice_stage.h) writes default.gen, init.gen and
+# the Day 1 file 0.gen; plants.gen is guarded like the others.
+dataDir/stages/practice/plants.gen
 
 # Parameter files CoreNode::load skips silently when missing (node.cpp); every
 # value keeps its code default. key.bin: the throw key stays A, which
-# throw_release asserts. demo, sound: no demo flags or sound constants are read
-# by a v1 scenario.
-dataDir/parms/demo.bin
+# throw_release asserts. sound: no sound constants are read by a scenario.
+# (demo.bin is written since the tutorial scenarios: the disc's trigger radii.)
 dataDir/parms/sound.bin
 dataDir/parms/key.bin
 dataDir/camera/camepara.bin
@@ -81,6 +83,10 @@ dataDir/cinemas/demo28.cin
 # extinction_day30: the bad ending's first movie (DEMOID_BadEnding, phase one).
 # The disc's has Action keys only (ship and Pikmin actors), no Notify key.
 dataDir/cinemas/demo69.cin
+# The tutorial scenarios (stages/practice.ini). demo03 is the Day 1 wake-up
+# (DEMOID_OlimarWakeUp, NewPikiGameSetupSection); the disc's has one Notify key,
+# the TUT_Awakening text at its end. The runner's intro gate would skip it.
+dataDir/cinemas/demo03.cin
 
 # captain_death: the three textures EffectMgr2D registers that effects.bun does
 # not hold (the file-select and results screens build the 2D effect manager when
@@ -94,3 +100,7 @@ dataDir/effects/tex/waku03.bti
 # tolerated. Achievements are saved per run in the scratch save folder, so the toast
 # shows on every run (it used to show on the first only, when the file was shared).
 dataDir/screen/eng_tex/end_navi.bti
+# tutorial_skip (and the engine carried to the ship): the Main Engine's part
+# achievement (PC_ACH_PART_MAIN_ENGINE) queues a toast whose icon is
+# screen/tex/image012.bti (pc_achievement_icon). Tolerated the same way.
+dataDir/screen/eng_tex/image012.bti

@@ -463,10 +463,12 @@ struct TestPelletConfig : public Parameters {
 	    , mPelletColor(this, -1, 0, 0, "p09", "color")
 	    , mCarryMin(this, 1, 0, 0, "p01", "min pikis")
 	    , mCarryMax(this, 1, 0, 0, "p02", "max pikis")
+	    , mScale(this, 1.0f, 0.0f, 0.0f, "p10", "scale")
 	{
 	}
 	Parm<String> mPelletName;
 	Parm<int> mPelletType, mPelletColor, mCarryMin, mCarryMax;
+	Parm<f32> mScale;
 	std::uint32_t model = 0, shape = 0, unused = 0;
 	int joint = 0;
 };
@@ -504,7 +506,7 @@ void testPelletTables()
 	check(files[0].path == "dataDir/parms/pelMgr.bin", "pelMgr.bin path");
 	RamStream cfg = streamOf(files[0].bytes);
 	const int configs = cfg.readInt(); // PelletMgr::readConfigs
-	check(configs == 12, "twelve coloured pellet configs");
+	check(configs == 13, "twelve coloured pellet configs and the Main Engine");
 	std::set<std::string> ids, configShapes;
 	for (int i = 0; i < configs; i++) {
 		TestPelletConfig c;
@@ -516,6 +518,15 @@ void testPelletTables()
 		const std::string model = idString(c.model);
 		check(ids.insert(model).second, "config id " + model + " is unique");
 		configShapes.insert(idString(c.shape));
+		if (model == "ust5") {
+			// The disc's Main Engine config (standin_objects.cpp): a ship part (type 3), no colour, 20 to 40 carriers,
+			// scale 1.65, ship joint 3, its own shape.
+			check(i == configs - 1, "the Main Engine is the last config");
+			check(idString(c.shape) == "ust5" && idString(c.unused) == "none" && c.joint == 3, "Main Engine: shape ust5, no split, repair joint 3");
+			check(c.mPelletType() == 3 && c.mPelletColor() == -1 && c.mCarryMin() == 20 && c.mCarryMax() == 40 && c.mScale() == 1.65f,
+			      "Main Engine: type 3, colour -1, 20 to 40 carriers, scale 1.65 (the disc's)");
+			continue;
+		}
 		check(model.size() == 4 && (model[1] == 'b' || model[1] == 'r' || model[1] == 'y') && model[0] == 'p', "config id " + model + " is p<colour><number>");
 		check(idString(c.shape).rfind("pe", 0) == 0 && idString(c.unused) == "none" && c.joint == -1, "config " + model + ": shape pe**, no split, no repair joint");
 		const int want = model[1] == 'b' ? 0 : model[1] == 'r' ? 1 : 2;
@@ -583,6 +594,18 @@ struct GenParms : public Parameters {
 	{
 	}
 	Parm<int> p00, p01;
+};
+
+// GenObjectWorkObject's Parm fields (workObject.cpp:305-310), with its code defaults.
+struct WorkGenParms : public Parameters {
+	WorkGenParms()
+	    : Parameters("work")
+	    , p02(this, 10, 0, 100, "p02", "pushers")
+	    , p03(this, 30.0f, 0.0f, 400.0f, "p03", "speed")
+	{
+	}
+	Parm<int> p02;
+	Parm<f32> p03;
 };
 
 struct ReadGen {
@@ -800,7 +823,7 @@ void testWorld()
 void testWorldGenerators()
 {
 	using Spec = nectar::ObjectGenSpec;
-	std::vector<Spec> specs(4);
+	std::vector<Spec> specs(5);
 	specs[0].kind      = Spec::Plant;
 	specs[0].plantType = 11;
 	specs[1].kind      = Spec::Work;
@@ -812,13 +835,32 @@ void testWorldGenerators()
 	specs[2].shape     = "bridge 13";
 	specs[3].kind      = Spec::Boss;
 	specs[3].bossType  = 8;
-	const Bytes file   = nectar::writeObjectGenFile(specs);
+	// A move stone with its own parameters, as the tutorial stand-in stage writes the disc's (10 pushers, speed 50).
+	specs[4].kind         = Spec::Work;
+	specs[4].name         = "move stone";
+	specs[4].shape        = "stone 10";
+	specs[4].stoneTo      = { 4.0f, 5.0f, 6.0f };
+	specs[4].stonePushers = 10;
+	specs[4].stoneSpeed   = 50.0f;
+	const Bytes file      = nectar::writeObjectGenFile(specs);
+
+	// Without stonePushers the bytes are what they were before the field existed (no object parameters).
+	{
+		Spec plain       = specs[1];
+		Spec withDefault = specs[1];
+		withDefault.stoneSpeed = 99.0f; // ignored while stonePushers < 0
+		check(nectar::writeObjectGen(plain) == nectar::writeObjectGen(withDefault), "a move stone without stonePushers writes no parameters");
+	}
 
 	nectar::GenFile parsed;
 	std::string err;
 	check(nectar::parseGen(file.data(), file.size(), parsed, err), "parseGen of plant, work and boss generators: " + err);
-	check(parsed.generators.size() == 4, "four generators");
-	if (parsed.generators.size() != 4) return;
+	check(parsed.generators.size() == 5, "five generators");
+	if (parsed.generators.size() != 5) return;
+	const nectar::GenParam* pushers = parsed.generators[4].object.param(0x70303200u); // 'p02'
+	const nectar::GenParam* speed   = parsed.generators[4].object.param(0x70303300u); // 'p03'
+	check(pushers && pushers->asInt() == 10 && speed && speed->asFloat() == 50.0f, "parseGen: the move stone's p02 10 and p03 50");
+	check(parsed.generators[1].object.params.empty(), "parseGen: the plain move stone has no object parameters");
 	check(nectar::genIdString(parsed.generators[0].object.kind) == "plnt" && parsed.generators[0].object.type == 11, "plant type 11");
 	check(nectar::genIdString(parsed.generators[1].object.kind) == "work" && parsed.generators[1].object.name == "move stone", "move stone");
 	check(parsed.generators[2].object.name == "bridge test", "bridge");
@@ -828,8 +870,9 @@ void testWorldGenerators()
 	RamStream in = streamOf(file);
 	readGenId(in);
 	for (int i = 0; i < 4; i++) in.readFloat();
-	check(in.readInt() == 4, "count");
-	for (int g = 0; g < 4; g++) {
+	check(in.readInt() == 5, "count");
+	for (int g = 0; g < 5; g++) {
+		bool objParmsRead = false;
 		readGenId(in);
 		readGenId(in);
 		readGenId(in);
@@ -847,14 +890,24 @@ void testWorldGenerators()
 			in.readString(name);
 			in.readString(shape);
 			if (std::string(name.mString) == "move stone") {
-				check(in.readFloat() == 1.0f && in.readFloat() == 2.0f && in.readFloat() == 3.0f, "a move stone's destination");
+				const float x = in.readFloat(), y = in.readFloat(), z = in.readFloat();
+				check((x == 1.0f && y == 2.0f && z == 3.0f) || (x == 4.0f && y == 5.0f && z == 6.0f), "a move stone's destination");
+				// GenObjectWorkObject's own Parms: the code defaults unless the generator carries them.
+				WorkGenParms w;
+				w.read(in);
+				const bool own = x == 4.0f;
+				check(own ? (w.p02() == 10 && w.p03() == 50.0f) : (w.p02() == 10 && w.p03() == 30.0f),
+				      own ? "the game reads the move stone's 10 pushers and speed 50" : "a plain move stone keeps the defaults 10 and 30");
+				objParmsRead = true;
 			}
 		} else if (kind == "boss") {
 			check(version == 2, "boss is version 2");
 			check((static_cast<std::uint32_t>(in.readInt()) & 0xF) == 8u, "boss type in the low four bits");
 		}
-		GenParms objParms;
-		objParms.read(in);
+		if (!objParmsRead) {
+			GenParms objParms;
+			objParms.read(in);
+		}
 		readGenId(in); // pint
 		readGenId(in);
 		for (int i = 0; i < 3; i++) in.readFloat();

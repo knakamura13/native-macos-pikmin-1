@@ -114,6 +114,10 @@ struct ObjectGenSpec {
 	int plantType   = 0;
 	std::string shape;
 	Vec3 stoneTo;
+	/// Work only: with stonePushers >= 0 the object part carries 'p02' (Pikmin needed to move a move stone) and
+	/// 'p03' (its speed); otherwise no parameters, so the game keeps its defaults (10 and 30, workObject.cpp).
+	int stonePushers = -1;
+	float stoneSpeed = 30.0f;
 	int bossType = 1;
 };
 

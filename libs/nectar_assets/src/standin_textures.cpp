@@ -110,6 +110,9 @@ bool standInTextureFiles(std::vector<StandInFile>& out, std::string& error)
 	// Null comprobado en el juego, pero el manifiesto de disco los lista como abiertos.
 	out.push_back({ "intro/item_0_9.bti", bti, true });
 	out.push_back({ "intro/map1.bti", bti, true });
+	// The Impact Site's area banner (game.cpp levNames, null-checked): opened when the
+	// tutorial stand-in stage (stage id 0) loads.
+	out.push_back({ "intro/map0.bti", bti, true });
 
 	// Texturas sueltas de screen/eng_tex que abre el arranque (manifiesto de #64).
 	// Las que citan los .blo de #72 y viven en screen.bun se añaden cuando #72 las enumere.
