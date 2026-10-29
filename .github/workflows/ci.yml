@@ -120,6 +120,16 @@ jobs:
         id: build-p1
         run: cmake --build build/pikmin1 --parallel -- -k 0
 
+      # Diagnostic (a trial on this branch): does the linked scenario binary have
+      # any x87 transcendental, fsqrt, FMA or CRT math import left, i.e. is the
+      # software libm complete? tools/netplay/fp_gate.py is the netplay build's gate.
+      - name: FP gate on the scenario binary (Windows)
+        if: ${{ !cancelled() && runner.os == 'Windows' && steps.build-p1.outcome == 'success' }}
+        continue-on-error: true
+        run: |
+          pacman -S --noconfirm --needed mingw-w64-x86_64-python
+          python games/pikmin1/tools/netplay/fp_gate.py --objdump "$(cygpath -m "$(which objdump)")" build/pikmin1/bin/nectar.exe
+
       # Scenarios need a GL context (hidden window). A runner that cannot create
       # one is on SCENARIO_SKIP_OS with a tracking issue; the scenario binary exits
       # 4 on a context failure, so it is never read as a failed scenario. Each test
@@ -402,6 +412,21 @@ jobs:
             macOS=hash-logs/scenario-hash-logs-jaudio-macOS \
             Linux=hash-logs/scenario-hash-logs-jaudio-Linux \
             Windows=hash-logs/scenario-hash-logs-jaudio-Windows
+
+      # The native audio engine must not touch the simulation: the JAudio-on
+      # scenarios (boot_smoke, throw_release, day30_clock) equal the JAudio-off
+      # logs of the same scenarios, on every OS.
+      - name: Compare (native JAudio on against off)
+        if: ${{ !cancelled() }}
+        run: |
+          python3 games/pikmin1/tools/scenarios/compare_hash_logs.py --common-only \
+            --label "state-hash logs, native JAudio on against off" \
+            macOS=hash-logs/scenario-hash-logs-macOS \
+            Linux=hash-logs/scenario-hash-logs-Linux \
+            Windows=hash-logs/scenario-hash-logs-Windows \
+            macOS-jaudio=hash-logs/scenario-hash-logs-jaudio-macOS \
+            Linux-jaudio=hash-logs/scenario-hash-logs-jaudio-Linux \
+            Windows-jaudio=hash-logs/scenario-hash-logs-jaudio-Windows
 
 
   # Reports, per OS, whether a hidden-window GL context of the kind the game

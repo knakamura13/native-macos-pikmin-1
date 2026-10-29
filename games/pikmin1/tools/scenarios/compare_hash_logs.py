@@ -5,8 +5,10 @@ CI (ci.yml, job scenario-hash-compare) calls it with one directory per OS, each
 holding that OS's build/pikmin1/scenario-logs/*.hash.log (the files
 run_standin_scenario.cmake writes with --state-hash-log):
 
-    compare_hash_logs.py [--label TEXT] NAME=DIR [NAME=DIR ...]
+    compare_hash_logs.py [--label TEXT] [--common-only] NAME=DIR [NAME=DIR ...]
 
+--common-only compares only the scenarios every directory has (for sets that
+cover different scenarios, such as the native-JAudio-off and -on builds).
 It fails (exit 1) when
   - a directory is missing, or holds no .hash.log,
   - a scenario has a log on some OS and none on another,
@@ -74,6 +76,9 @@ def first_difference(per_os):
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--label", default="state-hash logs", help="what is being compared, for the headings")
+    parser.add_argument("--common-only", action="store_true",
+                        help="compare only the scenarios every source has; the others are not a problem "
+                             "(for sources that cover different scenario sets)")
     parser.add_argument("sources", nargs="+", metavar="NAME=DIR")
     args = parser.parse_args()
 
@@ -94,7 +99,14 @@ def main():
             continue
         logs[name] = found
 
-    scenarios = sorted(set().union(*[set(found) for found in logs.values()])) if logs else []
+    if not logs:
+        scenarios = []
+    elif args.common_only:
+        scenarios = sorted(set.intersection(*[set(found) for found in logs.values()]))
+        if not scenarios:
+            problems.append("no scenario has a log in every source")
+    else:
+        scenarios = sorted(set().union(*[set(found) for found in logs.values()]))
     rows = []
     for scenario in scenarios:
         have = {name: found[scenario] for name, found in logs.items() if scenario in found}
@@ -132,6 +144,15 @@ def main():
     same = sum(1 for _s, state, _d in rows if state == "same")
     print(f"{args.label}: {len(scenarios)} scenarios on {', '.join(sources)}; "
           f"{same} identical, {len(scenarios) - same} not")
+    for name, found in logs.items():
+        with_cr = 0
+        for scenario in scenarios:
+            if scenario in found:
+                with open(found[scenario], "rb") as f:
+                    if b"\r" in f.read():
+                        with_cr += 1
+        if with_cr:
+            print(f"  note: {name} wrote CRLF line ends in {with_cr} of {len(scenarios)} logs (ignored)")
     for scenario, state, detail in rows:
         if state == "same":
             print(f"  same      {scenario}: {detail}")
