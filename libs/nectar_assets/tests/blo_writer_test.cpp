@@ -460,6 +460,28 @@ std::map<std::string, LayoutReq> requirements()
 		m["cha_sav2.blo"].reqs.push_back({ "abtn", 'P' });
 		m["ac_chui.blo"].reqs = list({ "back", "chui" }, 'P');
 	}
+	{
+		// The challenge results window: DrawCMresult::DrawCMresult (cha_re, cha_rank, cha_best), with
+		// DrawCMtitleObj::init, DrawCMscoreMgr::init (ranks 1..5), DrawCMbest::init and ogGraphMgr,
+		// plus the panes start and createRankInEffect look up.
+		std::vector<Req>& r = m["cha_re.blo"].reqs;
+		r                   = list({ "titl", "g_sp" }, 'A');
+		cat(r, list({ "mark", "bigl", "bigc", "bigr", "sbil", "sbic", "sbir", "bi_w" }, 'P'));
+		cat(r, run("p_m%d", 0, 5, 'A'));
+		std::vector<Req>& k = m["cha_rank.blo"].reqs;
+		k                   = list({ "rank" }, 'A');
+		cat(k, run("%dban", 1, 5, 'A'));
+		cat(k, run("%di_l", 1, 5, 'P'));
+		cat(k, run("%di_c", 1, 5, 'P'));
+		cat(k, run("%di_r", 1, 5, 'P'));
+		cat(k, run("m%d_w", 1, 5, 'P'));
+		m["cha_best.blo"].reqs = { { "best", 'A' }, { "b_00", 'P' } };
+		// DrawGameInfo::DrawGameInfo(MODE_Challenge): play_day.blo's lookups without the date.
+		LayoutReq& l = m["play_cha.blo"];
+		l.reqs       = list({ "piki", "w_01" }, 'P');
+		cat(l.reqs, list({ "w_00", "x_00" }, 'A'));
+		cat(l.reqs, list({ "c_ml", "c_mc", "c_mr", "c_ll", "c_lc", "c_lr", "c_sl", "c_sc", "c_sr", "c_s1" }, 'P'));
+	}
 	return m;
 }
 
@@ -708,8 +730,8 @@ int main()
 	{
 		std::vector<nectar::StandinLayout> layouts = nectar::standinBloLayouts();
 		std::map<std::string, LayoutReq> reqs      = requirements();
-		check(layouts.size() == 46, "46 layouts: 12 on the boot path, 8 for day30_clock, 2 for the stand-in cinema text keys, 17 for captain_death, "
-		                            "1 for captain_damage, 2 diary pages for day_end, 4 for extinction_day30");
+		check(layouts.size() == 50, "50 layouts: 12 on the boot path, 8 for day30_clock, 2 for the stand-in cinema text keys, 17 for captain_death, "
+		                            "1 for captain_damage, 2 diary pages for day_end, 4 for extinction_day30, 4 for challenge mode");
 		const char* bootOrder[] = { "black.blo", "pause.blo", "pause_ok.blo", "gameover.blo", "gameove2.blo", "count.blo",
 			                        "con01.blo", "sund.blo",  "account.blo",  "play09.blo",   "play10.blo",   "play_day.blo" };
 		for (size_t i = 0; i < 12 && i < layouts.size(); i++) check(layouts[i].file == bootOrder[i], std::string("load order: ") + bootOrder[i]);

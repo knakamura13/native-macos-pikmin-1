@@ -404,6 +404,50 @@ std::vector<StandinLayout> standinBloLayouts()
 		out.push_back(layout("ac_chui.blo", k));
 	}
 
+	{ // drawGameInfo.cpp, DrawGameInfo::DrawGameInfo(MODE_Challenge): the challenge-mode HUD,
+		// play_cha.blo in place of play_day.blo. The same lookups as play_day.blo except the date
+		// (dc_*, story mode only).
+		Kids k;
+		k.add(pic("piki")).add(pane("w_00")).add(pane("x_00")).add(pic("w_01"));
+		for (const char* t : { "c_ml", "c_mc", "c_mr", "c_ll", "c_lc", "c_lr", "c_sl", "c_sc", "c_sr", "c_s1" }) k.add(pic(t));
+		out.push_back(layout("play_cha.blo", k));
+	}
+
+	// challenge_day_end, challenge_captain_death, challenge_extinction: the challenge results
+	// window (zen::DrawCMresult, built by DayOverModeState::initialisePhaseTwo in challenge mode).
+	// Its constructor opens three screens; its save step (DrawOptionSave) reuses cha_sav2,
+	// ac_chui and data_m above. Tags and types are every search(.., true) of the constructor and
+	// of what it builds, the same as on the disc's files (blo_writer_test with NECTAR_DISC_DATA).
+	{ // drawCMresult.cpp, drawCMtitle.cpp, ogGraph.cpp: cha_re.blo. 'titl' anchors the title
+		// (DrawCMtitleObj) with its 'mark' (a BalloonPane); the score digits bigl..bigr and
+		// sbil..sbir are pictures (NumberPicCallBack); p_m0..p_m4 are the five course names, one
+		// shown (start); 'bi_w' places the new-record effect; 'g_sp' is the graph area (ogGraphMgr
+		// reads its size).
+		Kids k;
+		k.add(with(pane("titl"), { pic("mark") }));
+		digitTags(k, { "sbil", "sbic", "sbir", "bigl", "bigc", "bigr" });
+		k.add(pic("bi_w"));
+		k.add(sized(pane("g_sp"), 384, 64));
+		for (int i = 0; i < 5; i++) k.add(pane(tagf("p_m%d", i)));
+		out.push_back(layout("cha_re.blo", k));
+	}
+	{ // drawCMscore.cpp, DrawCMscoreObj::init for ranks 1..5 (MEMORY_BEST_SCORE): an 'Nban'
+		// anchor, its digits Ni_l, Ni_c, Ni_r (pictures) and the new-rank mark mN_w (a picture,
+		// createRankInEffect), all under 'rank' (DrawCMresult moves it).
+		Kids k;
+		BloPane rank = pane("rank");
+		for (int n = 1; n <= 5; n++) {
+			rank.children.push_back(with(pane(tagf("%dban", n)), { pic(tagf("m%d_w", n)), pic(tagf("%di_l", n)), pic(tagf("%di_c", n)), pic(tagf("%di_r", n)) }));
+		}
+		k.add(rank);
+		out.push_back(layout("cha_rank.blo", k));
+	}
+	{ // drawCMbest.cpp: cha_best.blo. 'best' with b_00 (DrawCMbest counts b_NN until one is missing).
+		Kids k;
+		k.add(with(pane("best"), { pic("b_00") }));
+		out.push_back(layout("cha_best.blo", k));
+	}
+
 	return out;
 }
 
