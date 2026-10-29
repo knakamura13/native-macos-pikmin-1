@@ -1235,6 +1235,7 @@ static bool sScenarioSettings   = false;
 static int sScenarioFpsMode     = 0;
 static int sScenarioInfiniteDay = 0;
 static int sScenarioWhistlePluck = 0;
+static int sScenarioNoDayAdvance = 0; // "No Day Limit"
 // The scenario window (PIKMIN_SCENARIO_WINDOW, see pc_scenario.cpp). Every tick
 // draws a frame, which under software GL costs per pixel, and no scenario reads
 // the picture.
@@ -9032,6 +9033,7 @@ void pc_settings_scenario_enable(void) { sScenarioSettings = true; }
 void pc_settings_scenario_set_fps_mode(int fpsMode) { sScenarioFpsMode = fpsMode; }
 void pc_settings_scenario_set_infinite_day(int on) { sScenarioInfiniteDay = on; }
 void pc_settings_scenario_set_whistle_pluck(int on) { sScenarioWhistlePluck = on; }
+void pc_settings_scenario_set_no_day_advance(int on) { sScenarioNoDayAdvance = on; }
 void pc_settings_scenario_set_window_size(int width, int height)
 {
     sScenarioWindowWidth  = width;
@@ -9097,7 +9099,12 @@ float pc_settings_get_carry_speed_scale(void) { if (pc_speedrun_active()) return
     return pc_hardmode_active() ? 1.0f : sConfig.carrySpeedPct / 100.0f; }
 float pc_settings_get_navi_speed_scale(void) { if (pc_speedrun_active()) return 1.0f; return pc_hardmode_active() ? 1.0f : sConfig.naviSpeedPct / 100.0f; }
 int pc_settings_get_unlock_zones(void) { if (pc_speedrun_active()) return 0; return pc_hardmode_active() ? 0 : sConfig.unlockZones; }
-int pc_settings_get_no_day_advance(void) { if (pc_speedrun_active()) return 0; return pc_hardmode_active() ? 0 : sConfig.noDayAdvance; }
+int pc_settings_get_no_day_advance(void) { if (pc_speedrun_active()) return 0;
+    if (pc_hardmode_active()) return 0;
+#if PIKI_SCENARIOS
+    if (sScenarioSettings) return sScenarioNoDayAdvance;
+#endif
+    return sConfig.noDayAdvance; }
 int pc_settings_get_all_onions(void) { if (pc_speedrun_active()) return 0; return pc_hardmode_active() ? 0 : sConfig.allOnions; }
 
 int pc_settings_get_instant_whistle(void) { if (pc_speedrun_active()) return 0;

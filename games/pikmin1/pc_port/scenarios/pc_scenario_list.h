@@ -24,5 +24,14 @@ PcScenario* pc_scenario_make_onion_unlock_whistle(void);
 PcScenario* pc_scenario_make_day_end(void);
 PcScenario* pc_scenario_make_day_end_day29(void);
 PcScenario* pc_scenario_make_extinction_day30(void);
+PcScenario* pc_scenario_make_ending_bad_day30(void);
+PcScenario* pc_scenario_make_ending_neutral_day30(void);
+PcScenario* pc_scenario_make_ending_happy(void);
+PcScenario* pc_scenario_make_ending_happy_skip(void);
+PcScenario* pc_scenario_make_captain_death_day30(void);
+PcScenario* pc_scenario_make_day_end_no_day_limit(void);
+PcScenario* pc_scenario_make_challenge_day_end(void);
+PcScenario* pc_scenario_make_challenge_captain_death(void);
+PcScenario* pc_scenario_make_challenge_extinction(void);
 
 #endif

@@ -448,7 +448,12 @@ if (PIKMIN_BUILD_SCENARIOS)
         pc_port/scenarios/scenario_captain_damage.cpp
         pc_port/scenarios/scenario_onion_unlock.cpp
         pc_port/scenarios/scenario_day_end.cpp
-        pc_port/scenarios/scenario_extinction_day30.cpp)
+        pc_port/scenarios/scenario_extinction_day30.cpp
+        pc_port/scenarios/scenario_ending_day30.cpp
+        pc_port/scenarios/scenario_ending_happy.cpp
+        pc_port/scenarios/scenario_captain_death_day30.cpp
+        pc_port/scenarios/scenario_no_day_limit.cpp
+        pc_port/scenarios/scenario_challenge.cpp)
 endif()
 
 include_directories(
@@ -2120,6 +2125,31 @@ if(PIKMIN_BUILD_SCENARIOS)
                 FIXTURES_REQUIRED scenario_standin_tree
                 WORKING_DIRECTORY "${PIKMIN_STANDIN_DATA}"
                 ENVIRONMENT "PIKMIN_SCENARIO_DATA_DIR=${PIKMIN_STANDIN_DATA};PIKMIN_SCENARIO_STAGE=stages/sandbox_all_objects.ini"
+                TIMEOUT 600)
+        endforeach()
+    endforeach()
+
+    # Endings, the last day, No Day Limit and challenge mode (coverage/terminals.md T07-T10,
+    # T12, T17, T18). 30 and 60: bounds in seconds, movies and windows advance per tick or
+    # per frame time (tools/scenarios/README.md, "Tick rates"). Two run on the object stage.
+    foreach(scenario ending_bad_day30 ending_neutral_day30 ending_happy ending_happy_skip captain_death_day30
+            challenge_captain_death challenge_extinction day_end_no_day_limit challenge_day_end)
+        set(scenario_stage stages/sandbox.ini)
+        if(scenario STREQUAL "day_end_no_day_limit" OR scenario STREQUAL "challenge_day_end")
+            set(scenario_stage stages/sandbox_objects.ini)
+        endif()
+        foreach(rate 30 60)
+            add_test(NAME scenario_${scenario}_${rate}
+                COMMAND ${CMAKE_COMMAND}
+                    -DGAME=$<TARGET_FILE:${NECTAR_GAME}>
+                    -DSCENARIO=${scenario} -DRATE=${rate}
+                    -DALLOWLIST=${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/standin-open-allowlist.txt
+                    -DLOG_DIR=${CMAKE_CURRENT_BINARY_DIR}/scenario-logs
+                    -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/run_standin_scenario.cmake)
+            set_tests_properties(scenario_${scenario}_${rate} PROPERTIES
+                FIXTURES_REQUIRED scenario_standin_tree
+                WORKING_DIRECTORY "${PIKMIN_STANDIN_DATA}"
+                ENVIRONMENT "PIKMIN_SCENARIO_DATA_DIR=${PIKMIN_STANDIN_DATA};PIKMIN_SCENARIO_STAGE=${scenario_stage}"
                 TIMEOUT 600)
         endforeach()
     endforeach()

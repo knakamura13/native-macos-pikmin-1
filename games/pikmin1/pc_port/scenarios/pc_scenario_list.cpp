@@ -55,6 +55,15 @@ const std::vector<PcScenario*>& pc_scenario_all(void)
 		pc_scenario_make_day_end(),
 		pc_scenario_make_day_end_day29(),
 		pc_scenario_make_extinction_day30(),
+		pc_scenario_make_ending_bad_day30(),
+		pc_scenario_make_ending_neutral_day30(),
+		pc_scenario_make_ending_happy(),
+		pc_scenario_make_ending_happy_skip(),
+		pc_scenario_make_captain_death_day30(),
+		pc_scenario_make_day_end_no_day_limit(),
+		pc_scenario_make_challenge_day_end(),
+		pc_scenario_make_challenge_captain_death(),
+		pc_scenario_make_challenge_extinction(),
 		[] { static ExitZero s; return static_cast<PcScenario*>(&s); }(),
 	};
 	return all;
