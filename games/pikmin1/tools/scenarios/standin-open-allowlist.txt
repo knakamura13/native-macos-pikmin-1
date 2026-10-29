@@ -87,6 +87,19 @@ dataDir/cinemas/demo69.cin
 # (DEMOID_OlimarWakeUp, NewPikiGameSetupSection); the disc's has one Notify key,
 # the TUT_Awakening text at its end. The runner's intro gate would skip it.
 dataDir/cinemas/demo03.cin
+# tutorial_firsts: the movies of DEMOFLAG_ApproachSeed (demo07) and
+# DEMOFLAG_ApproachEngine (demo16). The scenario asserts the flags and the
+# timer Navi::demoCheck sets, not the movies; the disc's carry one Notify key
+# each, a TextDemo (TUT_FirstSeed, TUT_FoundEngine), not covered.
+dataDir/cinemas/demo07.cin
+dataDir/cinemas/demo16.cin
+# tutorial_day1: the movies of DEMOFLAG_CollectFirstPellet (demo14) and
+# DEMOFLAG_StartBoxPush (demo15), asserted by their flags the same way; the disc's
+# carry a TextDemo each (TUT_Pelette, TUT_StoneHint2), not covered. The day-end
+# movies it reaches (demo28, demo32, demo84) and the waku textures are allowlisted
+# above for the other day ends.
+dataDir/cinemas/demo14.cin
+dataDir/cinemas/demo15.cin
 
 # captain_death: the three textures EffectMgr2D registers that effects.bun does
 # not hold (the file-select and results screens build the 2D effect manager when

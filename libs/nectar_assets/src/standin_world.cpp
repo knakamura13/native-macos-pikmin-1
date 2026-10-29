@@ -103,6 +103,13 @@ std::vector<StandInModelSpec> worldModelSpecs()
 		s.colour   = colourFor(m.path);
 		s.halfSize = halfFor(m);
 		if (!m.parts.empty()) s.collInfo = worldCollInfo(m.parts);
+		if (s.path == "dataDir/objects/hinderrock/cube10.mod") {
+			// The push box is solid: a 120-unit block whose side faces are the planes its four vtx parts (the disc's,
+			// at x and z +-60) define (HinderRock::updatePlanes), so pushing Pikmin stop on the face and stay on its
+			// side (HinderRock::getPlaneFlag, ActPush::exeGo). Without the collision they walk into the box.
+			s.halfSize = 60.0f;
+			s.platform = true;
+		}
 		out.push_back(std::move(s));
 	}
 	return out;

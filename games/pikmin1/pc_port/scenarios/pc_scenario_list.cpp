@@ -56,6 +56,8 @@ const std::vector<PcScenario*>& pc_scenario_all(void)
 		pc_scenario_make_day_end_day29(),
 		pc_scenario_make_extinction_day30(),
 		pc_scenario_make_tutorial_skip(),
+		pc_scenario_make_tutorial_firsts(),
+		pc_scenario_make_tutorial_day1(),
 		[] { static ExitZero s; return static_cast<PcScenario*>(&s); }(),
 	};
 	return all;

@@ -62,6 +62,13 @@ constexpr int kThrowReleaseFrame  = 1; ///< anim-key frame of Throw's KEY_Action
 constexpr int kAnimInfoGakkari = 6;  ///< PIKIANIM_Gakkari (73)
 constexpr int kAnimInfoJob2    = 41; ///< PIKIANIM_Job2 (19)
 constexpr int kAnimInfoKuttuku = 71; ///< PIKIANIM_Kuttuku (48)
+// A Pikmin lifting a pellet loops PickLoop (info 68) until its KEY_Action0
+// (ActTransport::animationKeyUpdated sets mIsLiftActionDone, which
+// ActTransport::doLift waits for before the carry starts); without that key no
+// pellet is ever carried. Measured the same way (2026-10-28): frame count 30,
+// anim keys [0, 10, 13, 18, 20, 29], KEY_Action0 at 10, loop 13 to 18,
+// KEY_Action1 at 20, flags 5, speed 30.
+constexpr int kAnimInfoPickLoop = 68; ///< PIKIANIM_PickLoop (46)
 
 /// One info: its AnimMgr record and the frame count of its payload.
 struct StandInAnim {

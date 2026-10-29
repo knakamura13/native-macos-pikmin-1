@@ -43,6 +43,11 @@ constexpr int kMovieCmdFadeIn           = 10;
 constexpr int kMovieCmdCleanupDayEnd    = 11;
 constexpr int kMovieCmdStartTotalResults = 12; ///< starts the final results window (demo73, bad ending)
 constexpr int kEndCausePikminZero       = 0; ///< ENDCAUSE_PikminZero
+constexpr int kMovieCmdForceDayEnd      = 2; ///< gamecore->forceDayEnd(), mIsDayEndTriggered (demo17, the tutorial's day end)
+
+/// The ship as a DemoEventMgr sender and its Henka event (demoEvent.cpp DemoEventSender::UFO, DemoEventUFO::Henka).
+constexpr int kDemoSenderUfo = 1;
+constexpr int kDemoUfoHenka  = 2;
 
 /// CinePlayerFlags (CinematicPlayer.h).
 constexpr std::uint32_t kCinLocalized = 1u << 0;

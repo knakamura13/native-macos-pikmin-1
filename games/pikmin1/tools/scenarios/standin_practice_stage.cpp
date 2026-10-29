@@ -115,10 +115,16 @@ bool addPracticeStage(std::map<std::string, std::vector<std::uint8_t>>& tree, st
 	if (!sourceMod(srcMod, error)) return false;
 	const std::string ini = baseIni();
 
-	// 1,600 units square, flat, 50-unit cells; compileMap lays the route grid
-	// (150-unit steps) over all of it, so the Onions, the ship and every carry
-	// have way points (GoalItem::startAI and UfoItem::startAI look one up).
+	// 1,600 units square, flat, 50-unit cells. compileMap lays a route grid with
+	// diagonals over all of it, so the Onions, the ship, the box and every carry
+	// have way points (GoalItem::startAI, UfoItem::startAI and HinderRock::startAI
+	// look one up). The grid is 3 by 3 (400-unit steps): a carry plans its route
+	// with PathFinder::findSyncOnyon, the original depth-first search with no
+	// visited set, which walks every simple path of the graph; on the default
+	// 150-unit grid (81 points, each linked to 8) one pellet's route did not
+	// finish in two minutes. The disc's hand-made route networks are sparse too.
 	nectar::MapDoc doc;
+	doc.routeStep = 400;
 	doc.name      = "practice";
 	doc.symmetric = false;
 	doc.minX      = -800;

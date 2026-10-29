@@ -41,7 +41,11 @@ const std::vector<ObjectAnimProfile>& objectAnimProfiles()
 	      { 40, 1, 30.0f, { 0, 38 }, { { 0, 0 }, { 1, 1 } } },
 	      { 50, 1, 30.0f, { 0, 48 }, {} },
 	      { 100, 2, 30.0f, { 0, 60, 99 }, { { 1, 2 } } }, // blue boot: our own short motion (the disc's has 360 frames, key 240)
-	      { 472, 2, 30.0f, { 0, 270, 471 }, { { 1, 2 } } },
+	      // red boot: the disc's five effect events too (frame, value), in the disc's order. GoalItem::animationKeyUpdated
+	      // (boot motions 3-5): 0 and 1 and 3 are particles, 4 starts the colour fade, 2 opens the Onion's route way point,
+	      // which the boot closed (GoalItem::startAI): without it no Pikmin carries a pellet to a booted red Onion. The blue
+	      // and yellow boots keep none (no scenario boots them and carries; onion_skip's skip opens the point itself).
+	      { 472, 2, 30.0f, { 0, 270, 471 }, { { 1, 2 } }, { { 31, 0 }, { 153, 1 }, { 221, 2 }, { 227, 3 }, { 32, 4 } } },
 	      { 360, 2, 30.0f, { 0, 240, 359 }, { { 1, 2 } } },
 	      { 399, 2, 30.0f, { 0, 398 }, {} },
 	      { 399, 2, 30.0f, { 0, 398 }, {} },

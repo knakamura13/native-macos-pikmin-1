@@ -16,6 +16,8 @@ namespace {
 
 // zen::ogScrTutorialMgr::EnumTutorial (ogTutorial.h).
 constexpr int kTutRedOnion = 1;  ///< TUT_RedOnion
+constexpr int kTutGetEngine = 9; ///< TUT_GetEngine, the ship-upgrade text after the Main Engine
+constexpr int kTutGetParts  = 17; ///< TUT_GetParts: with the ship text type CollectEngine, a scene skip and no window
 constexpr int kTutZenmetu  = 13; ///< TUT_Zenmetu, the post-extinction text
 
 /// A slow dolly from behind and above the origin towards it, looking at the
@@ -232,6 +234,54 @@ std::vector<Movie> movies()
 		loop.endFrame = 10;
 		loop.flags    = kCutLoop;
 		m.cinema.cuts = { once, loop };
+		list.push_back(m);
+	}
+
+	// The Main Engine reaching the ship on the Impact Site (DEMOFLAG_CollectEngine's
+	// movie 20, DEMOID_CollectPartPractice, demo20). The engine is sucked into the
+	// ship while it plays (PelletGoalState::exec, UfoItem::finishSuck). The disc's
+	// (read-only, 2026-10-28): one 218-frame cut played once with a TextDemo
+	// TUT_GetParts (17) key at 216, then a 2-frame loop. With gameflow.mShipTextType
+	// CollectEngine that key opens no window: GameMovieInterface::parse skips the
+	// scene, which ends the loop, and the queued ship-upgrade movie (demo17) follows.
+	// The stand-in keeps the key and the loop on a 120-frame cut (4 s at 30 Hz, the
+	// suck takes about 2); without it the movie is zero-length and the day ends
+	// (demo17) before the ship has the engine.
+	{
+		Movie m;
+		m.cin           = "dataDir/cinemas/demo20.cin";
+		m.cinema.flags  = hideNavi;
+		m.cinema.scenes = { "cinemas/demo20/dm_20.dsk" };
+		m.sceneFrames   = { 122 };
+		CinCut once, loop;
+		once.endFrame   = 120;
+		once.keys       = { notify(kMovieCmdTextDemo, kTutGetParts, 118) };
+		loop.startFrame = 120;
+		loop.endFrame   = 122;
+		loop.flags      = kCutLoop;
+		m.cinema.cuts   = { once, loop };
+		list.push_back(m);
+	}
+
+	// The ship's first upgrade on the Impact Site (DEMOID_ShipUpgradePractice, demo17,
+	// movie17table's Impact Site entry), which PlayerState::preloadHenkaMovie queues
+	// when the Main Engine reaches the ship (PelletGoalState::init). It is what ends
+	// the tutorial's Day 1: the clock is held at 14.8 h there, and the movie's
+	// ForceDayEnd key starts the day end. The disc's (read-only, 2026-10-28): one
+	// 380-frame cut played once, the ship's Henka Action at 40, ForceDayEnd at 356,
+	// the TUT_GetEngine text at 378, then a 2-frame loop, with ship actors. The
+	// stand-in keeps the three keys in that order on invented frames, no actors and
+	// no loop (the loop waits for the text, which here comes on the cut's last frames).
+	{
+		Movie m;
+		m.cin           = "dataDir/cinemas/demo17.cin";
+		m.cinema.flags  = hideNavi;
+		m.cinema.scenes = { "cinemas/demo17/demo17_1.dsk" };
+		m.sceneFrames   = { 60 };
+		CinCut cut;
+		cut.endFrame  = 60;
+		cut.keys      = { action(kDemoSenderUfo, kDemoUfoHenka, 10), notify(kMovieCmdForceDayEnd, 0, 50), notify(kMovieCmdTextDemo, kTutGetEngine, 57) };
+		m.cinema.cuts = { cut };
 		list.push_back(m);
 	}
 	return list;

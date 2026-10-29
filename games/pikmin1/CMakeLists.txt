@@ -449,7 +449,9 @@ if (PIKMIN_BUILD_SCENARIOS)
         pc_port/scenarios/scenario_onion_unlock.cpp
         pc_port/scenarios/scenario_day_end.cpp
         pc_port/scenarios/scenario_extinction_day30.cpp
-        pc_port/scenarios/scenario_tutorial_skip.cpp)
+        pc_port/scenarios/scenario_tutorial_skip.cpp
+        pc_port/scenarios/scenario_tutorial_firsts.cpp
+        pc_port/scenarios/scenario_tutorial_day1.cpp)
 endif()
 
 include_directories(
@@ -2128,7 +2130,7 @@ if(PIKMIN_BUILD_SCENARIOS)
     # The tutorial stand-in stage (stages/practice.ini, stage id Practice at index
     # 0, tools/scenarios/standin_practice_stage.h): the tutorial-only milestones.
     # No disc entry. 30 and 60 (tools/scenarios/README.md, "Tick rates").
-    foreach(scenario tutorial_skip)
+    foreach(scenario tutorial_skip tutorial_firsts tutorial_day1)
         foreach(rate 30 60)
             add_test(NAME scenario_${scenario}_${rate}
                 COMMAND ${CMAKE_COMMAND}

@@ -614,6 +614,23 @@ void testStandInSet()
 		check(info.flags == 2 && info.speed == 30.0f, std::string(w.label) + ": code-default flags and speed (the disc's speed is 30 as well)");
 	}
 
+	// PickLoop (info 68): the disc's timing, read back as the game reads it. ActTransport lifts on its KEY_Action0.
+	{
+		const LoadedInfo& info = m.infos[std::size_t(nectar::kAnimInfoPickLoop)];
+		int action0 = -1, action1 = -1, loopStart = -1, loopEnd = -1;
+		for (const AnimKey& k : info.infoKeys) {
+			const int frame = info.animKeys[std::size_t(k.mFrameIndex)];
+			if (k.mKeyType == 2) action0 = frame;
+			if (k.mKeyType == 3) action1 = frame;
+			if (k.mKeyType == 0) loopStart = frame;
+			if (k.mKeyType == 1) loopEnd = frame;
+		}
+		check(loaded[std::size_t(nectar::kAnimInfoPickLoop)].anim.frames == 30 && info.animKeys == std::vector<int>({ 0, 10, 13, 18, 20, 29 }),
+		      "PickLoop (68): 30 frames, anim keys [0, 10, 13, 18, 20, 29] (the disc's)");
+		check(action0 == 10 && loopStart == 13 && loopEnd == 18 && action1 == 20 && info.flags == 5 && info.speed == 30.0f,
+		      "PickLoop (68): KEY_Action0 at 10, loop 13 to 18, KEY_Action1 at 20, flags 5, speed 30 (the disc's)");
+	}
+
 	// Key timing: PaniAnimator at speed 30 (navi->mMotionSpeed with throwSpeedPct 100).
 	const float dt30 = 1.0f / 30.0f, dt60 = 1.0f / 60.0f;
 	KeyTimeline w30 = runMotion(m.infos[nectar::kAnimInfoThrowWait], 30.0f, dt30, 100), w60 = runMotion(m.infos[nectar::kAnimInfoThrowWait], 30.0f, dt60, 200);

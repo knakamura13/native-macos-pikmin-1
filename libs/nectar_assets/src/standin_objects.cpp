@@ -78,6 +78,13 @@ StandInAnimSet buildSet(const ObjectAnimProfile& p)
 			previousKey = r.frame;
 			a.info.infoKeys.push_back(r);
 		}
+		for (const auto& e : in.effectKeys) {
+			AnimKeyRecord r;
+			r.frame     = e.first;
+			r.eventType = 1; // ANIMEVENT_Action: PaniAnimator::checkEventKeys sends KEY_PlayEffect with mKeyType as its value
+			r.keyType   = std::uint8_t(e.second);
+			a.info.eventKeys.push_back(r);
+		}
 		a.frameCount = in.frames;
 		a.measured   = true; // length and keys come from the disc
 		s.anims.push_back(std::move(a));
@@ -239,7 +246,8 @@ bool writeStandInObjectModels(std::vector<StandInModelFile>& out, std::string& e
 		StandInModelFile f;
 		f.path = spec.path;
 		std::string err;
-		if (!writeMod(buildStandInModel(spec), f.bytes, err)) {
+		const Model model = buildStandInModel(spec);
+		if (!(spec.platform ? writePlatformMod(model, f.bytes, err) : writeMod(model, f.bytes, err))) {
 			error = spec.path + ": " + err;
 			return false;
 		}

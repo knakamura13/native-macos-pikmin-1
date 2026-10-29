@@ -37,6 +37,9 @@ struct ObjectAnimInfoProfile {
 	float speed = 30.0f; ///< 'spd'
 	std::vector<int> keys; ///< anim-key frames, already clamped below N (the game clamps them on load)
 	std::vector<std::pair<int, int>> infoKeys; ///< (anim-key index, key type): 0 loop start, 1 loop end, 2-5 KEY_Action0-3
+	/// (frame, value) of action event keys (type 1, KEY_PlayEffect with that value), in the disc's order. Event keys are
+	/// otherwise not written; the red Onion's boot carries them because one of them opens its route way point.
+	std::vector<std::pair<int, int>> effectKeys;
 };
 
 /// One AnimMgr: its table, its bundle and the joint count of its model.

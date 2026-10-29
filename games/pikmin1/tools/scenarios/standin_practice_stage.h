@@ -21,10 +21,12 @@
 //                shape "stone 10", 10 Pikmin, speed 50, pushed 270 units);
 //   0.gen        the Day 1 file: one red 1-pellet ("pr01").
 // The positions are this file's own (the disc's sit on its own terrain and
-// spread over 2,000 units): the ship near the captain's start, the red Onion
-// and the pellet to one side, the engine and the box on the other, each far
-// enough from the others that no trigger radius (parms/demo.bin) reaches two of
-// them. The captain starts at the origin (writeGen).
+// spread over 2,000 units): the red Onion, the pellet and the box on one side,
+// the engine and the ship on the other, each far enough from the others that no
+// trigger radius (parms/demo.bin) reaches two of them, and all of them outside
+// the 3 by 3 route grid (x and z -400, 0, 400; see the .cpp), so no route line
+// runs through an Onion, the ship or the box. The captain starts at the origin
+// (writeGen).
 
 #include <cstdint>
 #include <map>
@@ -36,18 +38,18 @@ namespace standin {
 constexpr const char* kPracticeStageIni = "stages/practice.ini";
 
 /// Positions in map units (x, z); the captain starts at the origin.
-constexpr float kPracticeRedOnionX   = -350.0f;
-constexpr float kPracticeRedOnionZ   = -250.0f;
-constexpr float kPracticeUfoX        = 250.0f;
-constexpr float kPracticeUfoZ        = 150.0f;
-constexpr float kPracticeEngineX     = 400.0f;
-constexpr float kPracticeEngineZ     = -400.0f;
-constexpr float kPracticeBoxX        = -450.0f;
-constexpr float kPracticeBoxZ        = 450.0f;
+constexpr float kPracticeRedOnionX   = -600.0f;
+constexpr float kPracticeRedOnionZ   = -300.0f;
+constexpr float kPracticeUfoX        = 650.0f;
+constexpr float kPracticeUfoZ        = 0.0f;
+constexpr float kPracticeEngineX     = 600.0f;
+constexpr float kPracticeEngineZ     = -600.0f;
+constexpr float kPracticeBoxX        = -600.0f;
+constexpr float kPracticeBoxZ        = 600.0f;
 /// The disc's box, unrotated, moves 270 units towards -z (init.gen: z 987.2 to 717.2); this one does the same.
 constexpr float kPracticeBoxPush     = 270.0f;
 constexpr float kPracticePelletX     = -600.0f;
-constexpr float kPracticePelletZ     = -50.0f;
+constexpr float kPracticePelletZ     = 100.0f;
 
 bool addPracticeStage(std::map<std::string, std::vector<std::uint8_t>>& tree, std::string& error);
 

@@ -25,5 +25,7 @@ PcScenario* pc_scenario_make_day_end(void);
 PcScenario* pc_scenario_make_day_end_day29(void);
 PcScenario* pc_scenario_make_extinction_day30(void);
 PcScenario* pc_scenario_make_tutorial_skip(void);
+PcScenario* pc_scenario_make_tutorial_firsts(void);
+PcScenario* pc_scenario_make_tutorial_day1(void);
 
 #endif
