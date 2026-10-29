@@ -100,6 +100,37 @@ std::vector<nectar::ObjectGenSpec> generators()
 	return g;
 }
 
+/// The Onion stage's default.gen (standin_objects_stage.h). GenObjectItem::birth
+/// (genItem.cpp) creates a `goal` from a generator not named `next` only while
+/// playerState->hasContainer(colour), and from a `next` generator only while not.
+std::vector<nectar::ObjectGenSpec> onionGenerators()
+{
+	struct Onion {
+		const char* memo;
+		const char* generator; // "" for the default name (four spaces)
+		int colour;
+		float x, z;
+	};
+	const Onion onions[] = {
+		{ "red onion", "", 1, kRedOnionX, kRedOnionZ },
+		{ "yellow onion", "", 2, kYellowOnionX, kYellowOnionZ },
+		{ "blue onion", "", 0, kBlueOnionX, kBlueOnionZ },
+		{ "yellow onion to find", "next", 2, kNextYellowX, kNextYellowZ },
+	};
+	std::vector<nectar::ObjectGenSpec> g;
+	for (const Onion& o : onions) {
+		nectar::ObjectGenSpec s;
+		s.kind = nectar::ObjectGenSpec::Item;
+		if (*o.generator) s.generatorName = o.generator;
+		s.memo      = o.memo;
+		s.name      = "goal";
+		s.itemParam = o.colour;
+		s.pos       = { o.x, 0.0f, o.z };
+		g.push_back(s);
+	}
+	return g;
+}
+
 } // namespace
 
 bool addObjectsStage(std::map<std::string, std::vector<std::uint8_t>>& tree, std::string& error)
@@ -168,6 +199,9 @@ bool addObjectsStage(std::map<std::string, std::vector<std::uint8_t>>& tree, std
 	tree[std::string("dataDir/") + kMapMod]           = compiled.mod;
 	tree[std::string("dataDir/") + kObjectsStageIni] = compiled.ini;
 	tree[std::string("dataDir/") + kStageGenDir + "default.gen"] = nectar::writeObjectGenFile(generators());
+	// The Onion stage: the same .ini (map, day_multiply), its own generator folder.
+	tree[std::string("dataDir/") + kOnionsStageIni]                       = compiled.ini;
+	tree[std::string("dataDir/stages/sandbox_onions/default.gen")] = nectar::writeObjectGenFile(onionGenerators());
 	return true;
 }
 

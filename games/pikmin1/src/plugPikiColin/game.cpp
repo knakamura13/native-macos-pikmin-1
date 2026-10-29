@@ -315,6 +315,13 @@ void OnePlayerSection::init()
 		}
 		case ONEPLAYER_MapSelect:
 		{
+#if PIKI_SCENARIOS
+			// A scenario that crosses days may choose the next course itself (the
+			// stand-in tree has no world map screens); the loop then builds NewPikiGame.
+			if (pc_scenario_active() && pc_scenario_on_map_select()) {
+				break;
+			}
+#endif
 			// world map section!
 			PRINT("making new MAPSELECT\n");
 			currentSection = new MapSelectSection();

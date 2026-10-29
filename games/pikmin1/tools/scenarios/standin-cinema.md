@@ -93,6 +93,7 @@ boot are the ones listed in `boot-manifest.txt`.
 | `demo45.cin` + 2 scenes (40 + 40) | Pikmin into the Onion, Forest of Hope | HideNavi, NaviNoAI | none |
 | `demo04.cin` + 1 scene (330) | Red Onion discovery (`DEMOID_FindRedOnyon`; the sandbox translates `DEMOID_FindOnyon` to it) | Localized, HideNavi, NaviNoAI | red Onion Boot at 10, EmitCone at 300; `TextDemo` `TUT_RedOnion` (1) at 310 |
 | `demo06.cin` + 1 scene (100) | Blue Onion discovery (`DEMOID_FindBlueOnyon`, started untranslated by `DEMOFLAG_DiscoverBlueOnyon`); used by `onion_skip` | Localized, HideNavi, NaviNoAI | blue Onion Boot at 10, EmitCone at 90; no text key (its screen, `tu_tx22`, is not a stand-in) |
+| `demo05.cin` + 1 scene (300) | Yellow Onion discovery (movie 5, started by `DEMOFLAG_DiscoverYellowOnyon`); used by `onion_day3` | Localized, HideNavi, NaviNoAI | yellow Onion Boot at 10, EmitCone at 270; no text key (the disc's demo05 has none either, per upstream #205's audit). The yellow boot motion keeps the disc's numbers (360 frames, `KEY_Action0` at 240), so the seed comes out at movie frame 250, leaving the three skip windows |
 | `demo46.cin` + 1 scene (60) | Pikmin extinction (`DEMOID_Extinction`), Localized at the captain | Localized, HideNavi, NaviNoAI | FadeOut at 40; `GameEndCondition` (PikminZero) and `CleanupDayEnd` at 57 |
 | `demo47.cin` + 1 scene (60) | Day end after an extinction (`DEMOID_ExtDayEnd`, translated per stage; the sandbox falls back to Impact Site, demo47) | HideNavi, NaviNoAI | FadeIn at 0, FadeOut at 50, `ForceResults` at 57 |
 | `demo36.cin` + 2 scenes (30 + 10) | End-of-day results backdrop (`DEMOID_EndOfDayResults`, started by `DayOverModeState::initialisePhaseTwo` with the results window); used by `captain_death` | NonGameMovie | none. The first cut plays once, the second loops (`CINMODE_LoopScene`) until `exitDayEnd` drops the movie, as the disc's does (a 420-frame cut and a 10-frame loop). The results window stays up only while a movie is active: with no demo36 the phases advance on the next ticks and the day leaves for `GameExit` |
@@ -107,7 +108,7 @@ movie frame 280, before EmitCone at 300.
 Blue is shortened on purpose. The disc's blue boot motion has 360 frames with
 the key at 240, which made `onion_skip` run about 965 ticks at 30 Hz. The blue
 stand-in motion (goal info 3) is our own: 100 frames, loop key 0, `KEY_Action0`
-at 60, last key 99. The yellow info (5), which no scenario uses, and the
+at 60, last key 99. The yellow info (5), which onion_day3 uses as it is, and the
 Onion's other infos keep the disc's numbers, so `sprout_landing` and
 `objects_smoke` are not affected. The seed comes out at movie frame 70, before
 EmitCone at 90, and the movie is 100 frames: Boot, seed, EmitCone, the same

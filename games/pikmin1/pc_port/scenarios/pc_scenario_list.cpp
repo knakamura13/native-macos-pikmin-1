@@ -55,6 +55,12 @@ const std::vector<PcScenario*>& pc_scenario_all(void)
 		pc_scenario_make_day_end(),
 		pc_scenario_make_day_end_day29(),
 		pc_scenario_make_extinction_day30(),
+		pc_scenario_make_onion_day3(),
+		pc_scenario_make_onion_day3_whistle(),
+		pc_scenario_make_onion_day3_hidetext(),
+		pc_scenario_make_onion_day3_reload(),
+		pc_scenario_make_onion_day3_unplucked(),
+		pc_scenario_make_onion_day3_skip(),
 		[] { static ExitZero s; return static_cast<PcScenario*>(&s); }(),
 	};
 	return all;

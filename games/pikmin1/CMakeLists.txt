@@ -448,7 +448,8 @@ if (PIKMIN_BUILD_SCENARIOS)
         pc_port/scenarios/scenario_captain_damage.cpp
         pc_port/scenarios/scenario_onion_unlock.cpp
         pc_port/scenarios/scenario_day_end.cpp
-        pc_port/scenarios/scenario_extinction_day30.cpp)
+        pc_port/scenarios/scenario_extinction_day30.cpp
+        pc_port/scenarios/scenario_onion_day3.cpp)
 endif()
 
 include_directories(
@@ -1996,6 +1997,20 @@ if(PIKMIN_BUILD_SCENARIOS)
                 LABELS "game-assets")
         endforeach()
     endforeach()
+    # onion_day3 on a real install: Day 2 on Forest of Hope (the runner's default
+    # stage) with the real discovery trigger, movies and world map, then Day 3
+    # (scenario_onion_day3.cpp). The same scenarios run on the stand-in tree below.
+    foreach(scenario onion_day3 onion_day3_whistle onion_day3_hidetext onion_day3_reload onion_day3_unplucked onion_day3_skip)
+        foreach(rate 30 60)
+            add_test(NAME scenario_${scenario}_${rate}_disc
+                COMMAND ${NECTAR_GAME} --scenario ${scenario} --scenario-tick-rate ${rate})
+            set_tests_properties(scenario_${scenario}_${rate}_disc PROPERTIES
+                WORKING_DIRECTORY "${PIKMIN_SCENARIO_SCRATCH}"
+                TIMEOUT 600
+                SKIP_RETURN_CODE 77
+                LABELS "game-assets")
+        endforeach()
+    endforeach()
 
     # Stand-in mode (#68): no disc. nectar_standin_generator writes the stand-in
     # tree (every libs/nectar_assets writer, plus the sandbox stage) into
@@ -2097,6 +2112,28 @@ if(PIKMIN_BUILD_SCENARIOS)
                 FIXTURES_REQUIRED scenario_standin_tree
                 WORKING_DIRECTORY "${PIKMIN_STANDIN_DATA}"
                 ENVIRONMENT "PIKMIN_SCENARIO_DATA_DIR=${PIKMIN_STANDIN_DATA};PIKMIN_SCENARIO_STAGE=stages/sandbox_objects.ini"
+                TIMEOUT 600)
+        endforeach()
+    endforeach()
+
+    # Day 2 to Day 3 through a real day end and a second stage load, on the Onion
+    # stage (stages/sandbox_onions.ini, tools/scenarios/standin_objects_stage.h):
+    # the yellow Onion unlocked on Day 2 is born, booted and listed on Day 3
+    # (scenario_onion_day3.cpp). 30 and 60: the pluck walk and the boot motion run
+    # on frame-time arithmetic (README "Tick rates").
+    foreach(scenario onion_day3 onion_day3_whistle onion_day3_hidetext onion_day3_reload onion_day3_unplucked onion_day3_skip)
+        foreach(rate 30 60)
+            add_test(NAME scenario_${scenario}_${rate}
+                COMMAND ${CMAKE_COMMAND}
+                    -DGAME=$<TARGET_FILE:${NECTAR_GAME}>
+                    -DSCENARIO=${scenario} -DRATE=${rate}
+                    -DALLOWLIST=${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/standin-open-allowlist.txt
+                    -DLOG_DIR=${CMAKE_CURRENT_BINARY_DIR}/scenario-logs
+                    -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/run_standin_scenario.cmake)
+            set_tests_properties(scenario_${scenario}_${rate} PROPERTIES
+                FIXTURES_REQUIRED scenario_standin_tree
+                WORKING_DIRECTORY "${PIKMIN_STANDIN_DATA}"
+                ENVIRONMENT "PIKMIN_SCENARIO_DATA_DIR=${PIKMIN_STANDIN_DATA};PIKMIN_SCENARIO_STAGE=stages/sandbox_onions.ini"
                 TIMEOUT 600)
         endforeach()
     endforeach()

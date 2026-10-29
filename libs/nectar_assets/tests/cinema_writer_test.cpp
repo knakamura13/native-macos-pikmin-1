@@ -523,6 +523,16 @@ int main(int argc, char** argv)
 			if (k.type == nectar::kCinEventAction && k.value == nectar::kDemoOnionEmitCone) cone6 = k.frame;
 		}
 		check(boot6 >= 5 && boot6 + 60 + 10 <= cone6, "demo06: windows before Boot, between Boot and the seed, and between the seed and EmitCone");
+		// demo05 (yellow, scenario onion_day3): the same order with the disc's yellow boot
+		// motion (KEY_Action0 at motion frame 240).
+		const auto k05 = keysOf("dataDir/cinemas/demo05.cin");
+		int boot5 = -1, cone5 = -1;
+		for (const ReadKey& k : k05) {
+			check(k.type != nectar::kCinEventAction || k.cmd == nectar::kDemoSenderYelOnion, "demo05 acts on the yellow Onion only");
+			if (k.type == nectar::kCinEventAction && k.value == nectar::kDemoOnionBoot) boot5 = k.frame;
+			if (k.type == nectar::kCinEventAction && k.value == nectar::kDemoOnionEmitCone) cone5 = k.frame;
+		}
+		check(boot5 >= 5 && boot5 + 240 + 10 <= cone5, "demo05: windows before Boot, between Boot and the seed, and between the seed and EmitCone");
 		// demo73 (scenario extinction_day30): StartTotalResults in the cut played once, before the loop.
 		int starts = 0;
 		for (const auto& f : files) {

@@ -31,6 +31,12 @@ dataDir/stages/sandbox_all_objects/plants.gen
 # day_end_day29 on Day 29 (object stage). Guarded like the others.
 dataDir/stages/sandbox/29.gen
 dataDir/stages/sandbox_objects/28.gen
+# The Onion stage (onion_day3, standin_objects_stage.h) writes only default.gen too;
+# its runs load Day 2 (1.gen) and Day 3 (2.gen).
+dataDir/stages/sandbox_onions/1.gen
+dataDir/stages/sandbox_onions/2.gen
+dataDir/stages/sandbox_onions/init.gen
+dataDir/stages/sandbox_onions/plants.gen
 
 # Parameter files CoreNode::load skips silently when missing (node.cpp); every
 # value keeps its code default. key.bin: the throw key stays A, which
@@ -78,6 +84,13 @@ dataDir/cinemas/demo11.cin
 # day_end, day_end_day29: the march-in movie (DEMOID_DayEnd, the sandbox stages'
 # translation). The disc's has one Notify key, FadeIn at frame 0; the chain needs it not.
 dataDir/cinemas/demo28.cin
+# onion_day3: the yellow Onion's take-off movie (DEMOID_EndOfDayYellowOnyon), started by
+# DayOverModeState::initialisePhaseTwo when hasContainer(Yellow); zero-length as above. The
+# scenario asserts the predicate, not the movie.
+dataDir/cinemas/demo85.cin
+# onion_day3: on Day 3 the red count is 0 and DEMOFLAG_PostExtinctionSeed is already set
+# (Day 2 played demo60), so GameCoreSection's start plays DEMOID_Unk64Cat instead; zero-length.
+dataDir/cinemas/demo64.cin
 # extinction_day30: the bad ending's first movie (DEMOID_BadEnding, phase one).
 # The disc's has Action keys only (ship and Pikmin actors), no Notify key.
 dataDir/cinemas/demo69.cin

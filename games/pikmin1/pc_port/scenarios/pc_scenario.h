@@ -37,6 +37,29 @@ public:
 	virtual void providePads(unsigned /*tick*/, PcInputPad& /*pad0*/) { }
 	// Runs after each tick's sim. Report a verdict with scenarioPass() / scenarioFail().
 	virtual void onTick(unsigned tick) = 0;
+
+	// Scenarios that cross a day end into the next stage (onion_day3). With this
+	// true, a soft reset seen after onTick without a verdict does not end the run:
+	// the runner stops ticking the scenario, waits for the next stage, runs the
+	// intro gate again and calls onStageReady() once more (pc_scenario_stage_number
+	// says which). Ticks keep counting across stages. Off by default, so every
+	// other scenario keeps its single-stage behaviour.
+	virtual bool crossesDays() const { return false; }
+	// Called when OnePlayerSection builds MapSelect for a crossesDays() scenario.
+	// Return the stages.ini `file` of the course to enter: the runner then does what
+	// MapSelectSetupSection::enterCourse and its exit do and goes to NewPikiGame
+	// without building the world map (the stand-in tree has no world map screens).
+	// Return nullptr to build the real MapSelectSection (disc) and drive it with
+	// providePadsBetweenStages.
+	virtual const char* onMapSelect() { return nullptr; }
+	// Pad 0 between a soft reset and the next stage ready (the real world map).
+	virtual void providePadsBetweenStages(unsigned /*ticksSinceReset*/, PcInputPad& /*pad0*/) { }
+	// Whether the intro gate pulses START over the opening movie of stage `stageNumber`
+	// (1 = the first). False lets the movie run to its end; A still closes text.
+	virtual bool introSkipsMovies(int /*stageNumber*/) const { return true; }
+	// Whether the runner's GameStat invariant check runs after this tick. A scenario
+	// turns it off only where the original game's own counting breaks it (say why).
+	virtual bool checksGameStat() const { return true; }
 };
 
 // Returns -1 to continue booting (no --scenario), else the process exit code.
@@ -52,6 +75,12 @@ void pc_scenario_on_no_gl(void);
 void pc_scenario_pre_stage(void);      // OnePlayerSection, before NewPikiGameSection is built
 void pc_scenario_on_stage_ready(void); // after GameCoreSection::finalSetup
 void pc_scenario_on_tick_end(void);    // System::run, after every tick including boot
+// OnePlayerSection, case ONEPLAYER_MapSelect: true when a crossesDays() scenario
+// chose the next course itself (gameflow.mNextOnePlayerSectionID is then NewPikiGame).
+bool pc_scenario_on_map_select(void);
+
+// For scenarios.
+int pc_scenario_stage_number(void); // 1 for the first stage, 2 after the first soft reset, ...
 
 // For scenarios.
 int pc_scenario_ticks_per_second(void); // 30 or 60

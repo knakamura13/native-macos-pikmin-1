@@ -26,8 +26,11 @@
 #include "GameStat.h"
 #include "Piki.h"
 #include "NaviMgr.h"
+#include "OnePlayerSection.h"
 #include "PikiMgr.h"
+#include "Section.h"
 #include "gameflow.h"
+#include "system.h"
 #include "jaudio/piki_scene.h"
 #include "netplay/pc_input_log.h"
 #include "netplay/pc_netplay_det.h"
@@ -71,6 +74,11 @@ unsigned sIntroTicks       = 0;
 constexpr unsigned kIntroSeconds = 90;
 unsigned sBootTicks        = 0;
 unsigned sTick             = 0; // ticks since the stage became ready
+// crossesDays() scenarios: the stage being played (1 = the first) and, after a
+// soft reset, the ticks spent waiting for the next stage (map select, loading).
+int sStageNumber           = 0;
+bool sBetweenStages        = false;
+unsigned sBetweenTicks     = 0;
 std::string sStageFile     = kDefaultStageFile;
 std::filesystem::path sScratchDir; // NECTAR_SAVE_DIR for this run, removed at exit
 
@@ -222,13 +230,18 @@ void usage(const char* msg)
 void providerThunk(PcInputPad pads[4])
 {
 	if (sScenario == nullptr) return;
-	// Pad 0 is the captain's. Before the stage is ready the pad stays neutral.
+	// Pad 0 is the captain's. Before the stage is ready the pad stays neutral,
+	// except between stages of a crossesDays() scenario (the world map).
+	if (sBetweenStages && !sStageReady && !sVerdict) {
+		sScenario->providePadsBetweenStages(sBetweenTicks, pads[0]);
+		return;
+	}
 	if (!sStageReady || sVerdict) return;
 	if (!sIntroDone) {
 		// START skips a movie and would open the pause menu otherwise; A closes ship text.
 		u32 buttons = 0;
 		if (sIntroTicks % 15 == 0) {
-			if (gameflow.mMoviePlayer && gameflow.mMoviePlayer->mIsActive) buttons |= PAD_BUTTON_START;
+			if (gameflow.mMoviePlayer && gameflow.mMoviePlayer->mIsActive && sScenario->introSkipsMovies(sStageNumber)) buttons |= PAD_BUTTON_START;
 			if (gameflow.mIsUIOverlayActive) buttons |= PAD_BUTTON_A;
 		}
 		pads[0].button = buttons;
@@ -547,10 +560,16 @@ void pc_scenario_on_stage_ready(void)
 {
 	if (!sActive || sStageReady) return;
 	sStageReady = true;
-	sTick       = 0;
+	sBetweenStages = false;
+	// Ticks count from the first stage's tick 0 and keep running across stages.
+	if (++sStageNumber == 1) sTick = 0;
 	int drawableWidth = 0, drawableHeight = 0, renderWidth = 0, renderHeight = 0;
 	pc_gfx_get_drawable_size(&drawableWidth, &drawableHeight);
 	pc_gfx_get_render_size(&renderWidth, &renderHeight);
+	if (sStageNumber > 1) {
+		std::printf("[scenario] stage %d ready %u ticks after the soft reset\n", sStageNumber, sBetweenTicks);
+		return;
+	}
 	std::printf("[scenario] stage ready after %u boot ticks (drawable %dx%d, render %dx%d)\n", sBootTicks, drawableWidth,
 	            drawableHeight, renderWidth, renderHeight);
 }
@@ -559,6 +578,12 @@ void pc_scenario_on_tick_end(void)
 {
 	if (!sActive || sVerdict) return;
 	if (!sStageReady) {
+		if (sBetweenStages) {
+			if (++sBetweenTicks > kBootTickBudget) {
+				scenarioFailf(sTick, "the next stage is ready within the boot budget after the soft reset", "%u ticks since the reset", sBetweenTicks);
+			}
+			return;
+		}
 		if (++sBootTicks > kBootTickBudget) scenarioFailf(sBootTicks, "stage ready within boot budget", "%u boot ticks without the stage-ready hook", sBootTicks);
 		return;
 	}
@@ -568,6 +593,11 @@ void pc_scenario_on_tick_end(void)
 		const bool walk   = navi && navi->getCurrState() && navi->getCurrState()->getID() == 0;
 		if (!movie && !gameflow.mIsUIOverlayActive && walk) {
 			sIntroDone = true;
+			if (sStageNumber > 1) {
+				std::printf("[scenario] stage %d intro done after %u ticks (tick %u)\n", sStageNumber, sIntroTicks, sTick);
+				sScenario->onStageReady();
+				return;
+			}
 			sTick      = 0;
 			std::printf("[scenario] intro done after %u ticks\n", sIntroTicks);
 			if (!scenarioCheckAnimMgrPreconditions(0)) return;
@@ -592,10 +622,51 @@ void pc_scenario_on_tick_end(void)
 		            gameflow.mWorldClock.mCurrentDay, gameflow.mWorldClock.mTimeOfDay);
 	}
 	sScenario->onTick(sTick);
-	if (!sVerdict) checkGameStatInvariants(sTick);
+	if (!sVerdict && sScenario->checksGameStat()) checkGameStatInvariants(sTick);
 	if (sStateStats) trackStates();
 	++sTick;
+	// A crossesDays() scenario continues past the soft reset that ends the day: from
+	// the next tick the stage objects are being torn down, so the scenario is not
+	// ticked (and the GameStat check does not run) until the next stage is ready.
+	if (!sVerdict && sScenario->crossesDays() && gsys->mSoftResetPending) {
+		sStageReady    = false;
+		sIntroDone     = false;
+		sIntroTicks    = 0;
+		sBetweenStages = true;
+		sBetweenTicks  = 0;
+		std::printf("[scenario] soft reset after tick %u (next section %d): waiting for stage %d\n", sTick - 1, (int)gameflow.mNextOnePlayerSectionID,
+		            sStageNumber + 1);
+	}
 }
+
+bool pc_scenario_on_map_select(void)
+{
+	if (!sActive || sVerdict || sScenario == nullptr || !sScenario->crossesDays()) return false;
+	const char* file = sScenario->onMapSelect();
+	if (sVerdict || file == nullptr) return false;
+	StageInfo* info = nullptr;
+	FOREACH_NODE(StageInfo, flowCont.mStageList.mChild, stage)
+	{
+		if (std::strcmp(stage->mFileName, file) == 0) info = stage;
+	}
+	if (info == nullptr) {
+		scenarioFailf(sTick, "the course chosen at map select is in stages.ini", "no stage with file '%s'", file);
+		return false;
+	}
+	// MapSelectSetupSection::enterCourse and the exit after a positive selection
+	// (mapSelect.cpp): the course, its paths, the challenge unlock, the start hour,
+	// then NewPikiGame. The world map itself (DrawWorldMap) is not built.
+	flowCont.mCurrentStage = info;
+	std::sprintf(flowCont.mCurrStageFilePath, "%s", info->mFileName);
+	std::sprintf(flowCont.mDoorStageFilePath, "%s", info->mFileName);
+	if (gameflow.mGamePrefs.isChallengeOpen()) gameflow.mGamePrefs.openStage(info->mStageID);
+	gameflow.mWorldClock.setTime(gameflow.mParameters->mStartHour());
+	gameflow.mNextOnePlayerSectionID = ONEPLAYER_NewPikiGame;
+	std::printf("[scenario] map select: entering '%s' on day %d without the world map\n", info->mFileName, gameflow.mWorldClock.mCurrentDay);
+	return true;
+}
+
+int pc_scenario_stage_number(void) { return sStageNumber; }
 
 void scenarioPass(void)
 {
