@@ -149,6 +149,17 @@ jobs:
         if: ${{ !cancelled() && steps.build-p1.outcome == 'success' && !contains(env.SCENARIO_SKIP_OS, runner.os) }}
         run: bash games/pikmin1/tools/scenarios/ci_k_summary.sh build/pikmin1 "${{ matrix.name }}, native JAudio off"
 
+      # Every stand-in scenario's per-tick state-hash log, on every run, for the
+      # scenario-hash-compare job (cross-OS determinism).
+      - name: Upload scenario state-hash logs
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: scenario-hash-logs-${{ runner.os }}
+          path: build/pikmin1/scenario-logs/*.hash.log
+          if-no-files-found: warn
+          retention-days: 14
+
       - name: Configure Pikmin 2
         if: ${{ !cancelled() }}
         run: |
@@ -223,12 +234,29 @@ jobs:
         run: cmake --build build/jaudio --parallel -- -k 0
 
   # The stand-in scenarios on a native JAudio build (standin-audio.md): the
-  # stand-in pikiseq.arc lets the engine boot a stage with no disc. Linux only,
-  # a separate build so jaudio-build keeps checking the release configuration.
+  # stand-in pikiseq.arc lets the engine boot a stage with no disc. A separate
+  # build on every OS, so jaudio-build keeps checking the release configuration.
+  # The matrix mirrors build-and-test (same dependencies, Mesa DLLs and flags).
   jaudio-scenarios:
-    name: Native JAudio scenarios (Linux)
-    runs-on: ubuntu-latest
+    name: Native JAudio scenarios (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux
+            os: ubuntu-latest
+            shell: bash
+          - name: macOS
+            os: macos-26
+            shell: bash
+          - name: Windows
+            os: windows-latest
+            shell: msys2 {0}
+    defaults:
+      run:
+        shell: ${{ matrix.shell }}
     env:
       BUILD_TYPE: Release
       CCACHE_DIR: ${{ github.workspace }}/.ccache
@@ -237,28 +265,62 @@ jobs:
       CCACHE_NOHASHDIR: "true"
     steps:
       - uses: actions/checkout@v7
-      - name: Install dependencies
+
+      - name: Install dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: brew install sdl2 ninja ccache
+
+      - name: Install dependencies (Linux)
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             cmake ninja-build ccache pkg-config libsdl2-dev libgl1-mesa-dev libx11-dev \
             libgl1-mesa-dri libglx-mesa0 libegl-mesa0 xvfb
+
+      - name: Install dependencies (Windows)
+        if: runner.os == 'Windows'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: false
+          install: >-
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-ninja
+            mingw-w64-x86_64-ccache
+            mingw-w64-x86_64-pkgconf
+            mingw-w64-x86_64-SDL2
+            mingw-w64-x86_64-mesa
+
+      # Same as build-and-test: MinGW predefines WIN32, which selects the
+      # original game's Win32/OpenGL code paths.
+      - name: Platform flags
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            echo 'PLATFORM_FLAGS=-DCMAKE_C_FLAGS=-UWIN32 -DCMAKE_CXX_FLAGS=-UWIN32' >> "$GITHUB_ENV"
+          fi
+
       - name: Restore ccache
         uses: actions/cache@v6
         with:
           path: .ccache
-          key: ccache-jaudio-scen-${{ runner.os }}-${{ github.sha }}
-          restore-keys: ccache-jaudio-scen-${{ runner.os }}-
+          key: ccache-jaudio-scen-${{ runner.os }}-${{ runner.arch }}-${{ github.sha }}
+          restore-keys: ccache-jaudio-scen-${{ runner.os }}-${{ runner.arch }}-
+
       - name: Configure
         run: |
           cmake -S games/pikmin1 -B build/pikmin1 -G Ninja \
             -DCMAKE_BUILD_TYPE="$BUILD_TYPE" \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             -DPIKMIN_BUILD_LAUNCHER=OFF -DPIKMIN_BUILD_TESTS=ON \
-            -DPIKMIN_NATIVE_JAUDIO=ON -DPIKMIN_BUILD_SCENARIOS=ON
+            -DPIKMIN_NATIVE_JAUDIO=ON -DPIKMIN_BUILD_SCENARIOS=ON \
+            $PLATFORM_FLAGS
+
       - name: Build
         id: build
         run: cmake --build build/pikmin1 --parallel --target pikmin_pc nectar_standin_generator -- -k 0
+
       - name: Test scenarios
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         env:
@@ -267,20 +329,79 @@ jobs:
           GALLIUM_DRIVER: llvmpipe
           LP_NUM_THREADS: "1"
         run: |
-          xvfb-run -a ctest --test-dir build/pikmin1 --output-on-failure --timeout 600 -j 4 \
-            -R '^scenario_(boot_smoke|throw_release|day30_clock)_' -E _disc
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            # Without Mesa beside the exe, Windows returns GDI Generic GL 1.1.
+            cp /mingw64/bin/opengl32.dll /mingw64/bin/libgallium_wgl.dll build/pikmin1/bin/
+          fi
+          JOBS=4
+          if [ "$RUNNER_OS" = "macOS" ]; then JOBS=3; fi
+          RUN="ctest --test-dir build/pikmin1 --output-on-failure --timeout 600 -j $JOBS -R ^scenario_(boot_smoke|throw_release|day30_clock)_ -E _disc"
+          if [ "$RUNNER_OS" = "Linux" ]; then xvfb-run -a $RUN; else $RUN; fi
+
       - name: Scenario calibration summary
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
-        run: bash games/pikmin1/tools/scenarios/ci_k_summary.sh build/pikmin1 "Linux (x86-64), native JAudio on"
+        run: bash games/pikmin1/tools/scenarios/ci_k_summary.sh build/pikmin1 "${{ matrix.name }}, native JAudio on"
+
+      - name: Upload scenario state-hash logs
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: scenario-hash-logs-jaudio-${{ runner.os }}
+          path: build/pikmin1/scenario-logs/*.hash.log
+          if-no-files-found: warn
+          retention-days: 14
+
       - name: Upload test logs
         if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: test-logs-jaudio-scenarios
+          name: test-logs-jaudio-scenarios-${{ runner.os }}
           path: |
             build/pikmin1/Testing/Temporary/LastTest*.log
             build/pikmin1/scenario-logs/
           if-no-files-found: ignore
+
+  # Cross-OS determinism: the stand-in scenarios' per-tick state-hash logs from
+  # the macOS, Linux and Windows runs must be the same lines (scenario builds
+  # use PIKMIN_SCENARIO_FLOAT_DET; tools/scenarios/README.md, "Cross-platform
+  # floats"). Fails on any differing line (the first one per scenario is
+  # printed), on a scenario with a log on one OS and none on another, and when an
+  # OS's job produced no logs at all (a cancelled job included).
+  scenario-hash-compare:
+    name: Cross-OS scenario state hashes
+    needs: [build-and-test, jaudio-scenarios]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: games/pikmin1/tools/scenarios
+
+      - name: Download state-hash logs
+        uses: actions/download-artifact@v8
+        with:
+          pattern: scenario-hash-logs-*
+          path: hash-logs
+
+      - name: Compare (native JAudio off, every stand-in scenario)
+        run: |
+          echo "build-and-test: ${{ needs.build-and-test.result }}"
+          python3 games/pikmin1/tools/scenarios/compare_hash_logs.py \
+            --label "state-hash logs, native JAudio off" \
+            macOS=hash-logs/scenario-hash-logs-macOS \
+            Linux=hash-logs/scenario-hash-logs-Linux \
+            Windows=hash-logs/scenario-hash-logs-Windows
+
+      - name: Compare (native JAudio on)
+        if: ${{ !cancelled() }}
+        run: |
+          echo "jaudio-scenarios: ${{ needs.jaudio-scenarios.result }}"
+          python3 games/pikmin1/tools/scenarios/compare_hash_logs.py \
+            --label "state-hash logs, native JAudio on" \
+            macOS=hash-logs/scenario-hash-logs-jaudio-macOS \
+            Linux=hash-logs/scenario-hash-logs-jaudio-Linux \
+            Windows=hash-logs/scenario-hash-logs-jaudio-Windows
 
 
   # Reports, per OS, whether a hidden-window GL context of the kind the game

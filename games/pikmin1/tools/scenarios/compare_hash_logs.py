@@ -1,0 +1,163 @@
+#!/usr/bin/env python3
+"""Compares the per-tick state-hash logs of the stand-in scenarios across operating systems.
+
+CI (ci.yml, job scenario-hash-compare) calls it with one directory per OS, each
+holding that OS's build/pikmin1/scenario-logs/*.hash.log (the files
+run_standin_scenario.cmake writes with --state-hash-log):
+
+    compare_hash_logs.py [--label TEXT] NAME=DIR [NAME=DIR ...]
+
+It fails (exit 1) when
+  - a directory is missing, or holds no .hash.log,
+  - a scenario has a log on some OS and none on another,
+  - a log is empty, or
+  - two OSes wrote different lines for the same scenario.
+For each scenario that differs it prints the first differing line (the tick and
+which of the hash columns differ) and every OS's value. A trailing CR is ignored:
+the game opens the log in text mode, so MinGW writes CRLF line ends and the
+other two OSes LF. Nothing else is normalised.
+
+Line format (pc_port/netplay/pc_state_hash.h): <tick> <total> <navi> <piki>
+<teki> <item> <world> <rng> <mode>, each hash 16 hex digits.
+
+With GITHUB_STEP_SUMMARY set, a table of the result is appended to it.
+"""
+import argparse
+import os
+import sys
+
+COLUMNS = ["tick", "total", "navi", "piki", "teki", "item", "world", "rng", "mode"]
+
+
+def read_lines(path):
+    with open(path, "rb") as f:
+        data = f.read().decode("utf-8", errors="replace")
+    lines = data.split("\n")
+    if lines and lines[-1] == "":
+        lines.pop()
+    return [line.rstrip("\r") for line in lines]
+
+
+def collect(directory):
+    """scenario name -> path of its .hash.log; None when the directory is missing."""
+    if not os.path.isdir(directory):
+        return None
+    logs = {}
+    for root, _dirs, files in os.walk(directory):
+        for name in files:
+            if name.endswith(".hash.log"):
+                logs[name[: -len(".hash.log")]] = os.path.join(root, name)
+    return logs
+
+
+def differing_columns(lines):
+    """Column names whose value is not the same in every line of `lines`."""
+    fields = [line.split() for line in lines]
+    names = []
+    for i, column in enumerate(COLUMNS):
+        values = {f[i] if i < len(f) else None for f in fields}
+        if len(values) > 1:
+            names.append(column)
+    return names
+
+
+def first_difference(per_os):
+    """(1-based line number, {os: line or None}) of the first line that is not the same everywhere."""
+    longest = max(len(lines) for lines in per_os.values())
+    for i in range(longest):
+        row = {name: (lines[i] if i < len(lines) else None) for name, lines in per_os.items()}
+        if len(set(row.values())) > 1:
+            return i + 1, row
+    return None, None
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--label", default="state-hash logs", help="what is being compared, for the headings")
+    parser.add_argument("sources", nargs="+", metavar="NAME=DIR")
+    args = parser.parse_args()
+
+    sources = {}
+    for item in args.sources:
+        name, sep, directory = item.partition("=")
+        if not sep or not name or not directory:
+            parser.error(f"expected NAME=DIR, got {item!r}")
+        sources[name] = directory
+
+    problems = []
+    logs = {}
+    for name, directory in sources.items():
+        found = collect(directory)
+        if not found:
+            problems.append(f"{name}: no *.hash.log under {directory} "
+                            f"({'directory missing' if found is None else 'directory empty'})")
+            continue
+        logs[name] = found
+
+    scenarios = sorted(set().union(*[set(found) for found in logs.values()])) if logs else []
+    rows = []
+    for scenario in scenarios:
+        have = {name: found[scenario] for name, found in logs.items() if scenario in found}
+        # An OS with no logs at all is already a problem of its own, above.
+        missing = [name for name in logs if name not in have]
+        if missing:
+            problems.append(f"{scenario}: no log from {', '.join(missing)}")
+            rows.append((scenario, "MISSING", f"no log from {', '.join(missing)}"))
+            continue
+        per_os = {name: read_lines(path) for name, path in have.items()}
+        empty = [name for name, lines in per_os.items() if not lines]
+        if empty:
+            problems.append(f"{scenario}: empty log from {', '.join(empty)}")
+            rows.append((scenario, "EMPTY", f"empty log from {', '.join(empty)}"))
+            continue
+        number, row = first_difference(per_os)
+        if number is None:
+            count = len(next(iter(per_os.values())))
+            rows.append((scenario, "same", f"{count} lines"))
+            continue
+        present = [line for line in row.values() if line is not None]
+        columns = differing_columns(present) if len(present) > 1 else []
+        tick = (present[0].split() or ["?"])[0] if present else "?"
+        shown = ", ".join(c for c in columns if c != "tick") or "line count"
+        detail = f"first difference at line {number} (tick {tick}), columns: {shown}"
+        lengths = {name: len(lines) for name, lines in per_os.items()}
+        if len(set(lengths.values())) > 1:
+            detail += "; line counts " + ", ".join(f"{n}={c}" for n, c in sorted(lengths.items()))
+        problems.append(f"{scenario}: {detail}")
+        rows.append((scenario, "DIFFERENT", detail))
+        print(f"DIFFERENT {scenario}: {detail}")
+        for name in sorted(row):
+            print(f"    {name:8} {row[name] if row[name] is not None else '(log ends before this line)'}")
+
+    same = sum(1 for _s, state, _d in rows if state == "same")
+    print(f"{args.label}: {len(scenarios)} scenarios on {', '.join(sources)}; "
+          f"{same} identical, {len(scenarios) - same} not")
+    for scenario, state, detail in rows:
+        if state == "same":
+            print(f"  same      {scenario}: {detail}")
+
+    summary = os.environ.get("GITHUB_STEP_SUMMARY")
+    if summary:
+        with open(summary, "a", encoding="utf-8") as f:
+            f.write(f"### Cross-OS {args.label} ({', '.join(sources)})\n\n")
+            f.write(f"{same} of {len(scenarios)} scenarios identical on every OS.\n\n")
+            if problems:
+                f.write("| Scenario | Result | Detail |\n|---|---|---|\n")
+                for scenario, state, detail in rows:
+                    if state != "same":
+                        f.write(f"| `{scenario}` | {state} | {detail} |\n")
+                for problem in problems:
+                    if not any(problem.startswith(f"{s}:") for s, _st, _d in rows):
+                        f.write(f"| | PROBLEM | {problem} |\n")
+                f.write("\n")
+
+    if problems:
+        print("\nFAILED:")
+        for problem in problems:
+            print(f"  {problem}")
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
