@@ -24,5 +24,9 @@ PcScenario* pc_scenario_make_onion_unlock_whistle(void);
 PcScenario* pc_scenario_make_day_end(void);
 PcScenario* pc_scenario_make_day_end_day29(void);
 PcScenario* pc_scenario_make_extinction_day30(void);
+PcScenario* pc_scenario_make_free_play(void);
+PcScenario* pc_scenario_make_first_yellow(void);
+PcScenario* pc_scenario_make_coop_smoke(void);
+PcScenario* pc_scenario_make_coop_look(void);
 
 #endif

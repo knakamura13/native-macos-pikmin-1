@@ -448,7 +448,9 @@ if (PIKMIN_BUILD_SCENARIOS)
         pc_port/scenarios/scenario_captain_damage.cpp
         pc_port/scenarios/scenario_onion_unlock.cpp
         pc_port/scenarios/scenario_day_end.cpp
-        pc_port/scenarios/scenario_extinction_day30.cpp)
+        pc_port/scenarios/scenario_extinction_day30.cpp
+        pc_port/scenarios/scenario_handoff.cpp
+        pc_port/scenarios/scenario_coop.cpp)
 endif()
 
 include_directories(
@@ -2207,4 +2209,72 @@ if(PIKMIN_BUILD_SCENARIOS)
         WORKING_DIRECTORY "${PIKMIN_STANDIN_DATA}"
         ENVIRONMENT "${PIKMIN_STANDIN_ENV}"
         TIMEOUT 1200)
+
+    # Hand-off (issue #76) and co-op scenarios (tools/scenarios/README.md).
+    # first_yellow's scripted part, headless: its hand-off point is a pass.
+    # coop_smoke and coop_look: two captains in split screen on the sandbox.
+    set(PIKMIN_STANDIN_OBJECTS_ENV "PIKMIN_SCENARIO_DATA_DIR=${PIKMIN_STANDIN_DATA};PIKMIN_SCENARIO_STAGE=stages/sandbox_objects.ini")
+    foreach(entry first_yellow:30:objects first_yellow:60:objects coop_smoke:30:sandbox coop_smoke:60:sandbox coop_look:30:sandbox)
+        string(REPLACE ":" ";" parts "${entry}")
+        list(GET parts 0 scenario)
+        list(GET parts 1 rate)
+        list(GET parts 2 stage)
+        add_test(NAME scenario_${scenario}_${rate}
+            COMMAND ${CMAKE_COMMAND}
+                -DGAME=$<TARGET_FILE:${NECTAR_GAME}>
+                -DSCENARIO=${scenario} -DRATE=${rate}
+                -DALLOWLIST=${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/standin-open-allowlist.txt
+                -DLOG_DIR=${CMAKE_CURRENT_BINARY_DIR}/scenario-logs
+                -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/run_standin_scenario.cmake)
+        if(stage STREQUAL "objects")
+            set(env "${PIKMIN_STANDIN_OBJECTS_ENV}")
+        else()
+            set(env "${PIKMIN_STANDIN_ENV}")
+        endif()
+        set_tests_properties(scenario_${scenario}_${rate} PROPERTIES
+            FIXTURES_REQUIRED scenario_standin_tree
+            WORKING_DIRECTORY "${PIKMIN_STANDIN_DATA}"
+            ENVIRONMENT "${env}"
+            TIMEOUT 600)
+    endforeach()
+    # The hand-off itself, headless (check_scenario_handoff.cmake): the scripted
+    # pad wins before it, the real input path (a virtual SDL game controller)
+    # after it, at real-time pacing, and nothing is written outside the scratch
+    # save dir. free_play at both rates (the pacing is per rate), first_yellow at 30.
+    foreach(entry free_play:30 free_play:60 first_yellow:30)
+        string(REPLACE ":" ";" parts "${entry}")
+        list(GET parts 0 scenario)
+        list(GET parts 1 rate)
+        add_test(NAME scenario_handoff_${scenario}_${rate}
+            COMMAND ${CMAKE_COMMAND}
+                -DGAME=$<TARGET_FILE:${NECTAR_GAME}>
+                -DSCENARIO=${scenario} -DRATE=${rate}
+                -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/scenario-handoff/${scenario}_${rate}
+                -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/check_scenario_handoff.cmake)
+        set_tests_properties(scenario_handoff_${scenario}_${rate} PROPERTIES
+            FIXTURES_REQUIRED scenario_standin_tree
+            ENVIRONMENT "${PIKMIN_STANDIN_OBJECTS_ENV}"
+            TIMEOUT 600)
+    endforeach()
+    # Real-time pacing keeps the scripted part deterministic: the per-tick hash
+    # log of first_yellow with --scenario-realtime equals the unthrottled one.
+    add_test(NAME scenario_realtime_determinism_first_yellow_30
+        COMMAND ${CMAKE_COMMAND}
+            -DGAME=$<TARGET_FILE:${NECTAR_GAME}>
+            -DSCENARIO=first_yellow -DRATE=30
+            -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/scenario-realtime-determinism
+            -DSECOND_ARGS=--scenario-realtime
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/check_scenario_determinism.cmake)
+    set_tests_properties(scenario_realtime_determinism_first_yellow_30 PROPERTIES
+        FIXTURES_REQUIRED scenario_standin_tree
+        WORKING_DIRECTORY "${PIKMIN_STANDIN_DATA}"
+        ENVIRONMENT "${PIKMIN_STANDIN_OBJECTS_ENV}"
+        TIMEOUT 1200)
+    # --scenario-handoff with a scenario that has no hand-off point exits 2.
+    add_test(NAME scenario_exit_handoff_unsupported
+        COMMAND ${CMAKE_COMMAND} -DGAME=$<TARGET_FILE:${NECTAR_GAME}> -DSCENARIO=boot_smoke -DEXPECT=2
+            -DARGS=--scenario-handoff "-DEXPECT_OUTPUT=boot_smoke has no hand-off point"
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/check_scenario_exit.cmake)
+    set_tests_properties(scenario_exit_handoff_unsupported PROPERTIES
+        ENVIRONMENT "${PIKMIN_STANDIN_ENV}")
 endif()
