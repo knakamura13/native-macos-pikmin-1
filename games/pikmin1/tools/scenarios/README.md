@@ -334,7 +334,8 @@ when a build job failed, and is skipped only when the whole run is cancelled.
 
 Result (branch `wip/close-ci`, 2026-10-29; GitHub's `macos-26` with Apple clang
 21.0, `ubuntu-latest` as Ubuntu 24.04 with GCC 13.3, `windows-latest` with MSYS2
-MINGW64 GCC 16.2): in run 40815424995 all 30 stand-in scenario logs, and the 6 of
+MINGW64 GCC 16.2): in runs 40815424995 and 40817545929 (the final workflow) all 30
+stand-in scenario logs, and the 6 of
 the native JAudio builds, are **byte-identical on macOS, Linux and Windows**
 (2,594,893 bytes for the 30, sha1 `6d0bda3da4f1...`, on all three), and the
 JAudio-on logs equal the JAudio-off logs of the same scenarios on every OS.
