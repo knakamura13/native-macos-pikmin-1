@@ -56,9 +56,13 @@
 #include "gameflow.h"
 #include "settings/pc_settings.h"
 #include "system.h"
+#include "scenarios/scenario_progress.h"
 #include "zen/ogResult.h"
 
 namespace {
+
+using scenario_progress::jumpToSunset;
+using scenario_progress::spawnPiki;
 
 // The day end starts this many open clock ticks after the jump (a text window
 // holds the clock).
@@ -127,14 +131,14 @@ public:
 				              (int)(itemMgr->getContainer(Red) != nullptr));
 				return;
 			}
-			pc_settings_scenario_set_infinite_day(0);
 			mBlueInOnion = GameStat::containerPikis[Blue];
 			mBlueDead    = GameStat::deadPikis[Blue];
 			mRedDead     = GameStat::deadPikis[Red];
-			if (!spawn(navi, Blue, PikiMode::FormationMode, -1) || !spawn(navi, Blue, PikiMode::FreeMode, 0) || !spawn(navi, Red, PikiMode::FormationMode, 1)) return;
+			if (!spawnPiki(navi, Blue, PikiMode::FormationMode, -1) || !spawnPiki(navi, Blue, PikiMode::FreeMode, 0)
+			    || !spawnPiki(navi, Red, PikiMode::FormationMode, 1))
+				return;
 			GameStat::update();
-			const float hoursPerTick = gsys->getFrameTime() / clock.mRealSecsPerGameHour;
-			clock.setTime(endHour - kSunsetTicks * hoursPerTick);
+			jumpToSunset(kSunsetTicks);
 			std::printf("[scenario] %s: day %d, 2 blue and 1 red Pikmin, clock %.4f h (%u ticks before %.2f h)\n", mName, day, clock.mTimeOfDay, kSunsetTicks, endHour);
 			enter(ToSunset, t);
 			return;
@@ -202,26 +206,6 @@ private:
 	{
 		mPhase     = p;
 		mPhaseTick = t;
-	}
-
-	// Born, counted and given a mode as the game's own spawners do (see throw_release).
-	bool spawn(Navi* navi, int colour, int mode, int slot)
-	{
-		Piki* piki = static_cast<Piki*>(pikiMgr->birth());
-		if (!piki) {
-			scenarioFailf(0, "a Pikmin is born", "birth returned null");
-			return false;
-		}
-		GameStat::workPikis.inc(colour);
-		piki->init(navi);
-		Vector3f at = navi->mSRT.t;
-		at.x += 45.0f * (float)slot;
-		at.z += 45.0f;
-		at.y = mapMgr->getMinY(at.x, at.z, true);
-		piki->Creature::init(at);
-		piki->initColor(colour);
-		piki->changeMode(mode, navi);
-		return true;
 	}
 
 	// GameCoreSection::exitDayEnd (phase two, before the day advance): a living Pikmin

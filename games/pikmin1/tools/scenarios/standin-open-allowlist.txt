@@ -34,6 +34,12 @@ dataDir/stages/sandbox_objects/28.gen
 # ending_happy on Day 12 and ending_happy_skip on Day 13 (sandbox).
 dataDir/stages/sandbox/11.gen
 dataDir/stages/sandbox/12.gen
+# The Onion stage (onion_day3, standin_objects_stage.h) writes only default.gen too;
+# its runs load Day 2 (1.gen) and Day 3 (2.gen).
+dataDir/stages/sandbox_onions/1.gen
+dataDir/stages/sandbox_onions/2.gen
+dataDir/stages/sandbox_onions/init.gen
+dataDir/stages/sandbox_onions/plants.gen
 
 # Parameter files CoreNode::load skips silently when missing (node.cpp); every
 # value keeps its code default. key.bin: the throw key stays A, which
@@ -87,6 +93,12 @@ dataDir/cinemas/demo28.cin
 # The chain needs none of their keys.
 dataDir/cinemas/demo85.cin
 dataDir/cinemas/demo86.cin
+# onion_day3: the yellow Onion's take-off movie (DEMOID_EndOfDayYellowOnyon), started by
+# DayOverModeState::initialisePhaseTwo when hasContainer(Yellow); zero-length as above. The
+# scenario asserts the predicate, not the movie.
+# onion_day3: on Day 3 the red count is 0 and DEMOFLAG_PostExtinctionSeed is already set
+# (Day 2 played demo60), so GameCoreSection's start plays DEMOID_Unk64Cat instead; zero-length.
+dataDir/cinemas/demo64.cin
 # extinction_day30: the bad ending's first movie (DEMOID_BadEnding, phase one).
 # The disc's has Action keys only (ship and Pikmin actors), no Notify key.
 dataDir/cinemas/demo69.cin
@@ -101,13 +113,10 @@ dataDir/cinemas/demo113.cin
 dataDir/cinemas/demo76.cin
 # challenge_*: the end-of-day Onion flights for the yellow and blue Onions; in challenge mode
 # PlayerState::setChallengeMode gives every Onion, so phase two starts all three (demo84 above).
-dataDir/cinemas/demo85.cin
-dataDir/cinemas/demo86.cin
 # challenge_*: setChallengeMode sets every demo flag and owns every Onion, so finalSetup plays
 # the post-extinction bonus-seed movie for each Onion colour with no Pikmin (DEMOID_Unk64Cat,
 # Impact Site's demo64; gameCoreSection.cpp). The disc's has BonusPiki Actions only; the
 # scenarios spawn their own Pikmin and need no seeds.
-dataDir/cinemas/demo64.cin
 
 # captain_death: the three textures EffectMgr2D registers that effects.bun does
 # not hold (the file-select and results screens build the 2D effect manager when

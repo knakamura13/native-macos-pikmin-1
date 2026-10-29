@@ -48,5 +48,11 @@ PcScenario* pc_scenario_make_day_end_no_day_limit(void);
 PcScenario* pc_scenario_make_challenge_day_end(void);
 PcScenario* pc_scenario_make_challenge_captain_death(void);
 PcScenario* pc_scenario_make_challenge_extinction(void);
+PcScenario* pc_scenario_make_onion_day3(void);
+PcScenario* pc_scenario_make_onion_day3_whistle(void);
+PcScenario* pc_scenario_make_onion_day3_hidetext(void);
+PcScenario* pc_scenario_make_onion_day3_reload(void);
+PcScenario* pc_scenario_make_onion_day3_unplucked(void);
+PcScenario* pc_scenario_make_onion_day3_skip(void);
 
 #endif

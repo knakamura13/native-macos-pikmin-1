@@ -141,6 +141,27 @@ generators are untouched, so every existing scenario keeps its numbers (the
 Scenarios opt in with `PIKMIN_SCENARIO_STAGE=stages/sandbox_objects.ini`. The CTest
 entries `scenario_sprout_landing_30` and `_60` do.
 
+## The Onion stage (`stages/sandbox_onions.ini`)
+
+Written by `addObjectsStage` too (`standin_objects_stage.cpp`): the same compiled
+map and `.ini` text as `sandbox_objects`, its own generator folder
+`stages/sandbox_onions/`, and a fourth hidden `stages.ini` entry, appended last so
+no other entry's index moves. `default.gen` places only Onions, as the disc's story
+courses do (Forest of Hope's `default.gen`, read with `nectar::loadGen`, 2026-10-28:
+red, yellow and blue `goal` generators with the default name and a yellow one named
+`next` at the discovery spot):
+
+| Generator | Colour | At (x, z) | Born when |
+|-----------|--------|-----------|-----------|
+| default name | red | (-120, -250) | red is owned |
+| default name | yellow | (-280, -250) | yellow is owned |
+| default name | blue | (-200, -400) | blue is owned |
+| `next` | yellow | (-300, 0) | yellow is not owned |
+
+Used by `onion_day3` and its variants, which load it twice (Day 2, then Day 3
+through MapSelect). The stage opens `1.gen`, `2.gen`, `init.gen` and `plants.gen`,
+which do not exist (allowlisted).
+
 ## sprout_landing (upstream #208)
 
 `pc_port/scenarios/scenario_sprout_landing.cpp`. Asserts the stage's content, then

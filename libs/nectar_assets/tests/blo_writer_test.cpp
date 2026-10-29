@@ -355,7 +355,7 @@ std::map<std::string, LayoutReq> requirements()
 	// with a leading NUL), each with text of at most 7 bytes (char[8] buffers).
 	m["wait_char.blo"].reqs = { { "maru", 'T' }, { std::string("\0ten", 4), 'T' }, { std::string("\0han", 4), 'T' } };
 	for (const char* f : { "tu_tx00.blo", "tu_tx26.blo", "tu_tx35.blo", "tu_tx37_00.blo", "tu_tx37_01.blo", "tu_tx37_02.blo", "tu_tx03.blo", "tu_tx20.blo",
-	                       "re_j_00.blo", "re_n1_00.blo", "re_g_00.blo" })
+	                       "re_j_00.blo", "re_n1_00.blo", "re_g_00.blo", "re_q_00.blo" })
 		m[f].reqs = { { "tx00", 'A' } }; // tx00..tx19 are optional and any type (the disc has a picture in tu_tx37_01); the stand-in has one text box
 	m["tu_tx31.blo"].reqs = { { "tx00", 'A' } }; // captain_damage: TUT_APunchUFO's page
 
@@ -730,8 +730,8 @@ int main()
 	{
 		std::vector<nectar::StandinLayout> layouts = nectar::standinBloLayouts();
 		std::map<std::string, LayoutReq> reqs      = requirements();
-		check(layouts.size() == 50, "50 layouts: 12 on the boot path, 8 for day30_clock, 2 for the stand-in cinema text keys, 17 for captain_death, "
-		                            "1 for captain_damage, 2 diary pages for day_end, 4 for extinction_day30, 4 for challenge mode");
+		check(layouts.size() == 51, "51 layouts: 12 on the boot path, 8 for day30_clock, 2 for the stand-in cinema text keys, 17 for captain_death, "
+		                            "1 for captain_damage, 2 diary pages for day_end, 4 for extinction_day30, 4 for challenge mode, 1 diary page for onion_day3");
 		const char* bootOrder[] = { "black.blo", "pause.blo", "pause_ok.blo", "gameover.blo", "gameove2.blo", "count.blo",
 			                        "con01.blo", "sund.blo",  "account.blo",  "play09.blo",   "play10.blo",   "play_day.blo" };
 		for (size_t i = 0; i < 12 && i < layouts.size(); i++) check(layouts[i].file == bootOrder[i], std::string("load order: ") + bootOrder[i]);

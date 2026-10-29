@@ -200,6 +200,11 @@ bool stagesIni(Tree& tree, std::string& error)
 	all.name    = "sandbox_all_objects";
 	all.file    = standin::kAllObjectsStageIni;
 	entries.push_back(all);
+	nectar::StagesEntry onions; // the Onion stage of onion_day3 (standin_objects_stage.h), last so no other index moves
+	onions.visible = false;
+	onions.name    = "sandbox_onions";
+	onions.file    = standin::kOnionsStageIni;
+	entries.push_back(onions);
 
 	std::string text;
 	if (!nectar::writeStagesIni(entries, text, error)) return fail(error, "stages.ini: " + error);

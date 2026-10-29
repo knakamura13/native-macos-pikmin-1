@@ -129,21 +129,33 @@ std::vector<Movie> movies()
 	// upstream #205 is about (before Boot, between Boot and the seed, between the
 	// seed and EmitCone). demo04 then opens the red Onion text; demo06 has no
 	// text key (its screen, tu_tx22, is not a stand-in).
+	// Yellow (DEMOID_FindYellowOnyon, demo05, which DEMOFLAG_DiscoverYellowOnyon
+	// starts; scenario onion_day3): the yellow boot motion keeps the disc's numbers
+	// (360 frames, KEY_Action0 at 240), so the seed comes out at movie frame 250 and
+	// EmitCone follows at 270. No text key (the yellow Onion's screen is not a
+	// stand-in).
 	{
 		constexpr int kDiscoveryBoot = 10;
-		for (int blue = 0; blue < 2; blue++) {
-			const int cone   = blue ? 90 : 300; // EmitCone: after the seed, before the movie's end
-			const int frames = blue ? 100 : 330;
-			const int sender = blue ? kDemoSenderBluOnion : kDemoSenderRedOnion;
+		struct Discovery {
+			const char* cin;
+			const char* scene;
+			int sender, cone, frames;
+		};
+		const Discovery discoveries[] = {
+			{ "dataDir/cinemas/demo04.cin", "cinemas/demo04/demo04_1.dsk", kDemoSenderRedOnion, 300, 330 },
+			{ "dataDir/cinemas/demo06.cin", "cinemas/demo06/demo06_1.dsk", kDemoSenderBluOnion, 90, 100 },
+			{ "dataDir/cinemas/demo05.cin", "cinemas/demo05/demo05_1.dsk", kDemoSenderYelOnion, 270, 300 },
+		};
+		for (const Discovery& d : discoveries) {
 			Movie m;
-			m.cin           = blue ? "dataDir/cinemas/demo06.cin" : "dataDir/cinemas/demo04.cin";
+			m.cin           = d.cin;
 			m.cinema.flags  = kCinLocalized | hideNavi;
-			m.cinema.scenes = { blue ? "cinemas/demo06/demo06_1.dsk" : "cinemas/demo04/demo04_1.dsk" };
-			m.sceneFrames   = { frames };
+			m.cinema.scenes = { d.scene };
+			m.sceneFrames   = { d.frames };
 			CinCut cut;
-			cut.endFrame = frames;
-			cut.keys     = { action(sender, kDemoOnionBoot, kDiscoveryBoot), action(sender, kDemoOnionEmitCone, cone) };
-			if (!blue) cut.keys.push_back(notify(kMovieCmdTextDemo, kTutRedOnion, cone + 10));
+			cut.endFrame = d.frames; // EmitCone: after the seed, before the movie's end
+			cut.keys     = { action(d.sender, kDemoOnionBoot, kDiscoveryBoot), action(d.sender, kDemoOnionEmitCone, d.cone) };
+			if (d.sender == kDemoSenderRedOnion) cut.keys.push_back(notify(kMovieCmdTextDemo, kTutRedOnion, d.cone + 10));
 			m.cinema.cuts = { cut };
 			list.push_back(m);
 		}
