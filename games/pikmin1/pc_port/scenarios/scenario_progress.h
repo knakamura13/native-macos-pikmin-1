@@ -162,8 +162,9 @@ inline bool checkPluck(unsigned t, Path path, int colour, const Snap& b, const S
 			return false;
 		}
 	}
-	if (path == Hand && a.plucked != b.plucked + 1) {
-		scenarioFailf(t, "a hand pluck counts one pluck (mTotalPluckedPikiCount)", "%s: %d, was %d", name, a.plucked, b.plucked);
+	// A whistle pluck counts too (pc_whistle_pluck): the pluck camera stops zooming after 100.
+	if (a.plucked != b.plucked + 1) {
+		scenarioFailf(t, "a hand or whistle pluck counts one pluck (mTotalPluckedPikiCount)", "%s: %d, was %d", name, a.plucked, b.plucked);
 		return false;
 	}
 	return true;
