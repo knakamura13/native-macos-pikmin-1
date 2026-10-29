@@ -450,7 +450,10 @@ if (PIKMIN_BUILD_SCENARIOS)
         pc_port/scenarios/scenario_day_end.cpp
         pc_port/scenarios/scenario_extinction_day30.cpp
         pc_port/scenarios/scenario_handoff.cpp
-        pc_port/scenarios/scenario_coop.cpp)
+        pc_port/scenarios/scenario_coop.cpp
+        pc_port/scenarios/pc_scenario_note.cpp pc_port/scenarios/scenario_save_common.cpp pc_port/scenarios/scenario_save_load.cpp
+        pc_port/scenarios/scenario_results_exit.cpp pc_port/scenarios/scenario_pause_continue.cpp
+        pc_port/scenarios/scenario_permadeath.cpp pc_port/scenarios/scenario_card_errors.cpp)
 endif()
 
 include_directories(
@@ -2126,10 +2129,50 @@ if(PIKMIN_BUILD_SCENARIOS)
         endforeach()
     endforeach()
 
+    # Save, load, the results and pause exits, Permadeath and the memory-card
+    # errors (scenario_save_load.cpp and the files beside it; coverage/terminals.md
+    # T13-T15, T20, T21). Each entry is name:stage:rates (tools/scenarios/README.md,
+    # "Tick rates").
+    foreach(entry save_load:sandbox_objects:30,60 save_load_flags:sandbox_objects:30,60
+            results_nosave_map:sandbox_objects:30 results_nosave_cardselect:sandbox_objects:30
+            card_errors:sandbox_objects:30 card_errors_saved:sandbox_objects:30 pause_continue:sandbox:30,60
+            permadeath_erase:sandbox:30,60 permadeath_unsaved:sandbox:30 permadeath_bad_slot:sandbox:30 permadeath_off:sandbox:30)
+        string(REPLACE ":" ";" parts "${entry}")
+        list(GET parts 0 scenario)
+        list(GET parts 1 stage)
+        list(GET parts 2 rates)
+        string(REPLACE "," ";" rates "${rates}")
+        foreach(rate IN LISTS rates)
+            add_test(NAME scenario_${scenario}_${rate}
+                COMMAND ${CMAKE_COMMAND}
+                    -DGAME=$<TARGET_FILE:${NECTAR_GAME}>
+                    -DSCENARIO=${scenario} -DRATE=${rate}
+                    -DALLOWLIST=${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/standin-open-allowlist.txt
+                    -DLOG_DIR=${CMAKE_CURRENT_BINARY_DIR}/scenario-logs
+                    -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/run_standin_scenario.cmake)
+            set_tests_properties(scenario_${scenario}_${rate} PROPERTIES
+                FIXTURES_REQUIRED scenario_standin_tree
+                WORKING_DIRECTORY "${PIKMIN_STANDIN_DATA}"
+                ENVIRONMENT "PIKMIN_SCENARIO_DATA_DIR=${PIKMIN_STANDIN_DATA};PIKMIN_SCENARIO_STAGE=stages/${stage}.ini"
+                TIMEOUT 600)
+        endforeach()
+    endforeach()
+
     # Runner self-tests on the stand-in tree: the scratch save directory and the
     # exit codes of the negative paths (pc_scenario.h). Each asserts its code in
     # a cmake -P wrapper, so a pass means exactly that code.
     set(PIKMIN_STANDIN_ENV "PIKMIN_SCENARIO_DATA_DIR=${PIKMIN_STANDIN_DATA};PIKMIN_SCENARIO_STAGE=stages/sandbox.ini")
+    # The Permadeath erase writes, deletes and rewrites files: nothing outside its
+    # scratch save directory may change (check_scenario_save_dir.cmake).
+    add_test(NAME scenario_save_dir_permadeath_erase
+        COMMAND ${CMAKE_COMMAND}
+            -DGAME=$<TARGET_FILE:${NECTAR_GAME}> -DSCENARIO=permadeath_erase
+            -DCWD_DIR=${CMAKE_CURRENT_BINARY_DIR}/scenario-save-dir-permadeath-cwd
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/check_scenario_save_dir.cmake)
+    set_tests_properties(scenario_save_dir_permadeath_erase PROPERTIES
+        FIXTURES_REQUIRED scenario_standin_tree
+        ENVIRONMENT "${PIKMIN_STANDIN_ENV}"
+        TIMEOUT 600)
     add_test(NAME scenario_save_dir
         COMMAND ${CMAKE_COMMAND}
             -DGAME=$<TARGET_FILE:${NECTAR_GAME}>

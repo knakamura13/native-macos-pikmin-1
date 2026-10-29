@@ -28,5 +28,16 @@ PcScenario* pc_scenario_make_free_play(void);
 PcScenario* pc_scenario_make_first_yellow(void);
 PcScenario* pc_scenario_make_coop_smoke(void);
 PcScenario* pc_scenario_make_coop_look(void);
+PcScenario* pc_scenario_make_save_load(void);
+PcScenario* pc_scenario_make_save_load_flags(void);
+PcScenario* pc_scenario_make_results_nosave_map(void);
+PcScenario* pc_scenario_make_results_nosave_cardselect(void);
+PcScenario* pc_scenario_make_pause_continue(void);
+PcScenario* pc_scenario_make_permadeath_erase(void);
+PcScenario* pc_scenario_make_permadeath_unsaved(void);
+PcScenario* pc_scenario_make_permadeath_bad_slot(void);
+PcScenario* pc_scenario_make_permadeath_off(void);
+PcScenario* pc_scenario_make_card_errors(void);
+PcScenario* pc_scenario_make_card_errors_saved(void);
 
 #endif

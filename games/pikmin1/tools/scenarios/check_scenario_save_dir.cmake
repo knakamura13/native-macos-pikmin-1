@@ -2,8 +2,9 @@
 # scratch NECTAR_SAVE_DIR and nowhere else. Runs boot_smoke with
 # PIKMIN_SCENARIO_KEEP_SAVE_DIR=1 (the runner then keeps the scratch directory),
 # from an empty working directory. Called by CTest as:
-#   cmake -DGAME=<nectar> -DCWD_DIR=<empty dir> -P check_scenario_save_dir.cmake
+#   cmake -DGAME=<nectar> -DCWD_DIR=<empty dir> [-DSCENARIO=<name>] [-DRATE=<30|60>] -P check_scenario_save_dir.cmake
 # with PIKMIN_SCENARIO_DATA_DIR and PIKMIN_SCENARIO_STAGE in the environment.
+# SCENARIO defaults to boot_smoke, RATE to 30.
 # Checks:
 #   - exit 0, and a `[scenario] save dir <path>` line;
 #   - <path>/card0 exists (CARDInit), and the CARDInit line names it;
@@ -11,7 +12,9 @@
 #     unless the driver offers no program binary format (then logged, not required);
 #   - none of save/, shader_cache/, card0/, card1/ appears that was not there
 #     before in the working directory, the data directory or the executable's
-#     directory, nor the per-user default save directory.
+#     directory, nor the per-user default save directory;
+#   - every file under the data directory has the same size and time stamp after
+#     the run, and none is added or removed.
 cmake_minimum_required(VERSION 3.16)
 
 foreach(var GAME CWD_DIR)
@@ -56,9 +59,35 @@ foreach(path IN LISTS watched)
     endif()
 endforeach()
 
+if(NOT DEFINED SCENARIO)
+    set(SCENARIO boot_smoke)
+endif()
+if(NOT DEFINED RATE)
+    set(RATE 30)
+endif()
+
+# The data directory as "path size time" lines (the generator writes it before
+# any scenario runs; no scenario may write into it).
+function(snapshot_tree dir out_var)
+    file(GLOB_RECURSE files LIST_DIRECTORIES true RELATIVE "${dir}" "${dir}/*")
+    list(SORT files)
+    set(lines)
+    foreach(f IN LISTS files)
+        if(IS_DIRECTORY "${dir}/${f}")
+            list(APPEND lines "${f}/")
+        else()
+            file(SIZE "${dir}/${f}" size)
+            file(TIMESTAMP "${dir}/${f}" stamp "%Y-%m-%dT%H:%M:%S" UTC)
+            list(APPEND lines "${f} ${size} ${stamp}")
+        endif()
+    endforeach()
+    set(${out_var} "${lines}" PARENT_SCOPE)
+endfunction()
+snapshot_tree("${data_dir}" data_before)
+
 set(ENV{PIKMIN_SCENARIO_KEEP_SAVE_DIR} 1)
 execute_process(
-    COMMAND "${GAME}" --scenario boot_smoke --scenario-tick-rate 30
+    COMMAND "${GAME}" --scenario "${SCENARIO}" --scenario-tick-rate "${RATE}"
     WORKING_DIRECTORY "${CWD_DIR}"
     OUTPUT_VARIABLE out
     ERROR_VARIABLE out
@@ -67,7 +96,7 @@ message("${out}")
 
 set(errors)
 if(NOT rc STREQUAL "0")
-    list(APPEND errors "boot_smoke exited with '${rc}'")
+    list(APPEND errors "${SCENARIO} exited with '${rc}'")
 endif()
 
 string(REGEX MATCH "\\[scenario\\] save dir ([^\r\n]+)" m "${out}")
@@ -124,6 +153,12 @@ foreach(path IN LISTS watched)
         list(APPEND errors "the run created ${path}")
     endif()
 endforeach()
+snapshot_tree("${data_dir}" data_after)
+if(NOT data_before STREQUAL data_after)
+    list(LENGTH data_before n_before)
+    list(LENGTH data_after n_after)
+    list(APPEND errors "the data directory changed (${n_before} entries before, ${n_after} after)")
+endif()
 file(GLOB cwd_entries "${CWD_DIR}/*")
 if(cwd_entries)
     list(APPEND errors "the working directory is not empty: ${cwd_entries}")
@@ -134,4 +169,4 @@ if(errors)
     string(REPLACE ";" "\n  " shown "${errors}")
     message(FATAL_ERROR "save dir check failed:\n  ${shown}")
 endif()
-message("[check] PASS: card and shader cache in the scratch save dir only")
+message("[check] PASS: ${SCENARIO}: card and shader cache in the scratch save dir only, the data directory unchanged")

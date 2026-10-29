@@ -78,6 +78,12 @@ dataDir/cinemas/demo11.cin
 # day_end, day_end_day29: the march-in movie (DEMOID_DayEnd, the sandbox stages'
 # translation). The disc's has one Notify key, FadeIn at frame 0; the chain needs it not.
 dataDir/cinemas/demo28.cin
+# save_load, save_load_flags: the scenario sets the yellow and blue container bits
+# so the save carries them; the day end then plays those Onions' take-off movies
+# (EndOfDayYellowOnyon, EndOfDayBlueOnyon) as zero-length movies, as demo84 above.
+# The chain needs none of their keys.
+dataDir/cinemas/demo85.cin
+dataDir/cinemas/demo86.cin
 # extinction_day30: the bad ending's first movie (DEMOID_BadEnding, phase one).
 # The disc's has Action keys only (ship and Pikmin actors), no Notify key.
 dataDir/cinemas/demo69.cin
