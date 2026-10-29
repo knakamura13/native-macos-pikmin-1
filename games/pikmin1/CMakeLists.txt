@@ -805,6 +805,17 @@ if(PIKMIN_NETPLAY_BUILD)
             ${PC_NETPLAY_LIBM_NO_BUILTIN_FLAGS} -fno-lto -ffp-contract=off -ftrivial-auto-var-init=zero)
     endif()
     target_sources(${NECTAR_GAME} PRIVATE $<TARGET_OBJECTS:pc_netplay_libm_obj>)
+    # Apple: clang fuses a sinf and a cosf of the same value into one call to
+    # __sincosf_stret (sin/cos into __sincos_stret), which the software libm
+    # does not define, so without this the fused pairs still run Apple's libm.
+    # pc_scenario_sincos_apple.c routes both halves to the software sinf/cosf.
+    if(APPLE)
+        if(NOT TARGET pc_scenario_sincos_obj)
+            add_library(pc_scenario_sincos_obj OBJECT pc_port/scenarios/pc_scenario_sincos_apple.c)
+            target_compile_options(pc_scenario_sincos_obj PRIVATE -fno-builtin -fno-lto -ffp-contract=off)
+        endif()
+        target_sources(${NECTAR_GAME} PRIVATE $<TARGET_OBJECTS:pc_scenario_sincos_obj>)
+    endif()
 endif()
 
 # Scenario builds: the same float results on every platform, so a stand-in
@@ -816,7 +827,7 @@ endif()
 # pc_scenario_sincos_apple.c also replaces __sincosf_stret/__sincos_stret,
 # which clang calls when it fuses a sin and a cos of the same value. Release
 # builds never set PIKMIN_BUILD_SCENARIOS, so their flags and libm are
-# unchanged. A netplay build already has both.
+# unchanged. A netplay build already has all three.
 option(PIKMIN_SCENARIO_FLOAT_DET
     "Scenario builds: no FMA contraction and the software libm (cross-platform identical floats)" ON)
 set(PIKMIN_SCENARIO_FLOAT_DET_ACTIVE OFF)
