@@ -95,6 +95,10 @@ A scenario run forces its own conditions:
 - Settings that are neither read nor written: windowed 64x36 (`PIKMIN_SCENARIO_WINDOW`), vsync off, the
   frame rate set from `--scenario-tick-rate`, Infinite Day and Whistle Pluck set by the scenario
   (`pc_settings_scenario_set_infinite_day`, `pc_settings_scenario_set_whistle_pluck`).
+- Story mode and No Day Limit off. A scenario whose `challengeMode()` returns true
+  starts in challenge mode instead (CardSelect's path: `gameflow.mIsChallengeMode`,
+  `PlayerState::setChallengeMode`; a stage with no `chid` becomes challenge course 0).
+  No Day Limit is set by the scenario (`pc_settings_scenario_set_no_day_advance`).
 - Achievements (`pikmin_achievements.txt`) are read and written in that run's
   `NECTAR_SAVE_DIR`, not in the data folder the process changes into
   (`pc_achievements.cpp`), so a run starts with none unlocked and writes nothing
@@ -220,6 +224,9 @@ code or timing the 30 Hz run does not. The disc entries keep `boot_smoke`,
 | `onion_unlock`, `onion_unlock_whistle` | 30, 60 | Same reason as `container_menu`: the captain's walk to each sprout (`Navi::updateWalkAnimation`), `NaviNukuAdjustState`'s odometer window (0.4 s) and the 40-frame stand-in pluck motions run on frame-time arithmetic, so each pluck lands on different ticks per rate; read from code, not shown to fail at either rate. |
 | `objects_smoke` | 30 | Loads the every-object stage and counts the enemies born; neither depends on the tick rate. |
 | `ship_parts` | 30, 60 | Nothing in `getUfoParts` depends on the rate (it is direct calls, one part per tick); both rates are kept because the run costs half a second and the intro gate and the tick counter differ (intro 15 ticks on the stand-ins, 45 on the disc). Not shown to fail at either rate. |
+| `ending_bad_day30`, `ending_neutral_day30`, `ending_happy`, `ending_happy_skip` | 30, 60 | The clock and the movies advance per tick (demo26's keys land on tick 52 or 104; demo77 and demo73 loop per tick), and the final results window's phases are timers summed from the frame time, so every step lands on different ticks per rate; bounds are in seconds. Read from code, not shown to fail at either rate. |
+| `captain_death_day30`, `challenge_captain_death`, `challenge_extinction` | 30, 60 | As `captain_death` and `extinction`: MessageModeState's timers (0.5, 2, 3 s) and the game-over window's 2 s are sums of the frame time, the movies advance per tick. |
+| `day_end_no_day_limit`, `challenge_day_end` | 30, 60 | As `day_end`: the clock jump is in clock ticks and the results windows run on frame-time timers. |
 
 Wall time of every stand-in entry, one run at a time on an M3 Max, `/usr/bin/time -p`
 (2026-10-28, base `ee769374`; the last three rows on base `a1065fef`, CTest's own per-test time, `-j 1`). "GPU" is the Mac's own GL, "software" is Apple's
@@ -237,6 +244,15 @@ software run are byte-identical for every entry.
 | `container_menu` | 363 / 726 | 1.1 s / 1.5 s | 2.5 s / 4.1 s |
 | `objects_smoke` | 299 / none | 1.0 s / none | 2.3 s / none |
 | `ship_parts` | 30 / 30 | 0.7 s / 0.5 s (CTest wall time, 2026-10-28; not the `/usr/bin/time -p` method above) | not measured |
+| `ending_bad_day30` | 625 / 1056 | 1.0 s / 1.6 s (CTest wall time, `-j 3`, 2026-10-28) | not measured |
+| `ending_neutral_day30` | 623 / 1054 | 1.4 s / 1.9 s (as above) | not measured |
+| `ending_happy` | 485 / 934 | 1.3 s / 1.3 s (as above) | not measured |
+| `ending_happy_skip` | 443 / 856 | 0.8 s / 1.4 s (as above) | not measured |
+| `captain_death_day30` | 757 / 1470 | 1.3 s / 2.0 s (as above) | not measured |
+| `day_end_no_day_limit` | 496 / 826 | 1.0 s / 1.3 s (as above) | not measured |
+| `challenge_day_end` | 382 / 687 | 0.9 s / 0.9 s (as above) | not measured |
+| `challenge_captain_death` | 658 / 1281 | 1.1 s / 1.8 s (as above) | not measured |
+| `challenge_extinction` | 412 / 777 | 1.3 s / 1.3 s (as above) | not measured |
 
 The object stage costs nothing at load any more: `sprout_landing` (287 ticks, 0.8 s)
 and `day30_clock` on the plain stage (277 ticks, 0.8 s) take the same time. The 17 s
@@ -250,6 +266,7 @@ Routes); the time left is per-tick rendering, which grows with the tick count.
 | `scenario_<name>_<rate>_disc` | a real install | `game-assets` | For `boot_smoke`, `throw_release` and `day30_clock` only, at 30 and 60 (6 entries). Runs in `<build>/scenario-scratch`, 600 s timeout, `SKIP_RETURN_CODE 77`. Set `PIKMIN_SCENARIO_DATA_DIR` to run it; otherwise CTest reports a skip. |
 | `scenario_determinism_<name>_<rate>` | stand-in tree | none | EC-60. `boot_smoke`, `throw_release` and `day30_clock` at 30 and 60 (6 entries). `check_scenario_determinism.cmake` runs the scenario twice with `--state-hash-log` and fails if the two per-tick hash logs differ (the first differing line is printed). No scenario change. 1200 s timeout, `stages/sandbox.ini`. |
 | `scenario_determinism_negative_boot_smoke_30` | stand-in tree | none | Negative control for the entry above: the second run boots `stages/sandbox_objects.ini`, and the test passes only if the logs differ (`-DEXPECT_DIFFER=1`, no `WILL_FAIL`). The runner clears `PIKMIN_NETPLAY_TEST_PREROLL_RAND`, so that variable cannot perturb a scenario run. |
+| `scenario_<name>_<rate>` (endings block) | stand-in tree | none | `ending_bad_day30`, `ending_neutral_day30`, `ending_happy`, `ending_happy_skip`, `captain_death_day30`, `challenge_captain_death`, `challenge_extinction`, `day_end_no_day_limit` and `challenge_day_end`, at 30 and 60, in their own `foreach` block after `objects_smoke`'s; the stage per scenario as in the stage table below. Otherwise as the row above. |
 | `scenario_gamestat_invariant_fail` | stand-in tree | none | Negative control for the GameStat invariant check (see below): the test-only scenario `gamestat_corrupt` raises `workPikis[Blue]` by 3 at tick 5 with no Pikmin behind it; `check_scenario_exit.cmake` asserts exit 1 and the `FAIL gamestat_corrupt tick 5` line. |
 
 Which stage each stand-in entry boots:
@@ -259,6 +276,8 @@ Which stage each stand-in entry boots:
 | `boot_smoke`, `throw_release`, `day30_clock`, `captain_death`, `extinction_day30`, `day_end`, `day_end_day29`, `onion_unlock`, `onion_unlock_whistle`, `captain_damage`, `ship_parts` | `stages/sandbox.ini` |
 | `sprout_landing`, `onion_skip`, `container_menu` | `stages/sandbox_objects.ini`, the opt-in second stage with a cliff, an Onion, sprouts, a pellet and an enemy. See `standin-objects.md` for what the object stand-ins are, what was read from the disc and what remains, and `standin-cinema.md` for `onion_skip`. |
 | `objects_smoke` | `stages/sandbox_all_objects.ini`, one of each plant, bridge, gate, boss and eight enemies. |
+| `ending_bad_day30`, `ending_neutral_day30`, `ending_happy`, `ending_happy_skip`, `captain_death_day30`, `challenge_captain_death`, `challenge_extinction` | `stages/sandbox.ini` |
+| `day_end_no_day_limit`, `challenge_day_end` | `stages/sandbox_objects.ini` (in challenge mode the stage has no Onion: see `challenge_day_end` below) |
 
 `sprout_landing`, `onion_skip`, `container_menu`, `onion_unlock`, `onion_unlock_whistle` and `objects_smoke` have no `_disc` entry: their
 stages do not exist on a real install.
@@ -361,6 +380,13 @@ that stay with the platform are exact by IEEE 754.
 | `day_end` | Day 2, object stage | The ordinary sunset day end to its terminal (T01, T03 in `coverage/terminals.md`). Two blue Pikmin (Formation and Free) and one red are spawned, Infinite Day is off, and the clock is set 60 open ticks before the end hour; the jump passes 13:00, so the first-noon text opens and A closes it. Asserted, each within a bound in seconds: the day end starts at or after the end hour, `DayOverModeState` follows, the day advances exactly once with no ending, `exitDayEnd` sends both blue Pikmin into the blue Onion and kills the red one (the stage has no red Onion), the diary entry for the day is `RESFLAG_Misc1` (`re_n1_00`, one page), and the soft reset goes to `ONEPLAYER_MapSelect` at least 3 s after the results opened and within 60 s. At 30 Hz: day end t=156, day advance t=160, reset t=496; at 60 Hz: 178, 182, 826. See `standin-cinema.md` (Day-end screens). |
 | `day_end_day29` | Day 29, object stage | `day_end` on the last ordinary day: `cleanupDayEnd` sets `RESFLAG_FinalDay`, so the diary entry is `re_g_00`; the day becomes 30 and the exit is still MapSelect. Same ticks as `day_end` at 30 Hz. |
 | `extinction_day30` | Day 30 | Every Pikmin dies on the last day (T05, EC-12). Three blue Pikmin are killed as in `extinction`. Asserted, each within a bound in seconds: PikiZero; `GAMEEND_PikminExtinction` with demo46 playing; demo46's own key resets the flag to `GAMEEND_None` while demo46 still plays and the clock is still below the end hour (the Day 30 branch of `GameMovieInterface::parse`); `DayOverModeState` follows at once and sets the clock to 19:00; the bad ending runs (demo73 with the final results window, which A presses take through the scores, the parts list and the options save, up at least 4 s); the soft reset goes to `ONEPLAYER_GameExit` within 60 s of demo73. Throughout: demo47 (ExtDayEnd) never starts, the flag is set once, the day stays 30, `mEndingType` stays None. A build without the Day 30 test at NPG:3323 fails with `demo47 started`. At 30 Hz: flag t=35, reset t=93, demo73 t=97, GameExit t=517; at 60 Hz: 35, 150, 157, 966. Needs the stand-in demo73 and the results screens (`standin-cinema.md`). |
+| `ending_bad_day30` | Day 30 | The bad ending at the Day 30 sunset (T08, DY7). 24 required + 5 optional = 29 parts set with `getUfoParts` and `ship_parts`' stage-id guard (`scenario_endings_common.h`), Infinite Day off, the clock 60 open ticks before the end hour (the first-noon text on the way). Asserted, each within a bound in seconds: the day end at or after the end hour with `mEndingType` None; from the sunset tick on, exactly one text window, `TUT_BadEnding` (`tu_tx35`), closed before `DayOverModeState`; no game-over window on this path; demo73 with the final results window (built, then started by demo73's key); `PC_ACH_BAD_ENDING`; the soft reset to GameExit at least 4 s after demo73 and within 60 s, with the clock at the start hour (phase three). Day 30 throughout. Windows and texts are read through the scenario-only accessors in `newPikiGame.cpp` (`pc_scenario.h`). At 30 Hz: day end t=156, `DayOverModeState` t=204, demo73 t=206, GameExit t=625. |
+| `ending_neutral_day30` | Day 30 | The neutral ending (T09, DY7). As `ending_bad_day30` with 25 required + 4 optional = 29 parts: `ENDING_Neutral` from the sunset tick on, the same `TUT_BadEnding` text, `PC_ACH_NORMAL_ENDING`, demo77 (phase three) with the final results window started by its key, GameExit with `mEndingType` Neutral and the clock still at the end hour. At 30 Hz: demo77 t=207, GameExit t=623. |
+| `ending_happy`, `ending_happy_skip` | Day 12, Day 13 | The happy ending (T10, DY8). 29 parts, then `PlayerState::preloadHenkaMovie` (which queues demo26) and the 30th part, as a delivery does. demo26's `SpecialDayEnd` key sets `ENDING_Happy` and triggers the day end before the end hour; `_skip` presses START at movie frame 20, before the key, and the skip's replay must still send it. Also asserted: `PC_ACH_BEST_ENDING`; `PC_ACH_SPEED_DEMON` on Day 12 and not on Day 13; no pause menu from the START; no day advance; demo77 with the final results window; GameExit at least 4 s after demo77. At 30 Hz: `ENDING_Happy` t=54 (skip t=22), GameExit t=485 (skip t=443). |
+| `captain_death_day30` | Day 30 | The captain dies on the last day (T07). The `captain_death` hit; the game-over window starts once, in `MODE_NaviDown`, within 2 s of `GAMEEND_NaviDown` (MessageModeState's Starting state on Day 30) and before `DayOverModeState`; still set on the tick ForceDayEnd builds `DayOverModeState`, cleared by phase one; then the bad ending (demo73) and GameExit. Day 30 and `mEndingType` None throughout. At 30 Hz: window t=185, `DayOverModeState` t=338, GameExit t=757. |
+| `day_end_no_day_limit` | Day 29, object stage | The No Day Limit setting (T12, MD4), on through `pc_settings_scenario_set_no_day_advance`: `day_end_day29`'s chain keeps the day at 29 through phase two and the soft reset to MapSelect, with no ending text and no ending; achievements blocked. Prints (does not assert) the diary slots: the Day 29 entry lands in Day 28's slot (terminals.md T12). |
+| `challenge_day_end` | Day 1, object stage, challenge mode | The challenge-mode sunset (T17). `challengeMode()` true. The stage has no Onion in challenge mode (only `next` generators make owned Onions); two blue and one red Pikmin are spawned and killed by `exitDayEnd`; the day advances by one (as the code does); no diary entry; `DrawCMresult` (stand-in `cha_re`, `cha_rank`, `cha_best`) started with `GameStat::allPikis` (the stage's 3 sprouts) as the score, recorded as the course's best (rank 0); the soft reset to MapSelect. At 30 Hz: window t=64, MapSelect t=382. |
+| `challenge_captain_death`, `challenge_extinction` | Day 1, challenge mode | The challenge-mode captain death and extinction (T18): the game-over window once (`MODE_NaviDown` 0.5 s after the flag, cleared by ForceDayEnd; `MODE_Extinction` with the extinction flag), no demo47, `DayOverModeState`, the day +1, `DrawCMresult` with score 0 (no rank), MapSelect. At 30 Hz: MapSelect t=658 and t=412. |
 
 `throw_release` measures K at run time and never hard-codes it. On this tree both
 the stand-in sandbox and a real install give K = 15 at 30 Hz and 18 at 60 Hz
@@ -378,6 +404,7 @@ from `PcScenario` (`pc_scenario.h`):
 | `name()` | The `--scenario` argument. |
 | `startDay()` | Day the stage starts on. Default 1. Set before the stage is built, because `GameCoreSection`'s constructor consumes it. |
 | `supportsRate(int)` | Return false to skip a rate with exit 77. |
+| `challengeMode()` | Return true to start in challenge mode (see the forced conditions above). Default false. |
 | `onStageReady()` | Runs once, after the intro gate, before tick 0. Spawn objects here. |
 | `providePads(tick, pad0)` | Fills pad 0 for this tick, before the sim. Pads 1 to 3 are neutral. |
 | `onTick(tick)` | Runs after each tick's sim. Call `scenarioPass()`, or `scenarioFail()` / `scenarioFailf()` with expected and observed text. |
