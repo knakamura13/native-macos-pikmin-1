@@ -332,7 +332,9 @@ tree did not have, and what was written for it (`standin_ui.cpp` and
 Left missing on purpose, each a zero-length movie whose keys no chain step needs
 (allowlisted in `standin-open-allowlist.txt`): demo28 (the march-in, the
 sandbox stages' `DEMOID_DayEnd`; the disc's has one Notify key, FadeIn at 0),
-demo32 and demo56 (take-off), demo84 (red Onion flight) and demo69 (the bad
-ending's first movie; the disc's has Action keys only). demo74 (Olimin) is not
+demo32 and demo56 (take-off), demo84 (red Onion flight), demo85 and demo86 (the
+yellow and blue Onion flights, opened by `save_load` and `save_load_flags`, which
+set those container bits) and demo69 (the bad ending's first movie; the disc's
+has Action keys only). demo74 (Olimin) is not
 opened: `MoviePlayer::startMovie` returns before it when the stage has no red
 Onion.
