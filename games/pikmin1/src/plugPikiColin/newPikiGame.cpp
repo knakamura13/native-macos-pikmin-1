@@ -2,6 +2,9 @@
 #if defined(PIKI_PC_PORT)
 #include "pc_window.h"
 #endif
+#if PIKI_SCENARIOS
+#include "scenarios/pc_scenario.h"
+#endif
 
 #include "Controller.h"
 #include "DayMgr.h"
@@ -189,6 +192,20 @@ static bool sGamecoreLive = false;
 
 /// Text ("tutorial") pop-ups/overlays.
 static zen::ogScrTutorialMgr* tutorialWindow;
+
+#if PIKI_SCENARIOS
+// Read access for --scenario (pc_scenario.h); nothing here changes the game.
+static int sScenarioTextWindows = 0;
+static int sScenarioLastTextId  = -1;
+zen::DrawGameOver* pc_scenario_gameover_window(void) { return gameoverWindow; }
+zen::DrawFinalResult* pc_scenario_total_window(void) { return totalWindow; }
+zen::DrawCMresult* pc_scenario_challenge_window(void) { return challengeWindow; }
+int pc_scenario_text_windows_opened(int* lastTextId)
+{
+	if (lastTextId) *lastTextId = sScenarioLastTextId;
+	return sScenarioTextWindows;
+}
+#endif
 
 /// Whether or not to play the parts discovery jingle (when walking close to them for the first time).
 static bool hasDemoSound;
@@ -799,6 +816,10 @@ static void createTutorialWindow(int textID, int ufoPartID, bool hasAudio)
 
 	tutorialWindow = new zen::ogScrTutorialMgr;
 	tutorialWindow->start((zen::ogScrTutorialMgr::EnumTutorial)textID);
+#if PIKI_SCENARIOS
+	sScenarioTextWindows++;
+	sScenarioLastTextId = textID;
+#endif
 
 	// restore movie heap settings
 	gsys->getHeap(SYSHEAP_Movie)->setAllocType(oldMovieAlloc);
@@ -1470,21 +1491,22 @@ void RunningModeState::postRender(Graphics& gfx)
  * it reads back as mMemCardSaveIndex -1, and there is then nothing to erase:
  * a run that died before it was ever saved.
  */
-static void pcErasePermadeathSave()
+static bool pcErasePermadeathSave()
 {
 	CardQuickInfo infos[4];
 	gameflow.mMemoryCard.getQuickInfos(infos);
 	const u32 slot = gameflow.mPlayState.mSaveSlot;
 	if (slot >= 3) {
 		PRINT("permadeath: save slot %d is out of range, erased nothing\n", slot);
-		return;
+		return false;
 	}
 	if (infos[slot].mMemCardSaveIndex == -1) {
 		PRINT("permadeath: slot %d held no save, erased nothing\n", slot);
-		return;
+		return false;
 	}
 	PRINT("permadeath: erasing save slot %d\n", slot);
 	gameflow.mMemoryCard.delFile(infos[slot]);
+	return true;
 }
 #endif
 
@@ -1543,8 +1565,8 @@ ModeState* MessageModeState::update(u32& result)
 			// into tomorrow. GameExit is queued first so the section tears its
 			// heaps down the same way every other exit does.
 			if (pc_permadeath_active()) {
-				pcErasePermadeathSave();
-				pc_erased_notice_queue();
+				// The notice says the save is gone, so only queue it when one was.
+				if (pcErasePermadeathSave()) pc_erased_notice_queue();
 				// Back to file select rather than the day-end results that
 				// would carry this file into tomorrow. It is the same exit the
 				// pause menu's "return to last save" takes out of live
@@ -2783,6 +2805,9 @@ public:
 			PRINT("final setup!\n");
 			gamecore->finalSetup();
 			mIsInitialSetup = false;
+#if PIKI_SCENARIOS
+			if (pc_scenario_active()) pc_scenario_on_stage_ready();
+#endif
 		}
 		if (mNextModeState) {
 			// force a mode transition if we have one pending

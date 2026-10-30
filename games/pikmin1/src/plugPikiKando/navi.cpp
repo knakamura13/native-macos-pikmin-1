@@ -460,7 +460,12 @@ void Navi::startDamageEffect()
 	mDamageEfxC = ptclGenC;
 
 	int vibTypes[2] = { 0, 1 };
+#if defined(PIKI_PC_PORT)
+	// Camera-shake type is presentation, so the cosmetic stream.
+	f32 randIdx     = pc_cosmetic_randf(1.0f);
+#else
 	f32 randIdx     = gsys->getRand(1.0f);
+#endif
 	// int vib         = vibTypes[int(2.0f * randIdx * 0.9999999f)];
 #if defined(PIKI_PC_PORT)
 	// Daño propio: solo tiembla la cámara del Olimar golpeado.

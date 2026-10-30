@@ -153,11 +153,12 @@ else()
 endif()
 option(PIKMIN_BUILD_LAUNCHER "Build the standalone first-run launcher" ${PIKMIN_DESKTOP_DEFAULT})
 option(PIKMIN_BUILD_TESTS "Build the host-run test executables" ${PIKMIN_DESKTOP_DEFAULT})
+option(PIKMIN_BUILD_SCENARIOS "Build --scenario, the scripted gameplay scenario runner (see pc_port/scenarios)" OFF)
 option(NECTAR_BUILD_MAPMAKER "Build the VS map editor (tools/mapmaker)" ${PIKMIN_DESKTOP_DEFAULT})
 option(NECTAR_BUILD_MODELMAKER "Build the model maker (tools/modelmaker)" ${PIKMIN_DESKTOP_DEFAULT})
 option(NECTAR_ONLINE "Build the experimental direct online co-op layer" OFF)
 
-if(PIKMIN_BUILD_TESTS)
+if(PIKMIN_BUILD_TESTS OR PIKMIN_BUILD_SCENARIOS)
     enable_testing()
 endif()
 
@@ -176,6 +177,7 @@ add_compile_options("-ffile-prefix-map=${CMAKE_CURRENT_SOURCE_DIR}/=")
 
 add_compile_definitions(
     PIKI_PC_PORT=1
+    PIKI_SCENARIOS=$<BOOL:${PIKMIN_BUILD_SCENARIOS}>
     ${PIKMIN_GAME_VERSION}
     DTK_CONFIG_NONMATCHING=1
     PIKI_USE_GLES=$<BOOL:${PIKMIN_GLES}>
@@ -428,6 +430,39 @@ if (ANDROID)
 endif()
 if (PIKMIN_TOUCH)
     list(APPEND PC_PORT_SOURCES pc_port/touch/pc_touch.cpp)
+endif()
+if (PIKMIN_BUILD_SCENARIOS)
+    list(APPEND PC_PORT_SOURCES
+        pc_port/scenarios/pc_scenario.cpp
+        pc_port/scenarios/pc_scenario_list.cpp
+        pc_port/scenarios/scenario_boot_smoke.cpp
+        pc_port/scenarios/scenario_throw_release.cpp
+        pc_port/scenarios/scenario_day30_clock.cpp
+        pc_port/scenarios/scenario_sprout_landing.cpp
+        pc_port/scenarios/scenario_extinction.cpp
+        pc_port/scenarios/scenario_onion_skip.cpp
+        pc_port/scenarios/scenario_objects_smoke.cpp
+        pc_port/scenarios/scenario_container_menu.cpp
+        pc_port/scenarios/scenario_captain_death.cpp
+        pc_port/scenarios/scenario_ship_parts.cpp
+        pc_port/scenarios/scenario_captain_damage.cpp
+        pc_port/scenarios/scenario_onion_unlock.cpp
+        pc_port/scenarios/scenario_day_end.cpp
+        pc_port/scenarios/scenario_extinction_day30.cpp
+        pc_port/scenarios/scenario_handoff.cpp
+        pc_port/scenarios/scenario_coop.cpp
+        pc_port/scenarios/pc_scenario_note.cpp pc_port/scenarios/scenario_save_common.cpp pc_port/scenarios/scenario_save_load.cpp
+        pc_port/scenarios/scenario_results_exit.cpp pc_port/scenarios/scenario_pause_continue.cpp
+        pc_port/scenarios/scenario_permadeath.cpp pc_port/scenarios/scenario_card_errors.cpp
+        pc_port/scenarios/scenario_ending_day30.cpp
+        pc_port/scenarios/scenario_ending_happy.cpp
+        pc_port/scenarios/scenario_captain_death_day30.cpp
+        pc_port/scenarios/scenario_no_day_limit.cpp
+        pc_port/scenarios/scenario_challenge.cpp
+        pc_port/scenarios/scenario_onion_day3.cpp
+        pc_port/scenarios/scenario_tutorial_skip.cpp
+        pc_port/scenarios/scenario_tutorial_firsts.cpp
+        pc_port/scenarios/scenario_tutorial_day1.cpp)
 endif()
 
 include_directories(
@@ -784,6 +819,51 @@ if(PIKMIN_NETPLAY_BUILD)
             ${PC_NETPLAY_LIBM_NO_BUILTIN_FLAGS} -fno-lto -ffp-contract=off -ftrivial-auto-var-init=zero)
     endif()
     target_sources(${NECTAR_GAME} PRIVATE $<TARGET_OBJECTS:pc_netplay_libm_obj>)
+    # Apple: clang fuses a sinf and a cosf of the same value into one call to
+    # __sincosf_stret (sin/cos into __sincos_stret), which the software libm
+    # does not define, so without this the fused pairs still run Apple's libm.
+    # pc_scenario_sincos_apple.c routes both halves to the software sinf/cosf.
+    if(APPLE)
+        if(NOT TARGET pc_scenario_sincos_obj)
+            add_library(pc_scenario_sincos_obj OBJECT pc_port/scenarios/pc_scenario_sincos_apple.c)
+            target_compile_options(pc_scenario_sincos_obj PRIVATE -fno-builtin -fno-lto -ffp-contract=off)
+        endif()
+        target_sources(${NECTAR_GAME} PRIVATE $<TARGET_OBJECTS:pc_scenario_sincos_obj>)
+    endif()
+endif()
+
+# Scenario builds: the same float results on every platform, so a stand-in
+# state-hash log from Linux or Windows CI means the same as one from macOS
+# (tools/scenarios/README.md, "Cross-platform floats"). Without it, arm64
+# clang fuses multiply-adds (-ffp-contract defaults to on) and each OS's libm
+# rounds sinf/atan2f/... differently. -ffp-contract=off forbids the fusion and
+# the netplay build's software libm replaces the platform one. On Apple,
+# pc_scenario_sincos_apple.c also replaces __sincosf_stret/__sincos_stret,
+# which clang calls when it fuses a sin and a cos of the same value. Release
+# builds never set PIKMIN_BUILD_SCENARIOS, so their flags and libm are
+# unchanged. A netplay build already has all three.
+option(PIKMIN_SCENARIO_FLOAT_DET
+    "Scenario builds: no FMA contraction and the software libm (cross-platform identical floats)" ON)
+set(PIKMIN_SCENARIO_FLOAT_DET_ACTIVE OFF)
+if(PIKMIN_BUILD_SCENARIOS AND PIKMIN_SCENARIO_FLOAT_DET AND NOT PIKMIN_NETPLAY_BUILD
+        AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    set(PIKMIN_SCENARIO_FLOAT_DET_ACTIVE ON)
+    foreach(target IN LISTS PIKMIN_OPTIMIZED_TARGETS)
+        target_compile_options(${target} PRIVATE -ffp-contract=off)
+    endforeach()
+    if(NOT TARGET pc_netplay_libm_obj)
+        add_library(pc_netplay_libm_obj OBJECT pc_port/netplay/pc_netplay_libm.c)
+        target_compile_options(pc_netplay_libm_obj PRIVATE
+            ${PC_NETPLAY_LIBM_NO_BUILTIN_FLAGS} -fno-lto -ffp-contract=off)
+    endif()
+    set(PIKMIN_SCENARIO_LIBM_OBJECTS $<TARGET_OBJECTS:pc_netplay_libm_obj>)
+    if(APPLE)
+        add_library(pc_scenario_sincos_obj OBJECT pc_port/scenarios/pc_scenario_sincos_apple.c)
+        target_compile_options(pc_scenario_sincos_obj PRIVATE -fno-builtin -fno-lto -ffp-contract=off)
+        list(APPEND PIKMIN_SCENARIO_LIBM_OBJECTS $<TARGET_OBJECTS:pc_scenario_sincos_obj>)
+    endif()
+    target_sources(${NECTAR_GAME} PRIVATE ${PIKMIN_SCENARIO_LIBM_OBJECTS})
+    message(STATUS "Scenario float determinism: -ffp-contract=off and the software libm")
 endif()
 
 # Netplay lockstep session (third_party/NETPLAY_VENDOR.md). GekkoNet is its own
@@ -1324,6 +1404,201 @@ if(PIKMIN_BUILD_TESTS)
     target_compile_options(pc_permadeath_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
     add_test(NAME pc_permadeath_test COMMAND pc_permadeath_test)
 
+    # Stand-in asset writers (libs/nectar_assets), checked against the game's own
+    # loaders: Parameters::read and CmdStream are compiled in with a System::halt
+    # and sysCon stub (tests/game_loader_stubs.cpp) instead of linking the engine.
+    set(NECTAR_ASSETS_DIR ${NECTAR_LIBS_DIR}/nectar_assets)
+    add_executable(nectar_parms_writer_test
+        ${NECTAR_ASSETS_DIR}/tests/parms_writer_test.cpp
+        ${NECTAR_ASSETS_DIR}/tests/game_loader_stubs.cpp
+        ${NECTAR_ASSETS_DIR}/src/parms.cpp
+        src/plugPikiColin/parameters.cpp src/sysCommon/stream.cpp src/sysCommon/string.cpp)
+    target_include_directories(nectar_parms_writer_test PRIVATE pc_port include ${NECTAR_ASSETS_DIR}/include ${NECTAR_ASSETS_DIR}/src)
+    target_compile_options(nectar_parms_writer_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME nectar_parms_writer_test COMMAND nectar_parms_writer_test)
+
+    add_executable(nectar_archive_stages_writer_test
+        ${NECTAR_ASSETS_DIR}/tests/archive_stages_writer_test.cpp
+        ${NECTAR_ASSETS_DIR}/tests/game_loader_stubs.cpp
+        ${NECTAR_ASSETS_DIR}/src/archive.cpp
+        ${NECTAR_ASSETS_DIR}/src/stages_ini.cpp
+        src/sysCommon/cmdStream.cpp src/sysCommon/stream.cpp src/sysCommon/string.cpp)
+    target_include_directories(nectar_archive_stages_writer_test PRIVATE pc_port include ${NECTAR_ASSETS_DIR}/include ${NECTAR_ASSETS_DIR}/src)
+    target_compile_options(nectar_archive_stages_writer_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME nectar_archive_stages_writer_test COMMAND nectar_archive_stages_writer_test)
+
+    # .mod writer and the 45 stand-in models (#65). Oracle: nectar::parseMod
+    # (mod.cpp, compiled in with image.cpp), a raw chunk walk, and the game's real
+    # CmdStream over the collinfo text. BaseShape::read cannot link; boot_smoke
+    # covers it. The boot manifest argument is the cross-check from #64.
+    add_executable(nectar_mod_writer_test
+        ${NECTAR_ASSETS_DIR}/tests/mod_writer_test.cpp
+        ${NECTAR_ASSETS_DIR}/tests/game_loader_stubs.cpp
+        ${NECTAR_ASSETS_DIR}/src/mod_writer.cpp
+        ${NECTAR_ASSETS_DIR}/src/standin_models.cpp
+        ${NECTAR_ASSETS_DIR}/src/mod.cpp
+        ${NECTAR_ASSETS_DIR}/src/image.cpp
+        ${PC_PORT_DIR}/launcher/bti_decode.cpp
+        src/sysCommon/cmdStream.cpp src/sysCommon/stream.cpp src/sysCommon/string.cpp)
+    target_include_directories(nectar_mod_writer_test PRIVATE pc_port include ${NECTAR_ASSETS_DIR}/include ${NECTAR_ASSETS_DIR}/src
+        ${NECTAR_ASSETS_DIR}/third_party ${PC_PORT_DIR}/launcher ${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb)
+    target_compile_options(nectar_mod_writer_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME nectar_mod_writer_test COMMAND nectar_mod_writer_test ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/boot-manifest.txt)
+
+    # Texture (.bti/.txe) and bundle (.bun/.anm) writers and the stand-in textures.
+    # Header fields are read with the game's BtiHeader and RamStream; pixels with
+    # the launcher's BTI decoder (compiled in, with image.cpp).
+    add_executable(nectar_texture_bundle_writer_test
+        ${NECTAR_ASSETS_DIR}/tests/texture_bundle_writer_test.cpp
+        ${NECTAR_ASSETS_DIR}/src/texture.cpp
+        ${NECTAR_ASSETS_DIR}/src/bundle.cpp
+        ${NECTAR_ASSETS_DIR}/src/standin_textures.cpp
+        ${NECTAR_ASSETS_DIR}/src/mesh_mod.cpp
+        ${NECTAR_ASSETS_DIR}/src/mod.cpp
+        ${NECTAR_ASSETS_DIR}/src/image.cpp
+        ${PC_PORT_DIR}/launcher/bti_decode.cpp
+        src/sysCommon/stream.cpp src/sysCommon/string.cpp)
+    target_include_directories(nectar_texture_bundle_writer_test PRIVATE pc_port include ${NECTAR_ASSETS_DIR}/include ${NECTAR_ASSETS_DIR}/src
+        ${NECTAR_ASSETS_DIR}/third_party ${PC_PORT_DIR}/launcher ${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb)
+    target_compile_options(nectar_texture_bundle_writer_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME nectar_texture_bundle_writer_test COMMAND nectar_texture_bundle_writer_test)
+
+    # Screen layout (.blo) and particle (.pcr) writers and their stand-ins (#72).
+    # The .blo test drives the game's P2DStream and RamStream from a transcription
+    # of makeHiearachyPanes; the .pcr test checks the name list against effectMgr.cpp.
+    add_executable(nectar_blo_writer_test
+        ${NECTAR_ASSETS_DIR}/tests/blo_writer_test.cpp
+        ${NECTAR_ASSETS_DIR}/tests/game_loader_stubs.cpp
+        ${NECTAR_ASSETS_DIR}/src/blo.cpp
+        ${NECTAR_ASSETS_DIR}/src/pcr.cpp
+        ${NECTAR_ASSETS_DIR}/src/standin_ui.cpp
+        ${NECTAR_ASSETS_DIR}/src/standin_pcr_names.cpp
+        src/plugPikiYamashita/P2DStream.cpp src/sysCommon/stream.cpp src/sysCommon/string.cpp)
+    target_include_directories(nectar_blo_writer_test PRIVATE pc_port include ${NECTAR_ASSETS_DIR}/include ${NECTAR_ASSETS_DIR}/src)
+    target_compile_options(nectar_blo_writer_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME nectar_blo_writer_test COMMAND nectar_blo_writer_test)
+
+    add_executable(nectar_pcr_writer_test
+        ${NECTAR_ASSETS_DIR}/tests/pcr_writer_test.cpp
+        ${NECTAR_ASSETS_DIR}/src/pcr.cpp
+        ${NECTAR_ASSETS_DIR}/src/blo.cpp
+        ${NECTAR_ASSETS_DIR}/src/standin_ui.cpp
+        ${NECTAR_ASSETS_DIR}/src/standin_pcr_names.cpp
+        ${NECTAR_ASSETS_DIR}/src/bundle.cpp)
+    target_include_directories(nectar_pcr_writer_test PRIVATE ${NECTAR_ASSETS_DIR}/include ${NECTAR_ASSETS_DIR}/src)
+    target_compile_definitions(nectar_pcr_writer_test PRIVATE
+        NECTAR_EFFECT_MGR_CPP="${CMAKE_CURRENT_SOURCE_DIR}/src/plugPikiYamashita/effectMgr.cpp"
+        NECTAR_EFFECT_MGR2D_CPP="${CMAKE_CURRENT_SOURCE_DIR}/src/plugPikiYamashita/effectMgr2D.cpp")
+    target_compile_options(nectar_pcr_writer_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME nectar_pcr_writer_test COMMAND nectar_pcr_writer_test)
+
+    # Cutscene (.cin/.dsk) writers and the stand-in cinemas. The real CmdStream
+    # reads them back; loadCin and SceneData::parse cannot link, so their token
+    # loops are transcribed in the test. The boot manifest argument checks that
+    # every cinema path the disc boot opens is a stand-in.
+    add_executable(nectar_cinema_writer_test
+        ${NECTAR_ASSETS_DIR}/tests/cinema_writer_test.cpp
+        ${NECTAR_ASSETS_DIR}/tests/game_loader_stubs.cpp
+        ${NECTAR_ASSETS_DIR}/src/cinema.cpp
+        ${NECTAR_ASSETS_DIR}/src/standin_cinema.cpp
+        src/sysCommon/cmdStream.cpp src/sysCommon/stream.cpp src/sysCommon/string.cpp)
+    target_include_directories(nectar_cinema_writer_test PRIVATE pc_port include ${NECTAR_ASSETS_DIR}/include ${NECTAR_ASSETS_DIR}/src)
+    target_compile_options(nectar_cinema_writer_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME nectar_cinema_writer_test COMMAND nectar_cinema_writer_test ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/boot-manifest.txt)
+
+    # DCA/DCK payload and AnimMgr table writers, and the stand-in animations (#66).
+    # Parameters::read and the game's Stream/DataChunk/AnimKey types read the bytes
+    # back; AnimDck::read, AnimInfo::doread and AnimMgr::read cannot link, so their
+    # loops are transcribed in the test. The rig cross-check reads the #65 stand-in
+    # models, hence the mod writer. The boot manifest argument is the #64 cross-check.
+    add_executable(nectar_anim_writer_test
+        ${NECTAR_ASSETS_DIR}/tests/anim_writer_test.cpp
+        ${NECTAR_ASSETS_DIR}/tests/game_loader_stubs.cpp
+        ${NECTAR_ASSETS_DIR}/src/anim.cpp
+        ${NECTAR_ASSETS_DIR}/src/standin_anims.cpp
+        ${NECTAR_ASSETS_DIR}/src/parms.cpp
+        ${NECTAR_ASSETS_DIR}/src/bundle.cpp
+        ${NECTAR_ASSETS_DIR}/src/mod_writer.cpp
+        ${NECTAR_ASSETS_DIR}/src/standin_models.cpp
+        ${NECTAR_ASSETS_DIR}/src/mod.cpp
+        ${NECTAR_ASSETS_DIR}/src/image.cpp
+        ${PC_PORT_DIR}/launcher/bti_decode.cpp
+        src/plugPikiColin/parameters.cpp src/sysCommon/stream.cpp src/sysCommon/string.cpp)
+    target_include_directories(nectar_anim_writer_test PRIVATE pc_port include ${NECTAR_ASSETS_DIR}/include ${NECTAR_ASSETS_DIR}/src
+        ${NECTAR_ASSETS_DIR}/third_party ${PC_PORT_DIR}/launcher ${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb)
+    target_compile_options(nectar_anim_writer_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME nectar_anim_writer_test COMMAND nectar_anim_writer_test ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/boot-manifest.txt)
+
+    # JAudio sequence archive writer and the stand-in SndData (standin-audio.md).
+    # The layout input is the game's own BARC table (src/jaudio/pikiseq.c); the
+    # port's PCSequenceArchive reads the .arc back and PCJamPlayer runs it.
+    add_executable(nectar_audio_writer_test
+        ${NECTAR_ASSETS_DIR}/tests/audio_writer_test.cpp
+        ${NECTAR_ASSETS_DIR}/src/audio_seq.cpp
+        ${NECTAR_ASSETS_DIR}/src/standin_audio.cpp
+        pc_port/audio/pc_jam.cpp
+        pc_port/audio/pc_instrument_bank.cpp
+        pc_port/audio/pc_sequence_archive.cpp
+        pc_port/audio/pc_wave_bank.cpp
+        src/jaudio/pikiseq.c)
+    target_include_directories(nectar_audio_writer_test PRIVATE pc_port include ${NECTAR_ASSETS_DIR}/include ${NECTAR_ASSETS_DIR}/src)
+    target_compile_options(nectar_audio_writer_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME nectar_audio_writer_test COMMAND nectar_audio_writer_test)
+
+    # The scenario sandbox's gate (#68): item generator and platform .mod writers
+    # and the gate files. The game's Stream and Parameters::read read the
+    # generator back in Generator::read's order; parseGen/parseMod and the game's
+    # CmdStream cover the rest.
+    add_executable(nectar_sandbox_writer_test
+        ${NECTAR_ASSETS_DIR}/tests/sandbox_writer_test.cpp
+        ${NECTAR_ASSETS_DIR}/tests/game_loader_stubs.cpp
+        ${NECTAR_ASSETS_DIR}/src/gen.cpp
+        ${NECTAR_ASSETS_DIR}/src/gen_item_writer.cpp
+        ${NECTAR_ASSETS_DIR}/src/mod_writer.cpp
+        ${NECTAR_ASSETS_DIR}/src/mod_platform_writer.cpp
+        ${NECTAR_ASSETS_DIR}/src/standin_sandbox.cpp
+        ${NECTAR_ASSETS_DIR}/src/anim.cpp
+        ${NECTAR_ASSETS_DIR}/src/parms.cpp
+        ${NECTAR_ASSETS_DIR}/src/bundle.cpp
+        ${NECTAR_ASSETS_DIR}/src/mod.cpp
+        ${NECTAR_ASSETS_DIR}/src/image.cpp
+        ${PC_PORT_DIR}/launcher/bti_decode.cpp
+        src/plugPikiColin/parameters.cpp src/sysCommon/cmdStream.cpp src/sysCommon/stream.cpp src/sysCommon/string.cpp)
+    target_include_directories(nectar_sandbox_writer_test PRIVATE pc_port include ${NECTAR_ASSETS_DIR}/include ${NECTAR_ASSETS_DIR}/src
+        ${NECTAR_ASSETS_DIR}/third_party ${PC_PORT_DIR}/launcher ${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb)
+    target_compile_options(nectar_sandbox_writer_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME nectar_sandbox_writer_test COMMAND nectar_sandbox_writer_test)
+
+    # Object stand-ins (standin_objects.h): the other AnimMgrs' tables and bundles,
+    # the extra models, the pellet tables and the .gen item and creature
+    # generators. Same oracles as the anim and mod tests (the game's Parameters,
+    # RamStream, CmdStream and animation types), plus the boot manifest cross-check.
+    add_executable(nectar_standin_objects_test
+        ${NECTAR_ASSETS_DIR}/tests/standin_objects_test.cpp
+        ${NECTAR_ASSETS_DIR}/tests/game_loader_stubs.cpp
+        ${NECTAR_ASSETS_DIR}/src/anim.cpp
+        ${NECTAR_ASSETS_DIR}/src/standin_anims.cpp
+        ${NECTAR_ASSETS_DIR}/src/standin_objects.cpp
+        ${NECTAR_ASSETS_DIR}/src/standin_object_profiles.cpp
+        ${NECTAR_ASSETS_DIR}/src/standin_world.cpp
+        ${NECTAR_ASSETS_DIR}/src/standin_world_data.cpp
+        ${NECTAR_ASSETS_DIR}/src/standin_sandbox.cpp
+        ${NECTAR_ASSETS_DIR}/src/gen_item_writer.cpp
+        ${NECTAR_ASSETS_DIR}/src/mod_platform_writer.cpp
+        ${NECTAR_ASSETS_DIR}/src/gen.cpp
+        ${NECTAR_ASSETS_DIR}/src/parms.cpp
+        ${NECTAR_ASSETS_DIR}/src/bundle.cpp
+        ${NECTAR_ASSETS_DIR}/src/mod_writer.cpp
+        ${NECTAR_ASSETS_DIR}/src/standin_models.cpp
+        ${NECTAR_ASSETS_DIR}/src/mod.cpp
+        ${NECTAR_ASSETS_DIR}/src/image.cpp
+        ${PC_PORT_DIR}/launcher/bti_decode.cpp
+        src/plugPikiColin/parameters.cpp src/sysCommon/cmdStream.cpp src/sysCommon/stream.cpp src/sysCommon/string.cpp)
+    target_include_directories(nectar_standin_objects_test PRIVATE pc_port include ${NECTAR_ASSETS_DIR}/include ${NECTAR_ASSETS_DIR}/src
+        ${NECTAR_ASSETS_DIR}/third_party ${PC_PORT_DIR}/launcher ${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb)
+    target_compile_options(nectar_standin_objects_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME nectar_standin_objects_test COMMAND nectar_standin_objects_test ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/boot-manifest.txt)
+
     # Photo mode camera convention (no stage needed)
     add_executable(pc_photo_mode_test pc_port/pc_photo_mode_test.cpp pc_port/pc_photo_mode.cpp)
     target_include_directories(pc_photo_mode_test PRIVATE ${SDL2_INCLUDE_DIRS} pc_port)
@@ -1730,4 +2005,390 @@ endif()
 # VRM u OBJ. Comparte con el editor de mapas la ImGui, OpenGL y nectar_assets.
 if (NECTAR_BUILD_MODELMAKER AND NOT ANDROID)
     add_subdirectory("${NECTAR_LIBS_DIR}/../tools/modelmaker" "${CMAKE_CURRENT_BINARY_DIR}/modelmaker")
+endif()
+
+# Scenario tests (see pc_port/scenarios and issue #59). Each runs
+# `nectar --scenario <name>` at 30 and, where the scenario depends on the tick
+# rate, 60 ticks per second (tools/scenarios/README.md, "Tick rates"). These are disc-mode
+# tests: PIKMIN_SCENARIO_DATA_DIR names a directory holding assets/ (a real
+# install). Unset or without assets/dataDir/parms/gamePrms.bin the binary exits
+# 77 and CTest reports a skip. The stand-in fixtures (no disc) are #68.
+if(PIKMIN_BUILD_SCENARIOS)
+    set(PIKMIN_SCENARIO_SCRATCH "${CMAKE_CURRENT_BINARY_DIR}/scenario-scratch")
+    file(MAKE_DIRECTORY "${PIKMIN_SCENARIO_SCRATCH}")
+    foreach(scenario boot_smoke throw_release day30_clock)
+        foreach(rate 30 60)
+            add_test(NAME scenario_${scenario}_${rate}_disc
+                COMMAND ${NECTAR_GAME} --scenario ${scenario} --scenario-tick-rate ${rate})
+            set_tests_properties(scenario_${scenario}_${rate}_disc PROPERTIES
+                WORKING_DIRECTORY "${PIKMIN_SCENARIO_SCRATCH}"
+                TIMEOUT 600
+                SKIP_RETURN_CODE 77
+                LABELS "game-assets")
+        endforeach()
+    endforeach()
+    # onion_day3 on a real install: Day 2 on Forest of Hope (the runner's default
+    # stage) with the real discovery trigger, movies and world map, then Day 3
+    # (scenario_onion_day3.cpp). The same scenarios run on the stand-in tree below.
+    foreach(scenario onion_day3 onion_day3_whistle onion_day3_hidetext onion_day3_reload onion_day3_unplucked onion_day3_skip)
+        foreach(rate 30 60)
+            add_test(NAME scenario_${scenario}_${rate}_disc
+                COMMAND ${NECTAR_GAME} --scenario ${scenario} --scenario-tick-rate ${rate})
+            set_tests_properties(scenario_${scenario}_${rate}_disc PROPERTIES
+                WORKING_DIRECTORY "${PIKMIN_SCENARIO_SCRATCH}"
+                TIMEOUT 600
+                SKIP_RETURN_CODE 77
+                LABELS "game-assets")
+        endforeach()
+    endforeach()
+
+    # Stand-in mode (#68): no disc. nectar_standin_generator writes the stand-in
+    # tree (every libs/nectar_assets writer, plus the sandbox stage) into
+    # <build>/scenario-data/assets/dataDir as a FIXTURES_SETUP test, so
+    # `ctest -R scenario_boot_smoke_30` builds the tree first. These carry no
+    # game-assets label and no SKIP_RETURN_CODE: a missing or broken tree fails.
+    # A separate executable, so release packaging (explicit targets) never ships it.
+    if(NOT TARGET nectar_mapcore)
+        add_subdirectory("${NECTAR_LIBS_DIR}/nectar_mapcore" "${CMAKE_CURRENT_BINARY_DIR}/nectar_mapcore")
+    endif()
+    # src/jaudio/pikiseq.c is the game's BARC table for SndData/Seqs/pikiseq.arc
+    # (data only), compiled with this build's PIKMIN_GAME_VERSION so the
+    # stand-in .arc matches the executable's layout (standin-audio.md).
+    add_executable(nectar_standin_generator tools/scenarios/standin_generator.cpp tools/scenarios/standin_objects_stage.cpp tools/scenarios/standin_all_objects_stage.cpp tools/scenarios/standin_practice_stage.cpp src/jaudio/pikiseq.c)
+    # Source-level include path (every target here already has include/), so
+    # the generator's own empty include list stays free of the game headers.
+    set_source_files_properties(src/jaudio/pikiseq.c
+        PROPERTIES INCLUDE_DIRECTORIES "${CMAKE_CURRENT_SOURCE_DIR}/include")
+    target_link_libraries(nectar_standin_generator PRIVATE nectar_mapcore nectar_assets)
+    # The generator writes the object stages' .mod geometry with float maths
+    # (nectar_assets, nectar_mapcore), so it gets the same treatment: without
+    # it the arm64 build writes different sandbox_objects.mod and
+    # sandbox_all_objects.mod bytes than x86-64.
+    if(PIKMIN_SCENARIO_FLOAT_DET_ACTIVE)
+        foreach(target nectar_standin_generator nectar_mapcore nectar_assets)
+            target_compile_options(${target} PRIVATE -ffp-contract=off)
+        endforeach()
+        target_sources(nectar_standin_generator PRIVATE ${PIKMIN_SCENARIO_LIBM_OBJECTS})
+    endif()
+    set_property(TARGET nectar_standin_generator PROPERTY INCLUDE_DIRECTORIES "")
+    target_include_directories(nectar_standin_generator PRIVATE
+        ${NECTAR_LIBS_DIR}/nectar_assets/include ${NECTAR_LIBS_DIR}/nectar_mapcore/include)
+
+    set(PIKMIN_STANDIN_DATA "${CMAKE_BINARY_DIR}/scenario-data")
+    file(MAKE_DIRECTORY "${PIKMIN_STANDIN_DATA}")
+    add_test(NAME scenario_standin_generate
+        COMMAND nectar_standin_generator "${PIKMIN_STANDIN_DATA}"
+            --manifest "${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/boot-manifest.txt")
+    set_tests_properties(scenario_standin_generate PROPERTIES
+        FIXTURES_SETUP scenario_standin_tree
+        TIMEOUT 120)
+    file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/scenario-logs")
+    foreach(scenario boot_smoke throw_release day30_clock extinction captain_death ship_parts captain_damage extinction_day30)
+        foreach(rate 30 60)
+            add_test(NAME scenario_${scenario}_${rate}
+                COMMAND ${CMAKE_COMMAND}
+                    -DGAME=$<TARGET_FILE:${NECTAR_GAME}>
+                    -DSCENARIO=${scenario} -DRATE=${rate}
+                    -DALLOWLIST=${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/standin-open-allowlist.txt
+                    -DLOG_DIR=${CMAKE_CURRENT_BINARY_DIR}/scenario-logs
+                    -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/run_standin_scenario.cmake)
+            set_tests_properties(scenario_${scenario}_${rate} PROPERTIES
+                FIXTURES_REQUIRED scenario_standin_tree
+                WORKING_DIRECTORY "${PIKMIN_STANDIN_DATA}"
+                ENVIRONMENT "PIKMIN_SCENARIO_DATA_DIR=${PIKMIN_STANDIN_DATA};PIKMIN_SCENARIO_STAGE=stages/sandbox.ini"
+                TIMEOUT 600)
+        endforeach()
+    endforeach()
+
+    # Scenarios that run on the opt-in object stage (stages/sandbox_objects.ini,
+    # tools/scenarios/standin_objects_stage.h): Onion, cliff, sprouts, pellet and
+    # an enemy, all stand-ins. No disc entry: the stage does not exist on a real
+    # install.
+    # day_end_day29 runs at 30 Hz only (tools/scenarios/README.md, "Tick rates").
+    foreach(scenario sprout_landing onion_skip container_menu
+            day_end day_end_day29)
+        foreach(rate 30 60)
+            if(scenario STREQUAL "day_end_day29" AND rate EQUAL 60)
+                continue()
+            endif()
+            add_test(NAME scenario_${scenario}_${rate}
+                COMMAND ${CMAKE_COMMAND}
+                    -DGAME=$<TARGET_FILE:${NECTAR_GAME}>
+                    -DSCENARIO=${scenario} -DRATE=${rate}
+                    -DALLOWLIST=${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/standin-open-allowlist.txt
+                    -DLOG_DIR=${CMAKE_CURRENT_BINARY_DIR}/scenario-logs
+                    -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/run_standin_scenario.cmake)
+            set_tests_properties(scenario_${scenario}_${rate} PROPERTIES
+                FIXTURES_REQUIRED scenario_standin_tree
+                WORKING_DIRECTORY "${PIKMIN_STANDIN_DATA}"
+                ENVIRONMENT "PIKMIN_SCENARIO_DATA_DIR=${PIKMIN_STANDIN_DATA};PIKMIN_SCENARIO_STAGE=stages/sandbox_objects.ini"
+                TIMEOUT 600)
+        endforeach()
+    endforeach()
+
+    # First-pluck unlocks on the object stage, by hand and by Whistle Pluck
+    # (scenario_onion_unlock.cpp). 30 and 60: the walk, the pluck approach and
+    # the whistle circle run on frame-time arithmetic (README "Tick rates").
+    foreach(scenario onion_unlock onion_unlock_whistle)
+        foreach(rate 30 60)
+            add_test(NAME scenario_${scenario}_${rate}
+                COMMAND ${CMAKE_COMMAND}
+                    -DGAME=$<TARGET_FILE:${NECTAR_GAME}>
+                    -DSCENARIO=${scenario} -DRATE=${rate}
+                    -DALLOWLIST=${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/standin-open-allowlist.txt
+                    -DLOG_DIR=${CMAKE_CURRENT_BINARY_DIR}/scenario-logs
+                    -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/run_standin_scenario.cmake)
+            set_tests_properties(scenario_${scenario}_${rate} PROPERTIES
+                FIXTURES_REQUIRED scenario_standin_tree
+                WORKING_DIRECTORY "${PIKMIN_STANDIN_DATA}"
+                ENVIRONMENT "PIKMIN_SCENARIO_DATA_DIR=${PIKMIN_STANDIN_DATA};PIKMIN_SCENARIO_STAGE=stages/sandbox_objects.ini"
+                TIMEOUT 600)
+        endforeach()
+    endforeach()
+
+    # Day 2 to Day 3 through a real day end and a second stage load, on the Onion
+    # stage (stages/sandbox_onions.ini, tools/scenarios/standin_objects_stage.h):
+    # the yellow Onion unlocked on Day 2 is born, booted and listed on Day 3
+    # (scenario_onion_day3.cpp). 30 and 60: the pluck walk and the boot motion run
+    # on frame-time arithmetic (README "Tick rates").
+    foreach(scenario onion_day3 onion_day3_whistle onion_day3_hidetext onion_day3_reload onion_day3_unplucked onion_day3_skip)
+        foreach(rate 30 60)
+            add_test(NAME scenario_${scenario}_${rate}
+                COMMAND ${CMAKE_COMMAND}
+                    -DGAME=$<TARGET_FILE:${NECTAR_GAME}>
+                    -DSCENARIO=${scenario} -DRATE=${rate}
+                    -DALLOWLIST=${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/standin-open-allowlist.txt
+                    -DLOG_DIR=${CMAKE_CURRENT_BINARY_DIR}/scenario-logs
+                    -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/run_standin_scenario.cmake)
+            set_tests_properties(scenario_${scenario}_${rate} PROPERTIES
+                FIXTURES_REQUIRED scenario_standin_tree
+                WORKING_DIRECTORY "${PIKMIN_STANDIN_DATA}"
+                ENVIRONMENT "PIKMIN_SCENARIO_DATA_DIR=${PIKMIN_STANDIN_DATA};PIKMIN_SCENARIO_STAGE=stages/sandbox_onions.ini"
+                TIMEOUT 600)
+        endforeach()
+    endforeach()
+
+    # The every-object stage (stages/sandbox_all_objects.ini,
+    # tools/scenarios/standin_all_objects_stage.h): the soft gate, plants, bridges,
+    # a push box, bosses and enemies, one of each. A boot-smoke run proves each
+    # model, platform, animation table and parameter file loads. No disc entry.
+    # 30 Hz only: what it checks (loading, the enemies born) does not depend on
+    # the tick rate (tools/scenarios/README.md, "Tick rates").
+    foreach(scenario objects_smoke)
+        foreach(rate 30)
+            add_test(NAME scenario_${scenario}_${rate}
+                COMMAND ${CMAKE_COMMAND}
+                    -DGAME=$<TARGET_FILE:${NECTAR_GAME}>
+                    -DSCENARIO=${scenario} -DRATE=${rate}
+                    -DALLOWLIST=${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/standin-open-allowlist.txt
+                    -DLOG_DIR=${CMAKE_CURRENT_BINARY_DIR}/scenario-logs
+                    -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/run_standin_scenario.cmake)
+            set_tests_properties(scenario_${scenario}_${rate} PROPERTIES
+                FIXTURES_REQUIRED scenario_standin_tree
+                WORKING_DIRECTORY "${PIKMIN_STANDIN_DATA}"
+                ENVIRONMENT "PIKMIN_SCENARIO_DATA_DIR=${PIKMIN_STANDIN_DATA};PIKMIN_SCENARIO_STAGE=stages/sandbox_all_objects.ini"
+                TIMEOUT 600)
+        endforeach()
+    endforeach()
+
+    # Save, load, the results and pause exits, Permadeath and the memory-card
+    # errors (scenario_save_load.cpp and the files beside it; coverage/terminals.md
+    # T13-T15, T20, T21). Each entry is name:stage:rates (tools/scenarios/README.md,
+    # "Tick rates").
+    foreach(entry save_load:sandbox_objects:30,60 save_load_flags:sandbox_objects:30,60
+            results_nosave_map:sandbox_objects:30 results_nosave_cardselect:sandbox_objects:30
+            card_errors:sandbox_objects:30 card_errors_saved:sandbox_objects:30 pause_continue:sandbox:30,60
+            permadeath_erase:sandbox:30,60 permadeath_unsaved:sandbox:30 permadeath_bad_slot:sandbox:30 permadeath_off:sandbox:30
+            # Endings, the last day, No Day Limit and challenge mode (terminals.md T07-T10,
+            # T12, T17, T18): bounds in seconds, movies and windows advance per tick.
+            ending_bad_day30:sandbox:30,60 ending_neutral_day30:sandbox:30,60 ending_happy:sandbox:30,60
+            ending_happy_skip:sandbox:30,60 captain_death_day30:sandbox:30,60
+            challenge_captain_death:sandbox:30,60 challenge_extinction:sandbox:30,60
+            day_end_no_day_limit:sandbox_objects:30,60 challenge_day_end:sandbox_objects:30,60
+            # The tutorial stand-in stage (stages/practice.ini, stage id Practice at index 0,
+            # tools/scenarios/standin_practice_stage.h): the tutorial-only milestones.
+            tutorial_skip:practice:30,60 tutorial_firsts:practice:30,60 tutorial_day1:practice:30,60)
+        string(REPLACE ":" ";" parts "${entry}")
+        list(GET parts 0 scenario)
+        list(GET parts 1 stage)
+        list(GET parts 2 rates)
+        string(REPLACE "," ";" rates "${rates}")
+        foreach(rate IN LISTS rates)
+            add_test(NAME scenario_${scenario}_${rate}
+                COMMAND ${CMAKE_COMMAND}
+                    -DGAME=$<TARGET_FILE:${NECTAR_GAME}>
+                    -DSCENARIO=${scenario} -DRATE=${rate}
+                    -DALLOWLIST=${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/standin-open-allowlist.txt
+                    -DLOG_DIR=${CMAKE_CURRENT_BINARY_DIR}/scenario-logs
+                    -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/run_standin_scenario.cmake)
+            set_tests_properties(scenario_${scenario}_${rate} PROPERTIES
+                FIXTURES_REQUIRED scenario_standin_tree
+                WORKING_DIRECTORY "${PIKMIN_STANDIN_DATA}"
+                ENVIRONMENT "PIKMIN_SCENARIO_DATA_DIR=${PIKMIN_STANDIN_DATA};PIKMIN_SCENARIO_STAGE=stages/${stage}.ini"
+                TIMEOUT 600)
+        endforeach()
+    endforeach()
+
+    # Runner self-tests on the stand-in tree: the scratch save directory and the
+    # exit codes of the negative paths (pc_scenario.h). Each asserts its code in
+    # a cmake -P wrapper, so a pass means exactly that code.
+    set(PIKMIN_STANDIN_ENV "PIKMIN_SCENARIO_DATA_DIR=${PIKMIN_STANDIN_DATA};PIKMIN_SCENARIO_STAGE=stages/sandbox.ini")
+    # The Permadeath erase writes, deletes and rewrites files: nothing outside its
+    # scratch save directory may change (check_scenario_save_dir.cmake).
+    add_test(NAME scenario_save_dir_permadeath_erase
+        COMMAND ${CMAKE_COMMAND}
+            -DGAME=$<TARGET_FILE:${NECTAR_GAME}> -DSCENARIO=permadeath_erase
+            -DCWD_DIR=${CMAKE_CURRENT_BINARY_DIR}/scenario-save-dir-permadeath-cwd
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/check_scenario_save_dir.cmake)
+    set_tests_properties(scenario_save_dir_permadeath_erase PROPERTIES
+        FIXTURES_REQUIRED scenario_standin_tree
+        ENVIRONMENT "${PIKMIN_STANDIN_ENV}"
+        TIMEOUT 600)
+    add_test(NAME scenario_save_dir
+        COMMAND ${CMAKE_COMMAND}
+            -DGAME=$<TARGET_FILE:${NECTAR_GAME}>
+            -DCWD_DIR=${CMAKE_CURRENT_BINARY_DIR}/scenario-save-dir-cwd
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/check_scenario_save_dir.cmake)
+    set_tests_properties(scenario_save_dir PROPERTIES
+        FIXTURES_REQUIRED scenario_standin_tree
+        ENVIRONMENT "${PIKMIN_STANDIN_ENV}"
+        TIMEOUT 600)
+    # exit(0) before a verdict (System::halt, PPCHalt) must read as a failure.
+    add_test(NAME scenario_exit_atexit_fail
+        COMMAND ${CMAKE_COMMAND} -DGAME=$<TARGET_FILE:${NECTAR_GAME}> -DSCENARIO=exit_zero -DEXPECT=1
+            "-DEXPECT_OUTPUT=intro done after" "-DFORBID_OUTPUT=\\[scenario\\] (PASS|FAIL)"
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/check_scenario_exit.cmake)
+    # SDL_Init fails with an unknown video driver: no window, exit 4.
+    add_test(NAME scenario_exit_no_gl
+        COMMAND ${CMAKE_COMMAND} -DGAME=$<TARGET_FILE:${NECTAR_GAME}> -DSCENARIO=boot_smoke -DEXPECT=4
+            "-DEXPECT_OUTPUT=Could not initialize window"
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/check_scenario_exit.cmake)
+    # The usage list leaves out test-only scenarios.
+    add_test(NAME scenario_exit_unknown
+        COMMAND ${CMAKE_COMMAND} -DGAME=$<TARGET_FILE:${NECTAR_GAME}> -DSCENARIO=no_such_scenario -DEXPECT=2
+            "-DEXPECT_OUTPUT=scenarios: boot_smoke" "-DFORBID_OUTPUT=exit_zero"
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/check_scenario_exit.cmake)
+    add_test(NAME scenario_exit_no_data
+        COMMAND ${CMAKE_COMMAND} -DGAME=$<TARGET_FILE:${NECTAR_GAME}> -DSCENARIO=boot_smoke -DEXPECT=77
+            -DUNSET_ENV=PIKMIN_SCENARIO_DATA_DIR "-DEXPECT_OUTPUT=PIKMIN_SCENARIO_DATA_DIR is not set"
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/check_scenario_exit.cmake)
+    set_tests_properties(scenario_exit_atexit_fail scenario_exit_no_gl PROPERTIES
+        FIXTURES_REQUIRED scenario_standin_tree TIMEOUT 600)
+    set_tests_properties(scenario_exit_atexit_fail scenario_exit_unknown scenario_exit_no_data PROPERTIES
+        ENVIRONMENT "${PIKMIN_STANDIN_ENV}")
+    set_tests_properties(scenario_exit_no_gl PROPERTIES
+        ENVIRONMENT "${PIKMIN_STANDIN_ENV};SDL_VIDEODRIVER=bogus")
+    # GameStat invariant checker (pc_scenario.cpp, checkGameStatInvariants): the
+    # test-only scenario raises a counter with no Pikmin behind it; the runner must
+    # report the failure (exit 1, a [scenario] FAIL line naming the invariant).
+    add_test(NAME scenario_gamestat_invariant_fail
+        COMMAND ${CMAKE_COMMAND} -DGAME=$<TARGET_FILE:${NECTAR_GAME}> -DSCENARIO=gamestat_corrupt -DEXPECT=1
+            "-DEXPECT_OUTPUT=FAIL gamestat_corrupt tick 5: expected formation \\+ free \\+ work equals the live Pikmin"
+            "-DFORBID_OUTPUT=\\[scenario\\] PASS"
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/check_scenario_exit.cmake)
+    set_tests_properties(scenario_gamestat_invariant_fail PROPERTIES
+        FIXTURES_REQUIRED scenario_standin_tree
+        ENVIRONMENT "${PIKMIN_STANDIN_ENV}"
+        TIMEOUT 600)
+
+    # Replay determinism (EC-60): two runs, identical per-tick state hash logs.
+    file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/scenario-determinism")
+    foreach(scenario boot_smoke throw_release day30_clock)
+        foreach(rate 30 60)
+            add_test(NAME scenario_determinism_${scenario}_${rate}
+                COMMAND ${CMAKE_COMMAND}
+                    -DGAME=$<TARGET_FILE:${NECTAR_GAME}>
+                    -DSCENARIO=${scenario} -DRATE=${rate}
+                    -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/scenario-determinism
+                    -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/check_scenario_determinism.cmake)
+            set_tests_properties(scenario_determinism_${scenario}_${rate} PROPERTIES
+                FIXTURES_REQUIRED scenario_standin_tree
+                WORKING_DIRECTORY "${PIKMIN_STANDIN_DATA}"
+                ENVIRONMENT "${PIKMIN_STANDIN_ENV}"
+                TIMEOUT 1200)
+        endforeach()
+    endforeach()
+    # Negative control: the second run boots the other stand-in stage, so its
+    # state differs and the logs must differ; this test passes only if the
+    # comparison sees that. (The RNG preroll variable is cleared by the runner.)
+    add_test(NAME scenario_determinism_negative_boot_smoke_30
+        COMMAND ${CMAKE_COMMAND}
+            -DGAME=$<TARGET_FILE:${NECTAR_GAME}>
+            -DSCENARIO=boot_smoke -DRATE=30
+            -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/scenario-determinism-negative
+            -DSECOND_ENV=PIKMIN_SCENARIO_STAGE=stages/sandbox_objects.ini -DEXPECT_DIFFER=1
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/check_scenario_determinism.cmake)
+    set_tests_properties(scenario_determinism_negative_boot_smoke_30 PROPERTIES
+        FIXTURES_REQUIRED scenario_standin_tree
+        WORKING_DIRECTORY "${PIKMIN_STANDIN_DATA}"
+        ENVIRONMENT "${PIKMIN_STANDIN_ENV}"
+        TIMEOUT 1200)
+
+    # Hand-off (issue #76) and co-op scenarios (tools/scenarios/README.md).
+    # first_yellow's scripted part, headless: its hand-off point is a pass.
+    # coop_smoke and coop_look: two captains in split screen on the sandbox.
+    set(PIKMIN_STANDIN_OBJECTS_ENV "PIKMIN_SCENARIO_DATA_DIR=${PIKMIN_STANDIN_DATA};PIKMIN_SCENARIO_STAGE=stages/sandbox_objects.ini")
+    foreach(entry first_yellow:30:objects first_yellow:60:objects coop_smoke:30:sandbox coop_smoke:60:sandbox coop_look:30:sandbox)
+        string(REPLACE ":" ";" parts "${entry}")
+        list(GET parts 0 scenario)
+        list(GET parts 1 rate)
+        list(GET parts 2 stage)
+        add_test(NAME scenario_${scenario}_${rate}
+            COMMAND ${CMAKE_COMMAND}
+                -DGAME=$<TARGET_FILE:${NECTAR_GAME}>
+                -DSCENARIO=${scenario} -DRATE=${rate}
+                -DALLOWLIST=${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/standin-open-allowlist.txt
+                -DLOG_DIR=${CMAKE_CURRENT_BINARY_DIR}/scenario-logs
+                -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/run_standin_scenario.cmake)
+        if(stage STREQUAL "objects")
+            set(env "${PIKMIN_STANDIN_OBJECTS_ENV}")
+        else()
+            set(env "${PIKMIN_STANDIN_ENV}")
+        endif()
+        set_tests_properties(scenario_${scenario}_${rate} PROPERTIES
+            FIXTURES_REQUIRED scenario_standin_tree
+            WORKING_DIRECTORY "${PIKMIN_STANDIN_DATA}"
+            ENVIRONMENT "${env}"
+            TIMEOUT 600)
+    endforeach()
+    # The hand-off itself, headless (check_scenario_handoff.cmake): the scripted
+    # pad wins before it, the real input path (a virtual SDL game controller)
+    # after it, at real-time pacing, and nothing is written outside the scratch
+    # save dir. free_play at both rates (the pacing is per rate), first_yellow at 30.
+    foreach(entry free_play:30 free_play:60 first_yellow:30)
+        string(REPLACE ":" ";" parts "${entry}")
+        list(GET parts 0 scenario)
+        list(GET parts 1 rate)
+        add_test(NAME scenario_handoff_${scenario}_${rate}
+            COMMAND ${CMAKE_COMMAND}
+                -DGAME=$<TARGET_FILE:${NECTAR_GAME}>
+                -DSCENARIO=${scenario} -DRATE=${rate}
+                -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/scenario-handoff/${scenario}_${rate}
+                -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/check_scenario_handoff.cmake)
+        set_tests_properties(scenario_handoff_${scenario}_${rate} PROPERTIES
+            FIXTURES_REQUIRED scenario_standin_tree
+            ENVIRONMENT "${PIKMIN_STANDIN_OBJECTS_ENV}"
+            TIMEOUT 600)
+    endforeach()
+    # Real-time pacing keeps the scripted part deterministic: the per-tick hash
+    # log of first_yellow with --scenario-realtime equals the unthrottled one.
+    add_test(NAME scenario_realtime_determinism_first_yellow_30
+        COMMAND ${CMAKE_COMMAND}
+            -DGAME=$<TARGET_FILE:${NECTAR_GAME}>
+            -DSCENARIO=first_yellow -DRATE=30
+            -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/scenario-realtime-determinism
+            -DSECOND_ARGS=--scenario-realtime
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/check_scenario_determinism.cmake)
+    set_tests_properties(scenario_realtime_determinism_first_yellow_30 PROPERTIES
+        FIXTURES_REQUIRED scenario_standin_tree
+        WORKING_DIRECTORY "${PIKMIN_STANDIN_DATA}"
+        ENVIRONMENT "${PIKMIN_STANDIN_OBJECTS_ENV}"
+        TIMEOUT 1200)
+    # --scenario-handoff with a scenario that has no hand-off point exits 2.
+    add_test(NAME scenario_exit_handoff_unsupported
+        COMMAND ${CMAKE_COMMAND} -DGAME=$<TARGET_FILE:${NECTAR_GAME}> -DSCENARIO=boot_smoke -DEXPECT=2
+            -DARGS=--scenario-handoff "-DEXPECT_OUTPUT=boot_smoke has no hand-off point"
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/check_scenario_exit.cmake)
+    set_tests_properties(scenario_exit_handoff_unsupported PROPERTIES
+        ENVIRONMENT "${PIKMIN_STANDIN_ENV}")
 endif()

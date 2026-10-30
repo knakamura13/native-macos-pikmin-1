@@ -291,6 +291,11 @@ void pc_gfx_set_dof_focus(float viewDistance);
  */
 unsigned int pc_gfx_get_colour_texture(void);
 void pc_gfx_get_render_size(int* width, int* height);
+/**
+ * @brief Lowest internal render size the render scale may produce. Default
+ * 160x120. --scenario lowers it, because nothing reads its picture.
+ */
+void pc_gfx_set_min_render_size(int width, int height);
 
 /**
  * @brief Peak use of the two fixed draw pools since the process started.

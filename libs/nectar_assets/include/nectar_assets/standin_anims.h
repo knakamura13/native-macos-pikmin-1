@@ -1,0 +1,112 @@
+#pragma once
+
+// Stand-in animations for the scenario sandbox (issue #66, under #62 and #59):
+// the captain and every Pikmin colour share one AnimMgr (pikis/animMgr.bin) and
+// one bundle (pikis/bluModel.anm). The table has the 100 infos the motion table
+// can reach (PaniPikiAnimator maps motions up to AnimID 99, and startAnim
+// dereferences a null info past the end of the list). Each info is a static
+// identity DCK on the shared 12-joint rig (piki_rig.h, issue #65): motion is
+// trivial, and the game's only check on the joint count is a log line followed by
+// out-of-range reads.
+//
+// Fidelity (#62): a stand-in matches the disc only where a scenario depends on
+// it. That is the length and the grab/throw key frame of ThrowWait (info 63) and
+// Throw (info 54), which #61's throw_release waits on. Those numbers ONLY THE
+// DISC HAS; they were read from the disc install (read-only, a one-off parse of
+// pikis/animMgr.bin and pikis/bluModel.anm) and each is named and sourced in
+// standin_anims.cpp. No curves, names or other disc animation data are copied:
+// every other info is a plain one-shot of kStandInDefaultFrames frames.
+
+#include "nectar_assets/anim.h"
+#include "nectar_assets/bundle.h"
+
+#include <cstdint>
+#include <string>
+#include <vector>
+
+namespace nectar {
+
+/// Infos 0 to 99, in index order.
+constexpr int kStandInAnimCount = 100;
+
+// Info indices (PaniPikiAnimator::init, panipikianimator.cpp: setMotion(PIKIANIM_x, info)).
+constexpr int kAnimInfoNigeru    = 4;  ///< PIKIANIM_Nigeru: Navi::enableMotionBlend starts the lower animator on it at counter 10.0
+constexpr int kAnimInfoThrow     = 54; ///< PIKIANIM_Throw (27): throws on its KEY_Action0
+constexpr int kAnimInfoThrowWait = 63; ///< PIKIANIM_ThrowWait (36): hangs the Pikmin on its KEY_Action0
+
+/// Frames of every info that no scenario measures. Counters are forced to 10
+/// (Navi::enableMotionBlend, navi.cpp:1043, copied onto the desired lower motion),
+/// 18 (aiPut.cpp:145,163,190,469) and 30 (aiBore.cpp:750) on motions whose
+/// identity is not known without the disc, and `Animator::animate` halts on a
+/// counter at or above the frame count, so every unmeasured info has more than 30.
+constexpr int kStandInDefaultFrames = 40;
+constexpr int kStandInMinForcedCounterFrames = 31;
+
+// Measured on the disc (VERSION_GPIE01_01 install). Info 63 'trwwait': frame
+// count 21, anim keys [0, 1, 20], one info key per Action0. Info 54 'throw':
+// frame count 10, anim keys [0, 1, 9], one Action0 info key. Both p00 5 and spd 30.
+// The stand-ins use the code-default flags (2) and speed (30.0, equal to the disc).
+constexpr int kThrowWaitFrames    = 21;
+constexpr int kThrowWaitGrabFrame = 1; ///< K: anim-key frame of ThrowWait's KEY_Action0
+constexpr int kThrowFrames        = 10;
+constexpr int kThrowReleaseFrame  = 1; ///< anim-key frame of Throw's KEY_Action0
+
+// The motions of a Pikmin working a gate and giving up (#68 sandbox gate,
+// standin_sandbox.h): ActBreakWall attacks on KEY_Action0 of Kuttuku (info 71)
+// or Job2 (info 41, on a platform), and a Pikmin that gives up plays Gakkari
+// (info 6) in PikiEmotionState until KEY_Finished. Their timing sets when the
+// squad comes back from the gate, so it is measured on the disc
+// (VERSION_GPIE01_01, pikis/animMgr.bin, read-only, 2026-10-28): anim keys,
+// info keys (loop start, KEY_Action0/1, loop end), the effect event key, flags
+// 5 (constant speed) and speed 30. No curves are copied.
+constexpr int kAnimInfoGakkari = 6;  ///< PIKIANIM_Gakkari (73)
+constexpr int kAnimInfoJob2    = 41; ///< PIKIANIM_Job2 (19)
+constexpr int kAnimInfoKuttuku = 71; ///< PIKIANIM_Kuttuku (48)
+// A Pikmin lifting a pellet loops PickLoop (info 68) until its KEY_Action0
+// (ActTransport::animationKeyUpdated sets mIsLiftActionDone, which
+// ActTransport::doLift waits for before the carry starts); without that key no
+// pellet is ever carried. Measured the same way (2026-10-28): frame count 30,
+// anim keys [0, 10, 13, 18, 20, 29], KEY_Action0 at 10, loop 13 to 18,
+// KEY_Action1 at 20, flags 5, speed 30.
+constexpr int kAnimInfoPickLoop = 68; ///< PIKIANIM_PickLoop (46)
+
+/// One info: its AnimMgr record and the frame count of its payload.
+struct StandInAnim {
+	AnimInfoSpec info;
+	int frameCount = 0;
+	bool measured  = false; ///< the length and key frame come from the disc (see above), so the generic length rule does not apply
+};
+
+struct StandInAnimSet {
+	std::string tablePath;  ///< relative to assets/, with dataDir/ as in the boot manifest
+	std::string bundlePath;
+	std::string baseDir;    ///< 'a01'; every bundle entry is named `<baseDir>/<info name>`
+	std::vector<int> parents; ///< skeleton the payloads are written for (joint count = size)
+	std::vector<StandInAnim> anims;
+
+	AnimMgrTable table() const;
+	std::string entryName(int info) const { return baseDir + "/" + anims[std::size_t(info)].info.name; }
+};
+
+/// The Pikmin and captain set: pikis/animMgr.bin and pikis/bluModel.anm.
+const StandInAnimSet& standInPikiAnims();
+
+/// The generator assertions, written from the same constants as the data: unique
+/// names; the joint list matches the rig; every anim key is below the frame count
+/// (the game clamps it silently otherwise); info keys point into the anim-key
+/// list; unmeasured infos are longer than the largest forced counter; ThrowWait
+/// and Throw each have exactly one KEY_Action0 info key at the recorded frame.
+bool checkStandInAnims(const StandInAnimSet& set, std::string& error);
+
+struct StandInAnimFile {
+	std::string path; ///< relative to assets/
+	std::vector<std::uint8_t> bytes;
+};
+
+/// Writes the table and the bundle of `set`. The generator (#68) decides where the files go.
+bool writeStandInAnimSet(const StandInAnimSet& set, std::vector<StandInAnimFile>& out, std::string& error);
+
+/// writeStandInAnimSet(standInPikiAnims()).
+bool writeStandInAnimations(std::vector<StandInAnimFile>& out, std::string& error);
+
+} // namespace nectar

@@ -1,0 +1,89 @@
+#include "scenarios/pc_scenario_list.h"
+
+#if PIKI_SCENARIOS
+
+#include <cstdlib>
+
+#include "GameStat.h"
+
+namespace {
+
+// Runner self-test (scenario_exit_atexit_fail): exit(0) before any verdict, as
+// System::halt and PPCHalt do. The runner's exit handler must turn it into exit 1.
+class ExitZero : public PcScenario {
+public:
+	const char* name() const override { return "exit_zero"; }
+	bool testOnly() const override { return true; }
+	void onTick(unsigned tick) override
+	{
+		if (tick >= 30) std::exit(0);
+	}
+};
+
+// Runner self-test (scenario_gamestat_corrupt): at tick 5 a counter is raised with
+// no Pikmin behind it. The runner's GameStat invariant check must fail the run
+// (exit 1) on that same tick; this scenario never reports a verdict itself.
+class GameStatCorrupt : public PcScenario {
+public:
+	const char* name() const override { return "gamestat_corrupt"; }
+	bool testOnly() const override { return true; }
+	void onTick(unsigned tick) override
+	{
+		if (tick == 5) GameStat::workPikis.add(Blue, 3);
+	}
+};
+
+} // namespace
+
+const std::vector<PcScenario*>& pc_scenario_all(void)
+{
+	static const std::vector<PcScenario*> all = {
+		pc_scenario_make_boot_smoke(),
+		pc_scenario_make_throw_release(),
+		pc_scenario_make_day30_clock(),
+		pc_scenario_make_sprout_landing(),
+		pc_scenario_make_onion_skip(),
+		pc_scenario_make_objects_smoke(),
+		pc_scenario_make_container_menu(),
+		pc_scenario_make_extinction(),
+		pc_scenario_make_captain_death(),
+		[] { static GameStatCorrupt s; return static_cast<PcScenario*>(&s); }(),
+		pc_scenario_make_ship_parts(),
+		pc_scenario_make_captain_damage(),
+		pc_scenario_make_onion_unlock(),
+		pc_scenario_make_onion_unlock_whistle(),
+		pc_scenario_make_day_end(),
+		pc_scenario_make_day_end_day29(),
+		pc_scenario_make_extinction_day30(),
+		pc_scenario_make_save_load(), pc_scenario_make_save_load_flags(), pc_scenario_make_results_nosave_map(),
+		pc_scenario_make_results_nosave_cardselect(), pc_scenario_make_pause_continue(), pc_scenario_make_permadeath_erase(),
+		pc_scenario_make_permadeath_unsaved(), pc_scenario_make_permadeath_bad_slot(), pc_scenario_make_permadeath_off(),
+		pc_scenario_make_card_errors(), pc_scenario_make_card_errors_saved(),
+		pc_scenario_make_ending_bad_day30(),
+		pc_scenario_make_ending_neutral_day30(),
+		pc_scenario_make_ending_happy(),
+		pc_scenario_make_ending_happy_skip(),
+		pc_scenario_make_captain_death_day30(),
+		pc_scenario_make_day_end_no_day_limit(),
+		pc_scenario_make_challenge_day_end(),
+		pc_scenario_make_challenge_captain_death(),
+		pc_scenario_make_challenge_extinction(),
+		pc_scenario_make_onion_day3(),
+		pc_scenario_make_onion_day3_whistle(),
+		pc_scenario_make_onion_day3_hidetext(),
+		pc_scenario_make_onion_day3_reload(),
+		pc_scenario_make_onion_day3_unplucked(),
+		pc_scenario_make_onion_day3_skip(),
+		pc_scenario_make_tutorial_skip(),
+		pc_scenario_make_tutorial_firsts(),
+		pc_scenario_make_tutorial_day1(),
+		[] { static ExitZero s; return static_cast<PcScenario*>(&s); }(),
+		pc_scenario_make_free_play(),
+		pc_scenario_make_first_yellow(),
+		pc_scenario_make_coop_smoke(),
+		pc_scenario_make_coop_look(),
+	};
+	return all;
+}
+
+#endif

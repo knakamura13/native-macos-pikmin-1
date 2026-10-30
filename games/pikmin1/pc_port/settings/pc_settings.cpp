@@ -1249,8 +1249,28 @@ int netplayApplyConfigText(const char* text) {
 }
 #endif
 
+#if PIKI_SCENARIOS
+// --scenario: the settings file is neither read nor written, so a developer's
+// pikmin_settings.conf cannot change a run. fpsMode, infiniteDay and
+// whistlePluck are overrides the scenario can switch at runtime.
+static bool sScenarioSettings   = false;
+static int sScenarioFpsMode     = 0;
+static int sScenarioInfiniteDay = 0;
+static int sScenarioWhistlePluck = 0;
+static int sScenarioNoDayAdvance = 0; // "No Day Limit"
+static int sScenarioHideOlimarText = 0; // the setting's default (sConfig.hideOlimarText)
+// The scenario window (PIKMIN_SCENARIO_WINDOW, see pc_scenario.cpp). Every tick
+// draws a frame, which under software GL costs per pixel, and no scenario reads
+// the picture.
+static int sScenarioWindowWidth  = 64;
+static int sScenarioWindowHeight = 36;
+#endif
+
 void saveConfig() {
     simLockRelock();
+#if PIKI_SCENARIOS
+    if (sScenarioSettings) return;
+#endif
 #if PIKI_NETPLAY_BUILD
     netplayRelockSessionFields();
     NetplayDiskValuesScope netplayDiskValues;
@@ -1386,6 +1406,18 @@ void saveConfig() {
 
 void loadConfig() {
     sConfig.applyDefaults();
+#if PIKI_SCENARIOS
+    if (sScenarioSettings) {
+        // Windowed, small so per-tick cost stays low under software GL, and no
+        // vsync wait.
+        sConfig.windowWidth  = sScenarioWindowWidth;
+        sConfig.windowHeight = sScenarioWindowHeight;
+        sConfig.renderScale  = 1.0f; // the scene renders at the window size
+        sConfig.vsync        = false;
+        sHadConfigFile       = true;
+        return;
+    }
+#endif
     std::string path = std::string(kConfigFilename);
     std::ifstream in(path, std::ios::in);
     if (!in) {
@@ -4061,9 +4093,13 @@ void pc_settings_init(void) {
     // Sin fichero previo, arrancar a la resolucion del monitor en vez de a un
     // 1280x720 fijo que en un panel 16:10 o 21:9 deja barras desde el principio.
     int idx = sHadConfigFile ? resolutionIndexFor(sPending.windowWidth, sPending.windowHeight) : -1;
+    bool keepWindowSize = false;
+#if PIKI_SCENARIOS
+    keepWindowSize = sScenarioSettings; // the scenario layer's small window, not the monitor's
+#endif
     if (idx < 0) {
         idx = defaultResolutionIndex();
-        if (!sResolutions.empty()) {
+        if (!sResolutions.empty() && !keepWindowSize) {
             sPending.windowWidth = sResolutions[idx].w;
             sPending.windowHeight = sResolutions[idx].h;
             sConfig.windowWidth = sPending.windowWidth;
@@ -9082,6 +9118,9 @@ const char* pc_settings_get_speedrun_ls_host(void) { return sConfig.speedrunLsHo
 int pc_settings_get_speedrun_ls_port(void) { return sConfig.speedrunLsPort; }
 int pc_settings_get_online_stun(void) { return sConfig.onlineStun; }
 int pc_settings_get_fps_mode(void) { if (pc_speedrun_active()) return 0;
+#if PIKI_SCENARIOS
+    if (sScenarioSettings) return sScenarioFpsMode;
+#endif
     return sConfig.fpsMode;
 }
 
@@ -9116,8 +9155,26 @@ int pc_settings_get_infinite_day(void) { if (pc_speedrun_active()) return 0;
     if (pc_vs_active()) return 1;
     // Misión: el día acaba con el reloj (decide el resultado).
     if (pc_mission_active()) return 0;
-    return pc_hardmode_active() ? 0 : sConfig.infiniteDay;
+    if (pc_hardmode_active()) return 0;
+#if PIKI_SCENARIOS
+    if (sScenarioSettings) return sScenarioInfiniteDay;
+#endif
+    return sConfig.infiniteDay;
 }
+
+#if PIKI_SCENARIOS
+void pc_settings_scenario_enable(void) { sScenarioSettings = true; }
+void pc_settings_scenario_set_fps_mode(int fpsMode) { sScenarioFpsMode = fpsMode; }
+void pc_settings_scenario_set_infinite_day(int on) { sScenarioInfiniteDay = on; }
+void pc_settings_scenario_set_whistle_pluck(int on) { sScenarioWhistlePluck = on; }
+void pc_settings_scenario_set_no_day_advance(int on) { sScenarioNoDayAdvance = on; }
+void pc_settings_scenario_set_hide_olimar_text(int on) { sScenarioHideOlimarText = on; }
+void pc_settings_scenario_set_window_size(int width, int height)
+{
+    sScenarioWindowWidth  = width;
+    sScenarioWindowHeight = height;
+}
+#endif
 
 int pc_settings_get_face_cursor(void) { return sConfig.faceCursor; }
 int pc_settings_get_free_camera(void) { if (pc_speedrun_active()) return 0;
@@ -9145,10 +9202,18 @@ int pc_settings_get_no_trip(void) { if (pc_speedrun_active()) return 0;
 }
 
 int pc_settings_get_whistle_pluck(void) { if (pc_speedrun_active()) return 0;
+#if PIKI_SCENARIOS
+    if (sScenarioSettings) return sScenarioWhistlePluck;
+#endif
     return sConfig.whistlePluck;
 }
 
-int pc_settings_get_hide_olimar_text(void) { if (pc_speedrun_active()) return 0; return sConfig.hideOlimarText; }
+int pc_settings_get_hide_olimar_text(void) { if (pc_speedrun_active()) return 0;
+#if PIKI_SCENARIOS
+    if (sScenarioSettings) return sScenarioHideOlimarText;
+#endif
+    return sConfig.hideOlimarText;
+}
 
 int pc_settings_get_breakable_gates(void) { if (pc_speedrun_active()) return 0;
     return pc_hardmode_active() ? 0 : sConfig.breakableGates;
@@ -9175,7 +9240,12 @@ float pc_settings_get_carry_speed_scale(void) { if (pc_speedrun_active()) return
     return pc_hardmode_active() ? 1.0f : sConfig.carrySpeedPct / 100.0f; }
 float pc_settings_get_navi_speed_scale(void) { if (pc_speedrun_active()) return 1.0f; return pc_hardmode_active() ? 1.0f : sConfig.naviSpeedPct / 100.0f; }
 int pc_settings_get_unlock_zones(void) { if (pc_speedrun_active()) return 0; return pc_hardmode_active() ? 0 : sConfig.unlockZones; }
-int pc_settings_get_no_day_advance(void) { if (pc_speedrun_active()) return 0; return pc_hardmode_active() ? 0 : sConfig.noDayAdvance; }
+int pc_settings_get_no_day_advance(void) { if (pc_speedrun_active()) return 0;
+    if (pc_hardmode_active()) return 0;
+#if PIKI_SCENARIOS
+    if (sScenarioSettings) return sScenarioNoDayAdvance;
+#endif
+    return sConfig.noDayAdvance; }
 int pc_settings_get_all_onions(void) { if (pc_speedrun_active()) return 0; return pc_hardmode_active() ? 0 : sConfig.allOnions; }
 
 int pc_settings_get_instant_whistle(void) { if (pc_speedrun_active()) return 0;

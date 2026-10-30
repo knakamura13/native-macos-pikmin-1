@@ -210,6 +210,13 @@ void pc_input_log_tick(void);
 typedef void (*PcYawCaptureFn)(void);
 void pc_input_log_set_yaw_capture_fn(PcYawCaptureFn fn);
 
+// Scenario input provider (--scenario). Called every tick after the slots are
+// cleared and before the record write; fills pads 0-3 (pads 1-3 arrive neutral
+// with err = kErrNoController, pad 0 connected) plus controlYaw, and flags (ext
+// bits) and cursorRotate per pad. The provider overrides real input.
+typedef void (*PcInputProviderFn)(PcInputPad pads[4]);
+void pc_input_log_set_provider(PcInputProviderFn fn);
+
 // Runs the capture hook now, without any record/replay logic. The _fresh
 // variant clears the slots first so the hook refills them from the camera.
 void pc_input_log_capture_yaw(void);
