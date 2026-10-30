@@ -210,7 +210,9 @@ void shadow_record_stream(const PcGfxHostVector<Vertex>& verts, GLenum mode) {
     d.mode = mode;
     d.first = (GLint)sShadowStream.size();
     d.count = (GLsizei)verts.size();
-    sShadowStream.reserve(sShadowStream.size() + verts.size());
+    // PERF: Do not call reserve(size() + n) on every draw in the append path.
+    // sShadowStream is cleared each frame with clear(), so std::vector's default
+    // geometric growth keeps capacity across frames once steady state is reached.
     for (const Vertex& v : verts) sShadowStream.push_back({ v.x, v.y, v.z, v.tex[0][0], v.tex[0][1], v.matrixSlot });
     sShadowDraws.push_back(d);
 }
