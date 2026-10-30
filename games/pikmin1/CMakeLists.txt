@@ -405,8 +405,8 @@ set(PC_PORT_SOURCES
     pc_port/audio/pc_dsp_host.cpp
     pc_port/settings/pc_settings.cpp
     pc_port/settings/pc_settings_p2d.cpp
-    pc_port/settings/pc_prompt_pointer.cpp
     pc_port/settings/pc_sim_settings_text.cpp
+    pc_port/settings/pc_prompt_pointer.cpp
     src/jaudio/pikiseq.c
     pc_port/dolphin_stubs/os_stubs.cpp
     pc_port/dolphin_stubs/pc_host_readable.cpp
@@ -1377,6 +1377,11 @@ if(PIKMIN_BUILD_TESTS)
     target_compile_options(pc_menu_pad_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
     add_test(NAME pc_menu_pad_test COMMAND pc_menu_pad_test)
 
+    # GameCube PADClamp (no window). Links the decomp translation unit.
+    add_executable(pc_pad_clamp_test pc_port/pc_pad_clamp_test.cpp src/pad/Padclamp.c)
+    target_include_directories(pc_pad_clamp_test PRIVATE include pc_port)
+    target_compile_options(pc_pad_clamp_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME pc_pad_clamp_test COMMAND pc_pad_clamp_test)
     # Cutscene skip replays its keys by frame (header only)
     add_executable(pc_cine_skip_order_test pc_port/pc_cine_skip_order_test.cpp)
     target_include_directories(pc_cine_skip_order_test PRIVATE pc_port)
@@ -1387,11 +1392,6 @@ if(PIKMIN_BUILD_TESTS)
     target_include_directories(pc_text_window_press_test PRIVATE ${SDL2_INCLUDE_DIRS} pc_port)
     target_compile_options(pc_text_window_press_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
     add_test(NAME pc_text_window_press_test COMMAND pc_text_window_press_test)
-    # GameCube PADClamp (no window). Links the decomp translation unit.
-    add_executable(pc_pad_clamp_test pc_port/pc_pad_clamp_test.cpp src/pad/Padclamp.c)
-    target_include_directories(pc_pad_clamp_test PRIVATE include pc_port)
-    target_compile_options(pc_pad_clamp_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
-    add_test(NAME pc_pad_clamp_test COMMAND pc_pad_clamp_test)
 
     # Permadeath save block (no game needed)
     add_executable(pc_permadeath_test pc_port/pc_permadeath_test.cpp pc_port/pc_permadeath.cpp src/sysCommon/stream.cpp src/sysCommon/string.cpp)
@@ -1664,6 +1664,7 @@ if(PIKMIN_BUILD_TESTS)
     target_include_directories(pc_throw_release_test PRIVATE pc_port)
     target_compile_options(pc_throw_release_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
     add_test(NAME pc_throw_release_test COMMAND pc_throw_release_test)
+
     # Day-1 voyage log after Skip tutorial (no disc or save)
     add_executable(pc_voyage_log_test
         pc_port/pc_voyage_log_test.cpp

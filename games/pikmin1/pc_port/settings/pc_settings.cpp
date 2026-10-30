@@ -1281,7 +1281,7 @@ void saveConfig() {
         printf("[PC Settings] Failed to write %s\n", path.c_str());
         return;
     }
-    out << "# Open Nectar settings (F1 or backtick in-game to change)\n";
+    out << "# Open Nectar settings (F1 in-game to change)\n";
     out << "windowWidth = " << sConfig.windowWidth << "\n";
     out << "windowHeight = " << sConfig.windowHeight << "\n";
     out << "displayMode = " << sConfig.displayMode << "\n";
@@ -2256,10 +2256,9 @@ void pollMenuInput() {
         sResolutionIdx = idx >= 0 ? idx : defaultResolutionIndex();
     };
 
-    // F1 or the backtick key (top left on a Mac keyboard, no Fn needed) always
-    // toggles. Select/View can open the menu while it is closed; closing is
-    // handled after video confirmation has had first refusal.
-    if (keyWentDown(SDL_SCANCODE_F1) || keyWentDown(SDL_SCANCODE_GRAVE) || toggleRequested) {
+    // F1 always toggles. Select/View can open the menu while it is closed;
+    // closing is handled after video confirmation has had first refusal.
+    if (keyWentDown(SDL_SCANCODE_F1) || toggleRequested) {
         if (sMenuOpen) closeMenu();
         else {
             sMenuPlayer = 0;

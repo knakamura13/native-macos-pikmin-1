@@ -1024,12 +1024,6 @@ fs::path installDirFile() { return nectar::paths::userFolderConfigFile("install_
 
 fs::path rememberedInstallDirectory() { return nectar::paths::readStoredPath(installDirFile()); }
 
-bool isManagedBundle()
-{
-    const char* value = std::getenv("PIKMIN_BUNDLE_MANAGED");
-    return value && std::strcmp(value, "1") == 0;
-}
-
 // Guarda la carpeta y, si es nueva, pone en el escritorio el acceso directo a
 // su launcher. Solo la primera vez: si el usuario lo borra, no vuelve.
 // Con portable.txt (o NECTAR_PORTABLE=1) no se escribe nada fuera de la
@@ -1045,7 +1039,7 @@ void rememberInstallDirectory(const fs::path& directory)
     const fs::path previous = rememberedInstallDirectory();
     if (!previous.empty() && fs::equivalent(previous, install, ec)) return;
     if (!nectar::paths::writeStoredPath(file, install)) return;
-    if (!isManagedBundle()) platform::createDesktopShortcut(install / kLauncherExecutable);
+    platform::createDesktopShortcut(install / kLauncherExecutable);
 }
 
 // La ruta de dolphin-tool elegida también se recuerda (junto a pikmin2_dir):
@@ -1300,15 +1294,7 @@ int main(int argc, char** argv)
     // Fusion mantiene cada juego en su propio directorio de trabajo. Las
     // variables también hacen que el launcher siga siendo reubicable y que los
     // paquetes normales, que no las definen, conserven el comportamiento previo.
-    fs::path pikmin1Directory = environmentPath("NECTAR_PIKMIN1_DIR", sourceDirectory);
-    // A managed app falls back to the remembered install only when its own
-    // folder (NECTAR_PIKMIN1_DIR, from Info.plist) has no game files. A folder
-    // that is ready always wins: a stale remembered folder (say, a test install
-    // under /tmp) must not take over the app's saves and settings.
-    if (isManagedBundle() && !assetsReady(pikmin1Directory)) {
-        const fs::path remembered = rememberedInstallDirectory();
-        if (!remembered.empty() && assetsReady(remembered)) pikmin1Directory = remembered;
-    }
+    const fs::path pikmin1Directory = environmentPath("NECTAR_PIKMIN1_DIR", sourceDirectory);
     const fs::path pikmin1Executable = environmentPath(
         "NECTAR_PIKMIN1_EXECUTABLE", gameBinaryFor(pikmin1Directory));
     // Pikmin 2 instalado por el launcher está en pikmin2/; el de una build de
@@ -1366,9 +1352,7 @@ int main(int argc, char** argv)
     // abre el de la instalación, que es el que juega y actualiza. Antes se
     // copia a la instalación lo que trae este paquete: si es una versión
     // nueva, la instalación queda al día (partidas y ajustes no se tocan).
-    // A managed macOS app owns its bundled binaries and build manifest. Do
-    // not copy it over an unrelated remembered install or relaunch from there.
-    if (argc == 1 && !isInstallFolder && !isManagedBundle()) {
+    if (argc == 1 && !isInstallFolder) {
         const fs::path installed = rememberedInstallDirectory();
         std::error_code ec;
         if (!installed.empty() && !fs::equivalent(installed, sourceDirectory, ec)
@@ -1710,7 +1694,7 @@ int main(int argc, char** argv)
 
         std::string failure;
         if (installerWindow) installerWindow->updateProgress(100, "Installing the launcher and game", "Finishing");
-        if (!isManagedBundle() && !installPackage(sourceDirectory, dataRoot, failure)) {
+        if (!installPackage(sourceDirectory, dataRoot, failure)) {
             if (reportError(failure)) continue;
             return 1;
         }
@@ -1720,14 +1704,14 @@ int main(int argc, char** argv)
             // portada de Pikmin ya juegue con lo recién instalado.
             hubState.games[0].installed = true;
             hubState.games[0].directory = dataRoot.string();
-            hubState.games[0].executable = (isManagedBundle() ? pikmin1Executable : gameBinaryFor(dataRoot)).string();
+            hubState.games[0].executable = gameBinaryFor(dataRoot).string();
             if (installerWindow && !installerWindow->showComplete(dataRoot.string(), !extractOnly)) return 0;
             else std::cout << "Installed in: " << dataRoot << '\n'
                            << (extractOnly ? "" : "The game will start now.\n");
         }
         if (extractOnly) return 0;
 
-        const fs::path gameBinary = isManagedBundle() ? pikmin1Executable : gameBinaryFor(dataRoot);
+        const fs::path gameBinary = gameBinaryFor(dataRoot);
         if (!fs::is_regular_file(gameBinary)) {
             std::cerr << "The game executable is not next to the launcher: " << gameBinary << '\n';
             return 1;

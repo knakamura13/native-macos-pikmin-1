@@ -225,11 +225,6 @@ move and resize them); Bluetooth and USB controllers work too. The
 To update, install the new APK over the old one — assets and saves stay.
 Uninstalling deletes them.
 
-### macOS
-
-There is no macOS release package yet. Build the app from source instead; see
-[macOS (app bundle)](#macos-app-bundle) under Build from source.
-
 ### Both platforms
 
 The launcher asks for your disc image, extracts the assets it needs and starts the
@@ -319,68 +314,6 @@ cmake --build build/pikmin2 --target pikmin2_pc -j"$(sysctl -n hw.ncpu)"
 There are no ready-made macOS packages: macOS players build from source.
 
 The compiler comes from the Xcode command-line tools (`xcode-select --install`). The port requests an OpenGL 4.1 core context, the newest core profile macOS provides.
-
-### macOS (app bundle)
-
-This builds an Open Nectar app (the launcher plays Pikmin 1 and Pikmin 2) and installs it in `/Applications`. It has been tested on
-Apple silicon with macOS 27. The app plays the USA Rev. 1 disc only. The European
-build is not in the macOS package yet.
-
-Install the requirements:
-
-```sh
-xcode-select --install   # compiler and tools, if not already installed
-brew install cmake sdl2-compat
-brew install ccache      # optional: faster rebuilds
-```
-
-Then, from the repository root:
-
-```sh
-games/pikmin1/packaging/macos/build-app.sh --install
-```
-
-To install somewhere else, pass a folder, for example `~/Applications`. The folder
-is created if it does not exist.
-
-Open **Pikmin 1** from Launchpad or Applications. The launcher asks for your disc
-image on first run, as described under [Both platforms](#both-platforms).
-
-**Keeping it in sync.** Run the same command again after each build. It replaces the
-installed app. It refuses to run while the game is open, so quit the game first.
-The bundle is written to `packaging/macos/out.noindex/` first, so Spotlight does
-not list that extra copy. On this fork, `tools/mac/install-launchd.sh` can install
-that update hourly from `origin/kyle-develop` instead (see below).
-
-Saves and settings live in `~/.local/share/pikmin-native`, not in the app, so
-reinstalling keeps them. To remove everything, delete the app and that folder.
-
-**Apps on this fork.** Spotlight shows exactly two apps; everything else lives in `*.noindex` folders:
-
-- `/Applications/Open Nectar.app` ("Open Nectar", `org.opennectar.upstream`) is upstream `main` with this fork's packaging. Its saves and settings are in `~/.local/share/pikmin-native-upstream`, starting empty. One command fetches upstream and builds it: `tools/mac/build-upstream.sh --install`.
-- `/Applications/Open Nectar Develop.app` ("Open Nectar Develop", `org.opennectar.develop`) is always a build of `origin/kyle-develop`, with your real saves in `~/.local/share/pikmin-native`.
-- `~/Desktop/Open Nectar` is a shortcut to the last checkout you built with `tools/mac/test-build.sh`.
-
-When Develop is first installed and checked, an old `/Applications/Pikmin 1.app` (bundle id `org.opennectar.pikmin1`) is moved to `~/OpenNectar-archive.noindex/legacy/`. It is kept there; delete it yourself once Develop works.
-
-Install the hourly updates once, from a checkout:
-
-```sh
-tools/mac/install-launchd.sh
-```
-
-It installs two LaunchAgents (`RunAtLoad`, then every hour), one per app, and records that checkout in both. `--only develop` or `--only upstream` picks one; `--uninstall` removes them. A run does nothing while the game is running. To try your real saves in the upstream app, copy them (never moved) with `tools/mac/copy-saves-to-upstream.sh`.
-
-Build the checkout you have open, without replacing the stable app or your real saves:
-
-```sh
-tools/mac/test-build.sh
-```
-
-Test saves and settings go in `~/OpenNectar-test-builds.noindex/data`. If a disc is already extracted at `~/.local/share/pikmin-native/assets`, the test build links to that folder instead of copying it. The link is shared, so a test that writes into `assets` changes the same files. Build folders are named `*.noindex`, which Spotlight does not index. The script keeps the five newest test builds and does not delete `data/`.
-
-The app uses Homebrew's `sdl2-compat` at `/opt/homebrew`, so run it on the Mac where
-you built it.
 
 ### Choosing which release to build
 
@@ -732,8 +665,6 @@ cmake -S games/pikmin1 -B build/pikmin1 -DCMAKE_BUILD_TYPE=Release
 cmake --build build/pikmin1 -j"$(nproc)"
 ctest --test-dir build/pikmin1 --output-on-failure
 ```
-
-**Fork.** On this fork, `kyle-develop` is generated. Fork-only changes go on `kyle-patches`. Fixes for an open upstream PR go on that PR's branch. Details: [AGENTS.md](AGENTS.md).
 
 ## License
 
