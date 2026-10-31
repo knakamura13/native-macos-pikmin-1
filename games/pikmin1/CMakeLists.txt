@@ -998,6 +998,7 @@ if(ANDROID AND NOT TARGET nectar_launcher)
         pc_port/launcher/launcher_android_main.cpp
         pc_port/launcher/launcher_gui.cpp
         pc_port/launcher/install_directory.cpp
+        pc_port/launcher/install_note_layout.cpp
         pc_port/dolphin_stubs/pc_card_save_root.cpp
         pc_port/launcher/button_style.cpp
         pc_port/launcher/button_layout.cpp
@@ -1071,6 +1072,7 @@ if(PIKMIN_BUILD_LAUNCHER)
         pc_port/launcher/launcher_main.cpp
         pc_port/launcher/launcher_gui.cpp
         pc_port/launcher/install_directory.cpp
+        pc_port/launcher/install_note_layout.cpp
         pc_port/launcher/gci_save_import.cpp
         pc_port/dolphin_stubs/pc_card_save_root.cpp
         pc_port/launcher/button_style.cpp
@@ -1153,10 +1155,17 @@ if(PIKMIN_BUILD_TESTS AND PIKMIN_BUILD_LAUNCHER)
     add_executable(install_directory_test
         pc_port/launcher/install_directory_test.cpp
         pc_port/launcher/install_directory.cpp
+        pc_port/launcher/install_note_layout.cpp
         pc_port/dolphin_stubs/pc_card_save_root.cpp)
     target_include_directories(install_directory_test PRIVATE pc_port/launcher ${PC_PORT_DIR})
     target_compile_options(install_directory_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
     add_test(NAME install_directory_test COMMAND install_directory_test)
+
+    add_executable(install_note_layout_test pc_port/launcher/install_note_layout_test.cpp
+        pc_port/launcher/install_note_layout.cpp)
+    target_include_directories(install_note_layout_test PRIVATE pc_port/launcher ${PC_PORT_DIR})
+    target_compile_options(install_note_layout_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME install_note_layout_test COMMAND install_note_layout_test)
 
     add_executable(install_dialog_snapshot
         pc_port/launcher/install_dialog_snapshot.cpp
@@ -1175,6 +1184,8 @@ if(PIKMIN_BUILD_TESTS AND PIKMIN_BUILD_LAUNCHER)
     add_executable(installer_ui_test
         pc_port/launcher/installer_ui_test.cpp
         pc_port/launcher/installer_ui.cpp
+        pc_port/launcher/install_note_layout.cpp
+        pc_port/dolphin_stubs/pc_card_save_root.cpp
         pc_port/pc_icon.cpp
         ${LAUNCHER_PLATFORM_SOURCE})
     target_include_directories(installer_ui_test PRIVATE

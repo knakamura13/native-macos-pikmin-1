@@ -124,6 +124,10 @@ public:
     bool offerRetry(const std::string& message) override;
     bool showComplete(const std::string& installDirectory, bool willLaunch) override;
 
+    // Saves the Install paths modal (for tests). `legacySaveOverride` skips disk lookup when non-empty.
+    bool savePathsModalScreenshot(const std::string& path, int width, int height, const std::string& rom,
+                                  const std::string& installDirectory, const std::string& legacySaveOverride = {});
+
 private:
     struct Impl;
     std::unique_ptr<Impl> mImpl;

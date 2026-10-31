@@ -1,6 +1,7 @@
 #include "install_directory.h"
 
 #include "dolphin_stubs/pc_card_save_root.h"
+#include "install_note_layout.h"
 
 #include <system_error>
 
@@ -44,7 +45,7 @@ std::string installSaveMigrationNote(const fs::path& installDirectory)
 {
     const fs::path legacy = pc_card_legacy_save_migration_source(installDirectory);
     if (legacy.empty()) return {};
-    return "Your saves from " + legacy.u8string() + " will be copied here; the old copy is kept.";
+    return installSaveMigrationMessage(legacy);
 }
 
 } // namespace launcher

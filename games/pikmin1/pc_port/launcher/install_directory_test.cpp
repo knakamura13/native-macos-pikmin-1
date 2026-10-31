@@ -113,6 +113,7 @@ void testSaveMigrationNote()
     touch(legacySave / "card0" / "test.bin");
     const std::string note = installSaveMigrationNote(install);
     expect(!note.empty(), "migration note appears when a legacy card0 exists");
+    expect(note.find("Your save in") == 0, "migration note keeps the sentence start");
     expect(note.find("copied here") != std::string::npos, "migration note mentions copying");
     touch(install / "save" / "card0" / "keep.bin");
     expect(installSaveMigrationNote(install).empty(), "negative: no note when card0 already exists in install");
