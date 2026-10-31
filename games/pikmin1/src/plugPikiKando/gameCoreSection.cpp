@@ -4297,7 +4297,12 @@ void GameCoreSection::draw(Graphics& gfx)
 	gfx.setColour(Colour(255, 255, 255, 128), true);
 #if defined(PIKI_PC_PORT)
 	// Con sombras proyectadas (shadow map) las manchas originales sobran.
-	if (pc_settings_get_shadows() == 0)
+#if PIKI_SCENARIOS
+	const bool drawBlobShadows = pc_settings_get_shadows() == 0 && !pc_scenario_uses_disc_free_assets();
+#else
+	const bool drawBlobShadows = pc_settings_get_shadows() == 0;
+#endif
+	if (drawBlobShadows)
 #endif
 	{
 		if (AIPerf::optLevel <= 1) {

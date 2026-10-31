@@ -12,12 +12,12 @@ namespace standin {
 
 constexpr const char* kShowcaseStageIni = "stages/sandbox_showcase.ini";
 
-constexpr float kShowcaseRedOnionX = -38.0f;
-constexpr float kShowcaseRedOnionZ = 52.0f;
-constexpr float kShowcasePelletX   = 34.0f;
-constexpr float kShowcasePelletZ   = 48.0f;
-constexpr float kShowcaseUfoX      = 6.0f;
-constexpr float kShowcaseUfoZ      = -92.0f;
+constexpr float kShowcaseRedOnionX = -28.0f;
+constexpr float kShowcaseRedOnionZ = 38.0f;
+constexpr float kShowcasePelletX   = 26.0f;
+constexpr float kShowcasePelletZ   = 34.0f;
+constexpr float kShowcaseUfoX      = 4.0f;
+constexpr float kShowcaseUfoZ      = -58.0f;
 
 bool addShowcaseStage(std::map<std::string, std::vector<std::uint8_t>>& tree, std::string& error);
 

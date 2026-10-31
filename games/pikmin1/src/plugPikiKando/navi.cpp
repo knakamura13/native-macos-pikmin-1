@@ -13,6 +13,9 @@
 #include "mods/pc_hd_models.h"
 #include "mods/pc_pikmin_models.h"
 #include "gl/pc_gfx.h"
+#if PIKI_SCENARIOS
+#include "scenarios/pc_scenario.h"
+#endif
 #include "timing/pc_anim_timing.h"
 #include "netplay/pc_netplay_camlead.h"
 #include "netplay/pc_netplay_present.h"
@@ -4300,7 +4303,15 @@ void Navi::demoDraw(Graphics& gfx, immut Matrix4f* mtx)
 	}
 	if (!drawn)
 #endif
+	{
+#if PIKI_SCENARIOS && defined(PIKI_PC_PORT)
+		pc_scenario_push_creature_unlit_draw();
+#endif
 		mNaviShapeObject->mShape->drawshape(gfx, *gfx.mCamera, nullptr);
+#if PIKI_SCENARIOS && defined(PIKI_PC_PORT)
+		pc_scenario_pop_creature_unlit_draw();
+#endif
+	}
 #if defined(PIKI_PC_PORT)
 	if (tinted) pc_gfx_clear_mat_color_tint();
 #endif

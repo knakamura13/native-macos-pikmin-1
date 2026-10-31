@@ -809,6 +809,20 @@ bool pc_scenario_uses_disc_free_assets(void)
 	return data != nullptr && *data != '\0';
 }
 
+static int sCreatureUnlitDrawDepth = 0;
+
+void pc_scenario_push_creature_unlit_draw(void)
+{
+	if (pc_scenario_uses_disc_free_assets()) sCreatureUnlitDrawDepth++;
+}
+
+void pc_scenario_pop_creature_unlit_draw(void)
+{
+	if (sCreatureUnlitDrawDepth > 0) sCreatureUnlitDrawDepth--;
+}
+
+bool pc_scenario_creature_unlit_draw(void) { return sCreatureUnlitDrawDepth > 0; }
+
 void pc_scenario_set_debug_camera(const PcScenarioDebugCamera& cam) { sDebugCamera = cam; }
 
 void pc_scenario_clear_debug_camera(void) { sDebugCamera = {}; }

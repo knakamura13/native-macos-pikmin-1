@@ -1172,7 +1172,7 @@ void DGXGraphics::setMaterial(Material* mat, bool p2)
 #if defined(PIKI_PC_PORT) && PIKI_SCENARIOS
 		// Stand-in .mod files are flat vertex-lit greys on PC; draw their material RGB
 		// directly so Pikmin/onion colours read on captures (#115).
-		if (pc_scenario_uses_disc_free_assets() && mat->mTexture == nullptr && mat->mEnvMapTexture == nullptr) {
+		if (pc_scenario_creature_unlit_draw() && mat->mTexture == nullptr && mat->mEnvMapTexture == nullptr) {
 			GXSetNumTexGens(0);
 			GXSetNumTevStages(1);
 			GXSetTevOrder(GX_TEVSTAGE0, GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR0A0);

@@ -99,6 +99,10 @@ bool pc_scenario_active(void);
 bool pc_scenario_screenshot_frame_active(void);
 unsigned pc_scenario_sim_tick(void);
 bool pc_scenario_uses_disc_free_assets(void);
+// While >0, colour-only creature materials draw unlit (Pikmin tint on material 0 only).
+void pc_scenario_push_creature_unlit_draw(void);
+void pc_scenario_pop_creature_unlit_draw(void);
+bool pc_scenario_creature_unlit_draw(void);
 struct PcScenarioDebugCamera {
 	bool active = false;
 	float eyeX = 0.0f, eyeY = 0.0f, eyeZ = 0.0f;

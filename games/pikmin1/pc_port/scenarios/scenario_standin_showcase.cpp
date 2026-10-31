@@ -17,9 +17,11 @@ void updateShowcaseCamera(Navi* navi)
 {
 	if (!navi) return;
 	Vector3f focus = navi->mSRT.t;
-	focus.y += 10.0f;
-	// South-west elevated rig: frames captain, Pikmin row, onion, pellet; ship stays mid-ground.
-	Vector3f eye(focus.x - 16.0f, focus.y + 28.0f, focus.z - 48.0f);
+	focus.x += 4.0f;
+	focus.z += 18.0f;
+	focus.y += 12.0f;
+	// Pull back and widen so onion (behind-left), pellet (right), and ship (aft) stay in frame.
+	Vector3f eye(focus.x - 22.0f, focus.y + 34.0f, focus.z - 62.0f);
 	PcScenarioDebugCamera cam {};
 	cam.active  = true;
 	cam.eyeX    = eye.x;
@@ -28,7 +30,7 @@ void updateShowcaseCamera(Navi* navi)
 	cam.focusX  = focus.x;
 	cam.focusY  = focus.y;
 	cam.focusZ  = focus.z;
-	cam.fov     = 33.0f;
+	cam.fov     = 38.0f;
 	pc_scenario_set_debug_camera(cam);
 }
 
