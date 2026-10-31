@@ -13,10 +13,10 @@ struct Rect {
 inline constexpr int kScreenW = 640;
 inline constexpr int kScreenH = 480;
 
-inline constexpr Rect kPlay10Life { 528, 392, 96, 88 };
-inline constexpr Rect kPlay10Navi { 552, 416, 56, 56 };
-inline constexpr Rect kPlay10LiI { 552, 416, 56, 56 };
-inline constexpr Rect kPlay10NaI { 528, 392, 96, 88 };
+inline constexpr Rect kPlay10Life { 552, 400, 72, 72 };
+inline constexpr Rect kPlay10Navi { 564, 412, 48, 48 };
+inline constexpr Rect kPlay10LiI { 564, 412, 48, 48 };
+inline constexpr Rect kPlay10NaI { 552, 400, 72, 72 };
 
 inline constexpr Rect kPlay09Stat { 0, 0, 640, 40 };
 inline constexpr Rect kPlay09Goal { 280, 0, 80, 40 };

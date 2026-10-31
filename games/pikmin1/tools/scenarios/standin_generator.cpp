@@ -97,7 +97,7 @@ bool sandboxSourceMod(Bytes& out, std::string& error)
 		mat.texAttr = -1;
 		mat.colour  = { 110, 150, 90, 255 }; // grass green
 		if (i == 1) mat.colour = { 90, 130, 70, 255 }; // darker grass
-		if (i == 14) mat.colour = { 100, 95, 85, 255 }; // cliff rock
+		if (i == 14) mat.colour = { 105, 145, 85, 255 }; // floor grass (compileMap floor material)
 		m.materials.push_back(mat);
 	}
 	if (!nectar::writeModTables(m, out, error)) return fail(error, "sandbox source .mod: " + error);
