@@ -92,6 +92,7 @@ const std::vector<PcScenario*>& pc_scenario_all(void)
 		pc_scenario_make_pikmin_cap_999(),
 		pc_scenario_make_day_clock(),
 		pc_scenario_make_demo_timers(),
+		pc_scenario_make_throw_levels(),
 		pc_scenario_make_title_boot(),
 		pc_scenario_make_piki_hazard_deaths(),
 		pc_scenario_make_piki_hazard_fire_red_fail(),
