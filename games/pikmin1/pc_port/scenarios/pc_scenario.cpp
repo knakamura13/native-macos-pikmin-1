@@ -788,6 +788,8 @@ int pc_scenario_parse_argv(int argc, char** argv)
 	if (sProbe.active) SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
 	pc_settings_scenario_enable();
 	pc_settings_scenario_set_fps_mode(rate == 60 ? 1 : 0);
+	// Before the stage build: GameCoreSection sizes PikiMgr, PikiHeadMgr and CPlate from it.
+	if (sScenario->pikiLimit() > 0) pc_settings_scenario_set_piki_limit(sScenario->pikiLimit());
 	if (windowWidth > 0) pc_settings_scenario_set_window_size(windowWidth, windowHeight);
 	pc_scenario_screenshot_set_base_window_size(windowWidth > 0 ? windowWidth : 64, windowHeight > 0 ? windowHeight : 36);
 	pc_gfx_set_min_render_size(1, 1); // the window size, below the player's 160x120 floor

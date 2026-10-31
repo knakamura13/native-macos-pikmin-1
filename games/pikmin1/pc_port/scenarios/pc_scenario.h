@@ -90,6 +90,9 @@ public:
 	virtual bool checksGameStat() const { return true; }
 	// When non-null, the runner loads this stages.ini entry unless PIKMIN_SCENARIO_STAGE is set.
 	virtual const char* stageFile() const { return nullptr; }
+	// Above 0: the field Pikmin limit for this run (pc_settings_scenario_set_piki_limit,
+	// before the stage build sizes PikiMgr, PikiHeadMgr and CPlate). 0 keeps the default 100.
+	virtual int pikiLimit() const { return 0; }
 };
 
 // Returns -1 to continue booting (no --scenario), else the process exit code.
@@ -194,5 +197,15 @@ zen::DrawCMresult* pc_scenario_challenge_window(void);
 // Text windows createTutorialWindow has opened since the process started; with a
 // non-null lastTextId, the EnumTutorial of the last one (-1 before the first).
 int pc_scenario_text_windows_opened(int* lastTextId);
+// The live GameCoreSection (null outside a running NewPikiGame), the countdown
+// window RunningModeState draws from mNightCountdown, and whether the map menu
+// (ogScrMenuMgr, MOVIECMD_CreateMenuWindow) is open.
+struct GameCoreSection;
+namespace zen {
+struct DrawCountDown;
+} // namespace zen
+GameCoreSection* pc_scenario_gamecore(void);
+zen::DrawCountDown* pc_scenario_countdown_window(void);
+bool pc_scenario_map_menu_open(void);
 
 #endif

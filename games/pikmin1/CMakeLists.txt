@@ -470,6 +470,7 @@ if (PIKMIN_BUILD_SCENARIOS)
         pc_port/scenarios/scenario_tutorial_day1.cpp
         pc_port/scenarios/scenario_carry_blocked.cpp
         pc_port/scenarios/scenario_bomb_firsts.cpp
+        pc_port/scenarios/scenario_pikmin_cap.cpp
         pc_port/scenarios/scenario_nectar_growth.cpp
         pc_port/scenarios/scenario_ship_part_carry.cpp
         pc_port/scenarios/scenario_ufo_part_discovery.cpp
@@ -2325,6 +2326,30 @@ if(PIKMIN_BUILD_SCENARIOS)
         nectar_growth:sandbox:30,60
         bomb_firsts:sandbox:30,60
         carry_blocked:sandbox_objects:30,60)
+        string(REPLACE ":" ";" parts "${entry}")
+        list(GET parts 0 scenario)
+        list(GET parts 1 stage)
+        list(GET parts 2 rates)
+        string(REPLACE "," ";" rates "${rates}")
+        foreach(rate IN LISTS rates)
+            add_test(NAME scenario_${scenario}_${rate}
+                COMMAND ${CMAKE_COMMAND}
+                    -DGAME=$<TARGET_FILE:${NECTAR_GAME}>
+                    -DSCENARIO=${scenario} -DRATE=${rate}
+                    -DALLOWLIST=${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/standin-open-allowlist.txt
+                    -DLOG_DIR=${CMAKE_CURRENT_BINARY_DIR}/scenario-logs
+                    -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/run_standin_scenario.cmake)
+            set_tests_properties(scenario_${scenario}_${rate} PROPERTIES
+                FIXTURES_REQUIRED scenario_standin_tree
+                WORKING_DIRECTORY "${PIKMIN_STANDIN_DATA}"
+                ENVIRONMENT "PIKMIN_SCENARIO_DATA_DIR=${PIKMIN_STANDIN_DATA};PIKMIN_SCENARIO_STAGE=stages/${stage}.ini"
+                TIMEOUT 600)
+        endforeach()
+    endforeach()
+
+    # Disc-free W3 scenarios (coverage/milestones.md, issue #95), name:stage:rates.
+    foreach(entry pikmin_cap:sandbox_objects:30,60 pikmin_cap_1:sandbox_objects:30,60
+        pikmin_cap_250:sandbox_objects:30,60 pikmin_cap_999:sandbox_objects:30,60)
         string(REPLACE ":" ";" parts "${entry}")
         list(GET parts 0 scenario)
         list(GET parts 1 stage)

@@ -328,6 +328,10 @@ std::vector<StandinLayout> standinBloLayouts()
 	                       "ufo_x_0.blo",  "ufo_y_0.blo", "ufo_z_0.blo", "ufo_a1_0.blo", "ufo_b1_0.blo", "ufo_c1_0.blo" })
 		out.push_back(tutorialPage(f));
 
+	// pikmin_cap (#95): the seed an Onion emits at the field limit asks for TUT_Limit100
+	// (EmitPiki::act, bloFile_Limit100).
+	out.push_back(tutorialPage("tu_tx28.blo"));
+
 	// ship_part_carry: delivering the Whimsical Radar (uf01) opens its "get" text
 	// (bloFile_PartsGet_uf01: auf_f_0 and tu_tx24) from the demo78 stand-in's TUT_GetParts key.
 	for (const char* f : { "auf_f_0.blo", "tu_tx24.blo" })
