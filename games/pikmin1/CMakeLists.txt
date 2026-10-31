@@ -997,6 +997,8 @@ if(ANDROID AND NOT TARGET nectar_launcher)
     add_library(nectar_launcher SHARED
         pc_port/launcher/launcher_android_main.cpp
         pc_port/launcher/launcher_gui.cpp
+        pc_port/launcher/install_directory.cpp
+        pc_port/dolphin_stubs/pc_card_save_root.cpp
         pc_port/launcher/button_style.cpp
         pc_port/launcher/button_layout.cpp
         pc_port/launcher/crash_report.cpp
@@ -1165,6 +1167,9 @@ if(PIKMIN_BUILD_TESTS AND PIKMIN_BUILD_LAUNCHER)
         ${CMAKE_CURRENT_SOURCE_DIR}/pc_port/launcher
         ${SDL2_INCLUDE_DIRS})
     target_link_libraries(install_dialog_snapshot PRIVATE nectar_paths ${SDL2_LIBRARIES} Threads::Threads)
+    if (WIN32)
+        target_link_libraries(install_dialog_snapshot PRIVATE comdlg32 ole32 shell32 uuid winhttp)
+    endif()
     target_compile_options(install_dialog_snapshot PRIVATE ${NATIVE_COMPILE_OPTIONS})
 
     add_executable(installer_ui_test
