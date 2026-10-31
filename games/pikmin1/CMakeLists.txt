@@ -471,6 +471,7 @@ if (PIKMIN_BUILD_SCENARIOS)
         pc_port/scenarios/scenario_carry_blocked.cpp
         pc_port/scenarios/scenario_bomb_firsts.cpp
         pc_port/scenarios/scenario_pikmin_cap.cpp
+        pc_port/scenarios/scenario_day_clock.cpp
         pc_port/scenarios/scenario_nectar_growth.cpp
         pc_port/scenarios/scenario_ship_part_carry.cpp
         pc_port/scenarios/scenario_ufo_part_discovery.cpp
@@ -2349,7 +2350,8 @@ if(PIKMIN_BUILD_SCENARIOS)
 
     # Disc-free W3 scenarios (coverage/milestones.md, issue #95), name:stage:rates.
     foreach(entry pikmin_cap:sandbox_objects:30,60 pikmin_cap_1:sandbox_objects:30,60
-        pikmin_cap_250:sandbox_objects:30,60 pikmin_cap_999:sandbox_objects:30,60)
+        pikmin_cap_250:sandbox_objects:30,60 pikmin_cap_999:sandbox_objects:30,60
+        day_clock:sandbox:30,60)
         string(REPLACE ":" ";" parts "${entry}")
         list(GET parts 0 scenario)
         list(GET parts 1 stage)
