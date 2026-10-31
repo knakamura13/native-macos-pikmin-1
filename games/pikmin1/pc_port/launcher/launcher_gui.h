@@ -114,7 +114,8 @@ public:
             const std::string& cancel = std::string());
 
     bool choosePaths(const std::function<std::string()>& chooseRom,
-                     const std::function<std::string()>& chooseInstallDirectory,
+                     const std::function<std::string(const std::string& currentInstallDirectory)>&
+                         chooseInstallDirectory,
                      std::string& rom, std::string& installDirectory) override;
     std::string runDialog(const std::function<std::string()>& dialog, const std::string& what) override;
     void updateProgress(std::uint32_t percent, const std::string& currentFile,

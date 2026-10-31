@@ -9,6 +9,7 @@
 #include "asset_finalize.h"
 #include "prepared_image.h"
 #include "installer_ui.h"
+#include "install_directory.h"
 #include "launcher_gui.h"
 #include "crash_report.h"
 #include "launcher_platform.h"
@@ -95,7 +96,10 @@ std::string promptLine(const std::string& prompt)
 
 bool respawnInTerminal() { return platform::respawnInTerminal(); }
 
-fs::path askForInstallDirectory() { return platform::askForInstallDirectory(); }
+fs::path askForInstallDirectory(const fs::path& initialDirectory = {})
+{
+    return platform::askForInstallDirectory("Choose the install folder", initialDirectory);
+}
 fs::path askForImage() { return platform::askForImage(); }
 
 fs::path askForImageConsole()
@@ -1024,6 +1028,27 @@ fs::path installDirFile() { return nectar::paths::userFolderConfigFile("install_
 
 fs::path rememberedInstallDirectory() { return nectar::paths::readStoredPath(installDirFile()); }
 
+pikmin::launcher::DefaultInstallDirectoryRequest makeDefaultInstallDirectoryRequest(
+    const fs::path& sourceDirectory, bool launcherInInstallFolder, const fs::path& pikmin1Directory, bool forPikmin2)
+{
+    pikmin::launcher::DefaultInstallDirectoryRequest request;
+    request.launcherDirectory             = sourceDirectory;
+    request.launcherInInstallFolder       = launcherInInstallFolder;
+    request.strictPortable                = nectar::paths::isStrictPortable();
+    request.rememberedInstallDirectory    = rememberedInstallDirectory();
+    request.defaultDataRoot               = defaultDataRoot();
+    request.pikmin1InstallDirectory       = pikmin1Directory;
+    request.forPikmin2                    = forPikmin2;
+    return request;
+}
+
+fs::path defaultInstallDirectory(const fs::path& sourceDirectory, bool launcherInInstallFolder,
+                                 const fs::path& pikmin1Directory, bool forPikmin2)
+{
+    return pikmin::launcher::resolveDefaultInstallDirectory(
+        makeDefaultInstallDirectoryRequest(sourceDirectory, launcherInInstallFolder, pikmin1Directory, forPikmin2));
+}
+
 // Guarda la carpeta y, si es nueva, pone en el escritorio el acceso directo a
 // su launcher. Solo la primera vez: si el usuario lo borra, no vuelve.
 // Con portable.txt (o NECTAR_PORTABLE=1) no se escribe nada fuera de la
@@ -1087,7 +1112,11 @@ UpdateOutcome runPikmin2Install(pikmin::launcher::HubWindow& hub, const fs::path
     for (;;) {
         std::string rom, directory;
         if (!hub.choosePaths([] { return askForImage().string(); },
-                             [] { return askForInstallDirectory().string(); }, rom, directory)) {
+                             [](const std::string& current) {
+                                 return askForInstallDirectory(current.empty() ? fs::path {} : fs::u8path(current))
+                                     .u8string();
+                             },
+                             rom, directory)) {
             return UpdateOutcome::BackHome;
         }
         fs::path image = rom;
@@ -1528,7 +1557,8 @@ int main(int argc, char** argv)
                         && choice.game == pikmin::launcher::HubGame::Pikmin2) {
                         fs::path gameDirectory;
                         const UpdateOutcome outcome = runPikmin2Install(
-                            *home, sourceDirectory, installedBesideLauncher ? sourceDirectory : fs::path(),
+                            *home, sourceDirectory,
+                            defaultInstallDirectory(sourceDirectory, isInstallFolder, pikmin1Directory, true).u8string(),
                             converter, gameDirectory);
                         if (outcome != UpdateOutcome::BackHome) {
                             hubState.games[1].installed = true;
@@ -1539,7 +1569,9 @@ int main(int argc, char** argv)
                         continue;
                     }
                     if (choice.action == pikmin::launcher::HubAction::Install) {
-                        home->setInstallGame(pikmin::launcher::HubGame::Pikmin1);
+                        home->setInstallGame(
+                            pikmin::launcher::HubGame::Pikmin1,
+                            defaultInstallDirectory(sourceDirectory, isInstallFolder, pikmin1Directory, false).u8string());
                         return choice;
                     }
                     fs::path playDirectory;
@@ -1579,11 +1611,17 @@ int main(int argc, char** argv)
                     }
                     installerWindow = std::move(fallback);
                 }
+                const fs::path suggestedInstall
+                    = defaultInstallDirectory(sourceDirectory, isInstallFolder, pikmin1Directory, false);
+                if (auto* fallback = dynamic_cast<pikmin::launcher::InstallerWindow*>(installerWindow.get()))
+                    fallback->presetInstallDirectory(suggestedInstall.u8string());
                 std::string selectedRom;
                 std::string selectedInstallDirectory;
                 if (!installerWindow->choosePaths(
                         [] { return askForImage().string(); },
-                        [] { return askForInstallDirectory().string(); },
+                        [](const std::string& current) {
+                            return askForInstallDirectory(current.empty() ? fs::path {} : fs::u8path(current)).u8string();
+                        },
                         selectedRom, selectedInstallDirectory)) {
                     // Canceló y pulsó la portada de un juego ya instalado.
                     if (hub && hub->playRequested() && installedBesideLauncher) {

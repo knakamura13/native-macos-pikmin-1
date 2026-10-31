@@ -23,6 +23,7 @@
 #include "launcher_coop.h"
 #endif
 #include "gci_save_import.h"
+#include "install_directory.h"
 #include "launcher_cursor.h"
 #include "launcher_platform.h"
 #include "launcher_page_layout.h"
@@ -2768,7 +2769,9 @@ struct HubWindow::Impl {
         if (pathField(ImVec2(at.x, at.y + 80.0f), width, "Disc image", rom, "No disc image chosen", "rom")) pathsAction = 1;
         if (pathField(ImVec2(at.x, at.y + 170.0f), width, "Install to", installDirectory, "No folder chosen", "dir")) pathsAction = 2;
         if (!pathsNote.empty()) {
-            dl->AddText(hub->fonts.caption, 16.0f, ImVec2(at.x, at.y + 262.0f), col(ImVec4(1.0f, 0.45f, 0.30f, 1.0f)), pathsNote.c_str());
+            const std::string note = fitTail(hub->fonts.caption, 16.0f, pathsNote, width);
+            dl->AddText(hub->fonts.caption, 16.0f, ImVec2(at.x, at.y + 262.0f), col(ImVec4(1.0f, 0.45f, 0.30f, 1.0f)),
+                        note.c_str());
         }
         const float buttonsY = at.y + panel.y - 110.0f;
         const float actionW = buttons::buttonWidth(role::kAction);
@@ -3182,6 +3185,7 @@ void HubWindow::setInstallGame(HubGame game, const std::string& suggestedDirecto
     if (m.installGame != game) m.rom.clear();
     m.installGame = game;
     if (m.installDirectory.empty()) m.installDirectory = suggestedDirectory;
+    m.pathsNote = m.installDirectory.empty() ? std::string {} : installSaveMigrationNote(fs::u8path(m.installDirectory));
 }
 
 void HubWindow::setHomeLoop(std::function<HubResult()> loop) { mImpl->homeLoop = std::move(loop); }
@@ -3216,7 +3220,8 @@ int HubWindow::ask(const std::string& title, const std::string& text, const std:
 }
 
 bool HubWindow::choosePaths(const std::function<std::string()>& chooseRom,
-                            const std::function<std::string()>& chooseInstallDirectory,
+                            const std::function<std::string(const std::string& currentInstallDirectory)>&
+                                chooseInstallDirectory,
                             std::string& rom, std::string& installDirectory)
 {
     Impl& m = *mImpl;
@@ -3233,7 +3238,8 @@ bool HubWindow::choosePaths(const std::function<std::string()>& chooseRom,
             }
         }
         m.modal = Impl::Modal::Paths;
-        m.pathsNote.clear();
+        m.pathsNote = m.installDirectory.empty() ? std::string {}
+                                                 : installSaveMigrationNote(fs::u8path(m.installDirectory));
         for (;;) {
             m.pathsAction = 0;
             m.frame();
@@ -3243,9 +3249,20 @@ bool HubWindow::choosePaths(const std::function<std::string()>& chooseRom,
                 if (m.quitRequested) return false;
                 if (!selected.empty()) m.rom = selected;
             } else if (m.pathsAction == 2) {
-                const std::string selected = m.waitForDialog(chooseInstallDirectory, "folder picker");
+                const std::string selected = m.waitForDialog(
+                    [&] {
+                        if (chooseInstallDirectory) return chooseInstallDirectory(m.installDirectory);
+                        return platform::askForInstallDirectory(
+                                   "Choose the install folder",
+                                   m.installDirectory.empty() ? fs::path {} : fs::u8path(m.installDirectory))
+                            .u8string();
+                    },
+                    "folder picker");
                 if (m.quitRequested) return false;
-                if (!selected.empty()) m.installDirectory = selected;
+                if (!selected.empty()) {
+                    m.installDirectory = selected;
+                    m.pathsNote = installSaveMigrationNote(fs::u8path(m.installDirectory));
+                }
             } else if (m.pathsAction == 3) {
                 rom = m.rom;
                 installDirectory = m.installDirectory;

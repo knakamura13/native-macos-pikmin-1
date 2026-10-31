@@ -1068,6 +1068,7 @@ if(PIKMIN_BUILD_LAUNCHER)
     add_executable(pikmin_launcher
         pc_port/launcher/launcher_main.cpp
         pc_port/launcher/launcher_gui.cpp
+        pc_port/launcher/install_directory.cpp
         pc_port/launcher/gci_save_import.cpp
         pc_port/dolphin_stubs/pc_card_save_root.cpp
         pc_port/launcher/button_style.cpp
@@ -1146,6 +1147,25 @@ if(PIKMIN_BUILD_TESTS AND PIKMIN_BUILD_LAUNCHER)
     target_include_directories(gci_save_import_test PRIVATE pc_port/launcher ${PC_PORT_DIR})
     target_compile_options(gci_save_import_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
     add_test(NAME gci_save_import_test COMMAND gci_save_import_test)
+
+    add_executable(install_directory_test
+        pc_port/launcher/install_directory_test.cpp
+        pc_port/launcher/install_directory.cpp
+        pc_port/dolphin_stubs/pc_card_save_root.cpp)
+    target_include_directories(install_directory_test PRIVATE pc_port/launcher ${PC_PORT_DIR})
+    target_compile_options(install_directory_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME install_directory_test COMMAND install_directory_test)
+
+    add_executable(install_dialog_snapshot
+        pc_port/launcher/install_dialog_snapshot.cpp
+        pc_port/launcher/installer_ui.cpp
+        pc_port/pc_icon.cpp
+        ${LAUNCHER_PLATFORM_SOURCE})
+    target_include_directories(install_dialog_snapshot PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/pc_port/launcher
+        ${SDL2_INCLUDE_DIRS})
+    target_link_libraries(install_dialog_snapshot PRIVATE nectar_paths ${SDL2_LIBRARIES} Threads::Threads)
+    target_compile_options(install_dialog_snapshot PRIVATE ${NATIVE_COMPILE_OPTIONS})
 
     add_executable(installer_ui_test
         pc_port/launcher/installer_ui_test.cpp

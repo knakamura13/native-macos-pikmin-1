@@ -266,6 +266,11 @@ bool InstallerWindow::open(std::string& error)
     return true;
 }
 
+void InstallerWindow::presetInstallDirectory(const std::string& directory)
+{
+    if (mImpl->installDirectory.empty() && !directory.empty()) mImpl->installDirectory = directory;
+}
+
 std::string InstallerWindow::runDialog(const std::function<std::string()>& dialog, const std::string& what)
 {
     const std::string status = mImpl->status;
@@ -313,7 +318,8 @@ std::string InstallerWindow::runDialog(const std::function<std::string()>& dialo
 }
 
 bool InstallerWindow::choosePaths(const std::function<std::string()>& chooseRom,
-                                  const std::function<std::string()>& chooseInstallDirectory,
+                                  const std::function<std::string(const std::string& currentInstallDirectory)>&
+                                      chooseInstallDirectory,
                                   std::string& rom, std::string& installDirectory)
 {
     mImpl->installing = false;
@@ -345,7 +351,8 @@ bool InstallerWindow::choosePaths(const std::function<std::string()>& chooseRom,
             const std::string selected = runDialog(chooseRom, "disc image picker");
             if (!selected.empty()) mImpl->rom = selected;
         } else if (contains(mImpl->installBrowse, x, y)) {
-            const std::string selected = runDialog(chooseInstallDirectory, "folder picker");
+            const std::string selected = runDialog(
+                [&] { return chooseInstallDirectory(mImpl->installDirectory); }, "folder picker");
             if (!selected.empty()) mImpl->installDirectory = selected;
         } else if (contains(mImpl->installButton, x, y)) {
             if (mImpl->rom.empty() || mImpl->installDirectory.empty()) {
@@ -412,6 +419,28 @@ bool InstallerWindow::showComplete(const std::string& installDirectory, bool wil
     if (willLaunch) message += "\n\nThe game will start now.";
     SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_INFORMATION, "Installation complete", message.c_str(), mImpl->window);
     return true;
+}
+
+bool InstallerWindow::saveSetupScreenshot(const std::string& path, const std::string& rom,
+                                            const std::string& installDirectory)
+{
+    if (!mImpl->renderer) return false;
+    mImpl->installing = false;
+    mImpl->rom          = rom;
+    mImpl->installDirectory = installDirectory;
+    mImpl->status       = "Choose your disc image and where to install";
+    mImpl->render();
+    SDL_Surface* surface
+        = SDL_CreateRGBSurfaceWithFormat(0, 760, 430, 32, SDL_PIXELFORMAT_ARGB8888);
+    if (!surface) return false;
+    if (SDL_RenderReadPixels(mImpl->renderer, nullptr, SDL_PIXELFORMAT_ARGB8888, surface->pixels, surface->pitch)
+        != 0) {
+        SDL_FreeSurface(surface);
+        return false;
+    }
+    const bool ok = SDL_SaveBMP(surface, path.c_str()) == 0;
+    SDL_FreeSurface(surface);
+    return ok;
 }
 
 } // namespace launcher
