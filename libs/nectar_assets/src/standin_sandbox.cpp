@@ -21,9 +21,9 @@ namespace {
 // wall) was chosen with the placement below: a wider panel moves where the
 // Pikmin work it away from the captain, which sets how far the first one walks
 // back to his hand (standin-k-investigation.md).
-constexpr float kPanelHalfWidth = 110.56034713495107f;
+constexpr float kPanelHalfWidth = 111.0f;
 constexpr float kPanelHeight    = 90.0f;
-constexpr float kPanelHalfDepth = 10.562116222545233f;
+constexpr float kPanelHalfDepth = 8.0f;
 constexpr float kPostWidth      = 20.0f;
 constexpr float kPostHeight     = 110.0f;
 constexpr float kPostHalfDepth  = 18.0f;
@@ -157,18 +157,15 @@ SandboxGatePlacement sandboxGatePlacement()
 	// start; that gate's generator stands 203 units ahead of him and 34 units to
 	// his left, turned 35 degrees. The sandbox gate takes that relation (a
 	// gameplay layout, not geometry: our wall has its own size), moved 6 units
-	// closer and turned 36 degrees, with the 210-unit panel above. Of about 600
-	// layouts searched around the disc's (turn, position, panel width and
-	// depth), that one gives K 15 / 18 at 30 / 60 Hz, the disc's exactly, and its
-	// 1-unit and 1-degree neighbours give 13 to 17 at 30 Hz (60 Hz: 16 to 20,
-	// or 28 to 50 when the squad ends up on the far side of the panel). K is a
-	// chaotic outcome of where each Pikmin stands when it gives up, so this is a
-	// chosen point in the calmest region found, not a plateau
+	// closer and turned. Re-fitted for #92 (GameCube RNG draw order): disc K is 13 /
+	// 22 at 30 / 60 Hz; the layout below matches on the stand-in tree (42 degrees,
+	// z -207, x -31.5, 222-unit panel, depth 16). K is a chaotic outcome of where
+	// each Pikmin stands when it gives up, so this is a chosen point, not a plateau
 	// (standin-k-investigation.md).
 	SandboxGatePlacement p;
-	p.x    = -30.157348583041852f;
-	p.z    = -195.4417368668644f;
-	p.rotY = 44;
+	p.x    = -31.5f;
+	p.z    = -207.0f;
+	p.rotY = 42;
 	return p;
 }
 

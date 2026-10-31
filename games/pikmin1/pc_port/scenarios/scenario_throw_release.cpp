@@ -2,8 +2,8 @@
 // that holds A until the grab completes and measures K, a release one tick
 // after the press, a release 2 ticks after that Pikmin's own grab completes). Each asserts its
 // preconditions, then only behaviour that holds with or without upstream #209
-// (an open upstream PR, merged into kyle-develop; K did not move, 15 / 18 at
-// 30 / 60 Hz on disc and stand-ins alike):
+// (an open upstream PR, merged into kyle-develop; K was 15 / 18 at 30 / 60 Hz
+// before #92's GameCube RNG order; after #92 disc and stand-in K are 13 / 22):
 // the Pikmin is Hanged before the captain enters Throw, the captain enters
 // Throw, the Pikmin flies and lands (Normal), and the captain returns to Walk.
 // All within tick bounds. The before-keyframe timing check is not in v1.
