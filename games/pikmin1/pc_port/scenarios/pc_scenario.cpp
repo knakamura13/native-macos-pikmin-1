@@ -821,6 +821,13 @@ bool pc_scenario_apply_debug_camera(Camera* cam)
 	Vector3f focus(sDebugCamera.focusX, sDebugCamera.focusY, sDebugCamera.focusZ);
 	cam->mFov = sDebugCamera.fov;
 	cam->calcVectors(eye, focus);
+	// calcVectors() ends with update(1.0f, …) using the gameplay near plane left on
+	// the camera (typically 100). Showcase rigs sit ~40 units from the subject, so
+	// the whole field clips and the capture is a green horizon strip over black.
+	f32 aspect = pc_gfx_get_window_aspect_ratio();
+	if (aspect <= 0.0f) aspect = 640.0f / 480.0f;
+	const f32 farClip = cam->mFar > 0.0f ? cam->mFar : 2600.0f;
+	cam->update(aspect, cam->mFov, 3.0f, farClip);
 	return true;
 }
 

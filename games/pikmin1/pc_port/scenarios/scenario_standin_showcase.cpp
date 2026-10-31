@@ -15,10 +15,11 @@ namespace {
 
 void updateShowcaseCamera(Navi* navi)
 {
-	if (!navi || !navi->mNaviCamera) return;
+	if (!navi) return;
 	Vector3f focus = navi->mSRT.t;
-	focus.y += 6.0f;
-	Vector3f eye(focus.x - 14.0f, focus.y + 16.0f, focus.z - 32.0f);
+	focus.y += 10.0f;
+	// South-west elevated rig: frames captain, Pikmin row, onion, pellet; ship stays mid-ground.
+	Vector3f eye(focus.x - 16.0f, focus.y + 28.0f, focus.z - 48.0f);
 	PcScenarioDebugCamera cam {};
 	cam.active  = true;
 	cam.eyeX    = eye.x;
@@ -27,10 +28,8 @@ void updateShowcaseCamera(Navi* navi)
 	cam.focusX  = focus.x;
 	cam.focusY  = focus.y;
 	cam.focusZ  = focus.z;
-	cam.fov     = 36.0f;
+	cam.fov     = 33.0f;
 	pc_scenario_set_debug_camera(cam);
-	navi->mNaviCamera->mFov = cam.fov;
-	navi->mNaviCamera->calcVectors(eye, focus);
 }
 
 void spawnShowcasePiki(Navi* navi, int colour, PikiHappa happa, int slot)

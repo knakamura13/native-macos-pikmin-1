@@ -17,7 +17,7 @@ constexpr float kShowcaseRedOnionZ = 52.0f;
 constexpr float kShowcasePelletX   = 34.0f;
 constexpr float kShowcasePelletZ   = 48.0f;
 constexpr float kShowcaseUfoX      = 6.0f;
-constexpr float kShowcaseUfoZ      = -58.0f;
+constexpr float kShowcaseUfoZ      = -92.0f;
 
 bool addShowcaseStage(std::map<std::string, std::vector<std::uint8_t>>& tree, std::string& error);
 
