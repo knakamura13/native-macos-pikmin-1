@@ -23,5 +23,5 @@ cmd=(python3 "${script_dir}/save_mode.py" resolve --home "${home}")
 [[ -n "${build_output}" ]] && cmd+=(--build-output "${build_output}")
 [[ -n "${cache}" ]] && cmd+=(--cmake-cache "${cache}")
 [[ "${non_interactive}" -eq 1 ]] && cmd+=(--non-interactive)
-cmd+=("${save_args[@]}")
+cmd+=(${save_args[@]+"${save_args[@]}"})
 "${cmd[@]}"

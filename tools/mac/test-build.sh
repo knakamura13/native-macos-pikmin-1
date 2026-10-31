@@ -216,7 +216,14 @@ export PIKMIN_BUILD_INFO="\$(dirname -- "\$0")/../Resources/build-info.json"
 export PIKMIN_BUNDLE_MANAGED=1
 export PIKMIN_LAUNCHER_TITLE=${q_title}
 unset NECTAR_EXECUTABLE_PATH PIKMIN_EXECUTABLE_PATH
-python3 "${save_mode_py}" backup-if-needed --home "\${HOME}" --build-info "\$(dirname -- "\$0")/../Resources/build-info.json" >/dev/null 2>&1 || true
+save_mode_py="\$(dirname -- "\$0")/../Resources/save_mode.py"
+if [[ ! -f "\$save_mode_py" ]]; then
+  printf 'Missing bundled save helper: %s\\n' "\$save_mode_py" >&2
+  exit 1
+fi
+if [[ ${q_read_only} != "1" && ${q_mode} == "central" ]]; then
+  python3 "\$save_mode_py" backup-if-needed --home "\${HOME}" --build-info "\$PIKMIN_BUILD_INFO" >/dev/null 2>&1 || true
+fi
 data_root=\$NECTAR_PIKMIN1_DIR
 mkdir -p "\$data_root/save" "\$XDG_CONFIG_HOME/open-nectar" "\$XDG_CACHE_HOME"
 real_assets="\${HOME}/.local/share/pikmin-native/assets"
@@ -255,6 +262,7 @@ write_test_app() {
     title_xml="$(xml_escape "${title}")"
     bundle_suffix="$(printf '%s\n%s' "${branch}" "${snapshot}" | shasum -a 256 | cut -c1-16)"
     mkdir -p "${macos}" "${resources}"
+    cp "${save_mode_py}" "${resources}/save_mode.py"
     write_wrapper "${macos}/open-nectar" \
         "${data_home}" "${config_home}" "${cache_home}" \
         "${data_root}" "${save_dir}" "${game_bin}" "${launcher_bin}" "${title}" "${NECTAR_SAVE_READ_ONLY:-0}"
@@ -497,7 +505,7 @@ dest="$(mktemp -d "${root}/${name}-${identity_hash}.XXXXXXXX")"
 snapshot="${short}-${dest##*.}"
 build_dir="${dest}/build"
 # shellcheck disable=SC1090
-eval "$(bash "${resolve_save_sh}" --home "${HOME}" --build-output "${dest}" --non-interactive -- "${save_flag_args[@]}")"
+eval "$(bash "${resolve_save_sh}" --home "${HOME}" --build-output "${dest}" --non-interactive -- ${save_flag_args[@]+"${save_flag_args[@]}"})"
 data_home="${root}/data"
 config_home="${data_home}/config"
 cache_home="${data_home}/cache"

@@ -24,6 +24,8 @@ BACKUP_KEEP = 5
 
 SAVE_MODES = ('central', 'fresh', 'sandbox', 'named', 'readonly')
 
+PIKMIN_CARD_CONFLICT_FILES = ('Pikmin dataFile', 'Pikmin2_SaveData')
+
 
 @dataclass(frozen=True)
 class SaveResolution:
@@ -138,6 +140,26 @@ def _backup_dir(home: Path, label: str) -> Path:
     return dest
 
 
+def _file_mtime(path: Path) -> float:
+    if not path.is_file():
+        return 0.0
+    try:
+        return path.stat().st_mtime
+    except OSError:
+        return 0.0
+
+
+def _copy_card_file(src_card: Path, dest_card: Path, name: str) -> None:
+    src = src_card / name
+    if not src.is_file():
+        return
+    dest_card.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(src, dest_card / name)
+    meta = src_card / f'.meta_{name}'
+    if meta.is_file():
+        shutil.copy2(meta, dest_card / meta.name)
+
+
 def merge_pikmin2_cards(central: Path, p2_save: Path, home: Path) -> None:
     central_card = central / 'card0'
     p2_card = p2_save / 'card0'
@@ -146,13 +168,45 @@ def merge_pikmin2_cards(central: Path, p2_save: Path, home: Path) -> None:
     if not central_card.is_dir():
         _copy_tree(p2_save, central)
         return
-    central_mtime = _newest_mtime(central_card)
-    p2_mtime = _newest_mtime(p2_card)
-    if p2_mtime <= central_mtime:
-        return
-    backup = _backup_dir(home, 'pikmin2-conflict')
-    _copy_tree(central, backup / 'save')
-    _copy_tree(p2_save, central)
+
+    backup_root: Path | None = None
+
+    def backup_losing_file(name: str, loser: Path) -> None:
+        nonlocal backup_root
+        if backup_root is None:
+            backup_root = _backup_dir(home, 'pikmin2-conflict') / 'save' / 'card0'
+            backup_root.mkdir(parents=True, exist_ok=True)
+        _copy_card_file(loser.parent, backup_root, name)
+
+    for name in PIKMIN_CARD_CONFLICT_FILES:
+        central_file = central_card / name
+        p2_file = p2_card / name
+        if not p2_file.is_file():
+            continue
+        if not central_file.is_file():
+            _copy_card_file(p2_card, central_card, name)
+            continue
+        central_mtime = _file_mtime(central_file)
+        p2_mtime = _file_mtime(p2_file)
+        if p2_mtime <= central_mtime:
+            continue
+        backup_losing_file(name, central_file)
+        _copy_card_file(p2_card, central_card, name)
+
+    for rel in sorted(_relative_files(p2_save)):
+        if rel.startswith('card0/'):
+            tail = rel[len('card0/'):]
+            if tail.split('/')[0] in PIKMIN_CARD_CONFLICT_FILES or tail in PIKMIN_CARD_CONFLICT_FILES:
+                continue
+        target = central / rel
+        if target.exists():
+            continue
+        source_file = p2_save / rel
+        target.parent.mkdir(parents=True, exist_ok=True)
+        if source_file.is_symlink():
+            target.symlink_to(os.readlink(source_file))
+        else:
+            shutil.copy2(source_file, target)
 
 
 def copy_merge_sources(home: Path, dest: Path, *, config_home: Path | None = None) -> None:
@@ -313,6 +367,7 @@ def resolve_save_mode(
     force_throwaway = automation_or_cheat_forces_throwaway(env, cmake_cache)
     if force_throwaway and mode in ('central', 'readonly', 'named'):
         mode = 'sandbox' if args.sandbox_save or env.get('PIKMIN_SAVE_SANDBOX_ON_AUTOMATION', '1') != '0' else 'fresh'
+        read_only = False
 
     central = central_save_dir(home)
     if mode == 'central':
@@ -403,7 +458,7 @@ def _backup_stamp() -> str:
 def snapshot_card0(card0: Path) -> Path | None:
     if not card0.is_dir():
         return None
-    files = [p for p in card0.iterdir() if p.is_file()]
+    files = [p for p in card0.rglob('*') if p.is_file()]
     if not files:
         return None
     root = _card_backup_root(card0)
@@ -416,10 +471,10 @@ def snapshot_card0(card0: Path) -> Path | None:
         dest = root / f'{stamp}-{suffix:02d}'
     dest.mkdir(parents=True)
     for item in files:
-        shutil.copy2(item, dest / item.name)
-        meta = card0 / f'.meta_{item.name}'
-        if meta.is_file():
-            shutil.copy2(meta, dest / meta.name)
+        rel = item.relative_to(card0)
+        target = dest / rel
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(item, target)
     backups = sorted([p for p in root.iterdir() if p.is_dir()], key=lambda p: p.name, reverse=True)
     for old in backups[BACKUP_KEEP:]:
         shutil.rmtree(old, ignore_errors=True)
@@ -432,7 +487,7 @@ def maybe_backup_on_first_launch(home: Path, build_info: Path) -> bool:
     except (OSError, ValueError, json.JSONDecodeError):
         return False
     mode = info.get('save_mode')
-    if mode not in ('central', 'readonly'):
+    if mode != 'central':
         return False
     sha = info.get('sha')
     if not isinstance(sha, str) or not sha:

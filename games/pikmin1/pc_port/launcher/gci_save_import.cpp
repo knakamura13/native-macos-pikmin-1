@@ -673,11 +673,13 @@ bool snapshotEntireCard0(const fs::path& card0Dir, std::string& error, CardBacku
     std::error_code ec;
     if (!fs::is_directory(card0Dir, ec)) return true;
     bool hasAny = false;
-    for (const auto& entry : fs::directory_iterator(card0Dir, ec)) {
-        if (entry.is_regular_file() && entry.path().filename().string().rfind(".meta_", 0) != 0) {
-            hasAny = true;
-            break;
-        }
+    for (const auto& entry : fs::recursive_directory_iterator(card0Dir, ec)) {
+        if (ec) break;
+        if (!entry.is_regular_file()) continue;
+        const std::string name = entry.path().filename().string();
+        if (name.rfind(".meta_", 0) == 0) continue;
+        hasAny = true;
+        break;
     }
     if (!hasAny) return true;
     const std::string stamp = [] {
@@ -709,18 +711,36 @@ bool snapshotEntireCard0(const fs::path& card0Dir, std::string& error, CardBacku
         error = ec.message();
         return false;
     }
-    for (const auto& entry : fs::directory_iterator(card0Dir, ec)) {
+    for (const auto& entry : fs::recursive_directory_iterator(card0Dir, ec)) {
+        if (ec) {
+            error = ec.message();
+            return false;
+        }
         if (!entry.is_regular_file()) continue;
-        const std::string name = entry.path().filename().string();
+        const fs::path src = entry.path();
+        const std::string name = src.filename().string();
         if (name.rfind(".meta_", 0) == 0) continue;
-        if (!fs::copy_file(entry.path(), dir / name, ec)) {
+        const fs::path rel = fs::relative(src, card0Dir, ec);
+        if (ec) {
+            error = ec.message();
+            return false;
+        }
+        const fs::path destFile = dir / rel;
+        fs::create_directories(destFile.parent_path(), ec);
+        if (ec) {
+            error = ec.message();
+            return false;
+        }
+        if (!fs::copy_file(src, destFile, ec)) {
             error = ec ? ec.message() : "copy failed";
             return false;
         }
-        const fs::path meta = card0Dir / (".meta_" + name);
-        if (fs::is_regular_file(meta, ec) && !fs::copy_file(meta, dir / meta.filename(), ec)) {
-            error = ec ? ec.message() : "copy failed";
-            return false;
+        if (src.parent_path() == card0Dir) {
+            const fs::path meta = card0Dir / (".meta_" + name);
+            if (fs::is_regular_file(meta, ec) && !fs::copy_file(meta, dir / meta.filename(), ec)) {
+                error = ec ? ec.message() : "copy failed";
+                return false;
+            }
         }
     }
     const std::vector<CardBackup> all = listCardBackups(card0Dir);
@@ -742,7 +762,7 @@ bool maybeBackupCentralSaveForBuild(const fs::path& buildInfoPath, std::string& 
     Json build;
     if (!parseJson(text, build) || build.type != Json::Type::Object) return true;
     const std::string mode = build.str("save_mode");
-    if (mode != "central" && mode != "readonly") return true;
+    if (mode != "central") return true;
     const std::string sha = build.str("sha");
     const std::string saveDir = build.str("configured_save_directory");
     if (sha.empty() || saveDir.empty()) return true;

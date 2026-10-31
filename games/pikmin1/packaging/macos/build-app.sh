@@ -587,7 +587,7 @@ cache_for_save="${build_dir}/CMakeCache.txt"
 resolve_args=(--home "${HOME}" --build-output "${output_dir}" --non-interactive)
 [[ -f "${cache_for_save}" ]] && resolve_args+=(--cmake-cache "${cache_for_save}")
 # shellcheck disable=SC1090
-eval "$(bash "${resolve_save_sh}" "${resolve_args[@]}" -- "${save_flag_args[@]}")"
+eval "$(bash "${resolve_save_sh}" "${resolve_args[@]}" -- ${save_flag_args[@]+"${save_flag_args[@]}"})"
 configured_save_dir="${NECTAR_SAVE_DIR}"
 save_read_only="${NECTAR_SAVE_READ_ONLY:-0}"
 bundle_executable="nectar-launcher"
@@ -654,6 +654,8 @@ if [[ -e "${app}" || -L "${app}" ]]; then
     rm -rf "${app}"
 fi
 mkdir -p "${contents}/MacOS" "${contents}/Resources"
+
+cp "${save_mode_py}" "${contents}/Resources/save_mode.py"
 
 # The binaries keep the upstream names (nectar, nectar-launcher). Only the app
 # bundle is named, so the code and the install format stay unchanged.
