@@ -42,6 +42,10 @@ execute_process(
         --max-near-black-ratio 0.20
         --min-center-non-grass 800
         --min-center-distinct 10
+        --min-saturated-red 350
+        --min-saturated-yellow 350
+        --min-saturated-blue 350
+        --max-center-near-black-ratio 0.18
     RESULT_VARIABLE pos_rc)
 if(NOT pos_rc STREQUAL "0")
     message(FATAL_ERROR "standin_showcase PNG composition check failed")

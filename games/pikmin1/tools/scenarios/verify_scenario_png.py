@@ -137,6 +137,50 @@ def is_grass_pixel(r: int, g: int, b: int) -> bool:
     return g > 70 and g > r + 8 and g > b + 8 and r < 130
 
 
+def is_saturated_red(r: int, g: int, b: int) -> bool:
+    return r >= 200 and r > g + 35 and r > b + 35
+
+
+def is_saturated_yellow(r: int, g: int, b: int) -> bool:
+    return r >= 180 and g >= 170 and b <= 120 and g >= b + 20
+
+
+def is_saturated_blue(r: int, g: int, b: int) -> bool:
+    return b >= 180 and b > r + 35 and b > g + 20
+
+
+def saturated_channel_counts(pixels: list[tuple[int, int, int]]) -> tuple[int, int, int]:
+    red = yellow = blue = 0
+    for r, g, b in pixels:
+        if is_saturated_red(r, g, b):
+            red += 1
+        if is_saturated_yellow(r, g, b):
+            yellow += 1
+        if is_saturated_blue(r, g, b):
+            blue += 1
+    return red, yellow, blue
+
+
+def center_near_black_ratio(
+    width: int,
+    height: int,
+    pixels: list[tuple[int, int, int]],
+    *,
+    threshold: int = 15,
+) -> float:
+    cx0, cx1 = width // 4, (3 * width) // 4
+    cy0, cy1 = height // 5, (2 * height) // 3
+    total = 0
+    dark = 0
+    for y in range(cy0, cy1):
+        for x in range(cx0, cx1):
+            r, g, b = pixels[y * width + x]
+            total += 1
+            if r < threshold and g < threshold and b < threshold:
+                dark += 1
+    return dark / total if total else 1.0
+
+
 def showcase_composition_stats(
     width: int,
     height: int,
@@ -175,8 +219,14 @@ def verify_showcase_composition(
     max_near_black_ratio: float,
     min_center_non_grass: int,
     min_center_distinct: int,
+    min_saturated_red: int = 0,
+    min_saturated_yellow: int = 0,
+    min_saturated_blue: int = 0,
+    max_center_near_black_ratio: float = 1.0,
 ) -> tuple[bool, str]:
     world_dark, non_grass, distinct_c = showcase_composition_stats(width, height, pixels)
+    sat_r, sat_y, sat_b = saturated_channel_counts(pixels)
+    center_dark = center_near_black_ratio(width, height, pixels)
     if world_dark > max_near_black_ratio:
         return (
             False,
@@ -192,7 +242,22 @@ def verify_showcase_composition(
             False,
             f"center has {distinct_c} distinct colours (need >= {min_center_distinct})",
         )
-    return True, f"showcase composition ok (world dark {world_dark * 100:.1f}%, center non-grass {non_grass})"
+    if min_saturated_red > 0 and sat_r < min_saturated_red:
+        return False, f"saturated red pixels {sat_r} (need >= {min_saturated_red})"
+    if min_saturated_yellow > 0 and sat_y < min_saturated_yellow:
+        return False, f"saturated yellow pixels {sat_y} (need >= {min_saturated_yellow})"
+    if min_saturated_blue > 0 and sat_b < min_saturated_blue:
+        return False, f"saturated blue pixels {sat_b} (need >= {min_saturated_blue})"
+    if center_dark > max_center_near_black_ratio:
+        return (
+            False,
+            f"center is {center_dark * 100:.1f}% near-black (max {max_center_near_black_ratio * 100:.1f}%)",
+        )
+    return (
+        True,
+        f"showcase composition ok (world dark {world_dark * 100:.1f}%, center non-grass {non_grass}, "
+        f"sat R/Y/B {sat_r}/{sat_y}/{sat_b}, center dark {center_dark * 100:.1f}%)",
+    )
 
 def compare_golden(
     golden: list[tuple[int, int, int]],
@@ -274,6 +339,15 @@ def main() -> int:
         default=0,
         help="standin_showcase guard: min distinct colours in the central region",
     )
+    p.add_argument("--min-saturated-red", type=int, default=0)
+    p.add_argument("--min-saturated-yellow", type=int, default=0)
+    p.add_argument("--min-saturated-blue", type=int, default=0)
+    p.add_argument(
+        "--max-center-near-black-ratio",
+        type=float,
+        default=-1.0,
+        help="fail if the central region is mostly near-black (dominant black blob guard)",
+    )
     args = p.parse_args()
     import os
 
@@ -313,7 +387,16 @@ def main() -> int:
                 file=sys.stderr,
             )
             return 1
-    if args.max_near_black_ratio >= 0.0 or args.min_center_non_grass > 0 or args.min_center_distinct > 0:
+    showcase_guard = (
+        args.max_near_black_ratio >= 0.0
+        or args.min_center_non_grass > 0
+        or args.min_center_distinct > 0
+        or args.min_saturated_red > 0
+        or args.min_saturated_yellow > 0
+        or args.min_saturated_blue > 0
+        or args.max_center_near_black_ratio >= 0.0
+    )
+    if showcase_guard:
         ok, msg = verify_showcase_composition(
             w,
             h,
@@ -321,11 +404,17 @@ def main() -> int:
             max_near_black_ratio=args.max_near_black_ratio if args.max_near_black_ratio >= 0.0 else 1.0,
             min_center_non_grass=args.min_center_non_grass,
             min_center_distinct=args.min_center_distinct,
+            min_saturated_red=args.min_saturated_red,
+            min_saturated_yellow=args.min_saturated_yellow,
+            min_saturated_blue=args.min_saturated_blue,
+            max_center_near_black_ratio=(
+                args.max_center_near_black_ratio if args.max_center_near_black_ratio >= 0.0 else 1.0
+            ),
         )
         if not ok:
             print(f"showcase composition failed: {msg}", file=sys.stderr)
             return 1
-        if args.max_near_black_ratio >= 0.0:
+        if showcase_guard:
             print(msg)
     if args.golden:
         try:
