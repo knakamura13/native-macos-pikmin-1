@@ -10,7 +10,7 @@ root = pathlib.Path(__file__).resolve().parents[4]
 build = pathlib.Path(sys.argv[1])
 upstream = 'a39f2e11f641b1a717fab0cc44218a8ba5650264'
 subprocess.run(['git','-C',str(root),'merge-base','--is-ancestor',upstream,'HEAD'],check=True)
-cache = (build/'CMakeCache.txt').read_text()
+cache = (build/'CMakeCache.txt').read_text(encoding='utf-8')
 compiler = next(line.split('=',1)[1] for line in cache.splitlines() if line.startswith('CMAKE_CXX_COMPILER:FILEPATH='))
 paths = ['games/pikmin1/pc_port/scenarios/scenario_throw_release.cpp',
          'games/pikmin1/pc_port/netplay/pc_netplay_det.cpp',

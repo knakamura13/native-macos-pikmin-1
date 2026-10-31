@@ -14,9 +14,9 @@ def collect(directory):
         matches = re.findall(r'^\[scenario\] throw_release calibration: K = (\d+) ticks\r?$', text, re.M)
         if len(matches) != 1 or int(matches[0]) < 3:
             raise ValueError(f'{path}: expected exactly one valid calibration')
-        if not re.search(r'^\[scenario\] PASS\b', text, re.M) or re.search(r'^\[scenario\] FAIL\b', text, re.M):
+        if not re.search(r'^\[scenario\] PASS throw_release at tick \d+\b', text, re.M) or re.search(r'^\[scenario\] FAIL\b', text, re.M):
             raise ValueError(f'{path}: missing PASS or reported FAIL')
-        if 'sessionSeed=0' not in text:
+        if not re.search(r'\bsessionSeed=0(?:\s|$)', text) or re.search(r'\bsessionSeed=(?!0(?:\s|$))\d+', text):
             raise ValueError(f'{path}: missing fixed session seed evidence')
         values[str(rate)] = int(matches[0])
     return values

@@ -19,7 +19,7 @@ class ComparisonTests(unittest.TestCase):
             for rate, k in ((30,15),(60,18)):
                 (directory/f'scenario_throw_release_{rate}.log').write_text(
                     f'[netplay-det] reseed day=0 stage=0 sessionSeed=0 hash=0x123 tick=0\n'
-                    f'[scenario] throw_release calibration: K = {k} ticks\n[scenario] PASS throw_release\n')
+                    f'[scenario] throw_release calibration: K = {k} ticks\n[scenario] PASS throw_release at tick 200 (intro 0 ticks)\n')
 
     def path(self):
         return self.sources['Windows']/'scenario_throw_release_60.log'
@@ -41,6 +41,8 @@ class ComparisonTests(unittest.TestCase):
         original = self.path().read_text()
         for text in ('', original.replace('[scenario] PASS','[scenario] FAIL'),
                      original.replace('sessionSeed=0','sessionSeed=1'),
+                     original.replace('sessionSeed=0','sessionSeed=01'),
+                     original.replace('PASS throw_release','PASS boot_smoke'),
                      original+original, original.replace('18 ticks','0 ticks')):
             with self.subTest(text=text):
                 self.path().write_text(text)
