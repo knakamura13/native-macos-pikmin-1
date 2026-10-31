@@ -538,7 +538,7 @@ void testPelletTables()
 	check(files[0].path == "dataDir/parms/pelMgr.bin", "pelMgr.bin path");
 	RamStream cfg = streamOf(files[0].bytes);
 	const int configs = cfg.readInt(); // PelletMgr::readConfigs
-	check(configs == 13, "twelve coloured pellet configs and the Main Engine");
+	check(configs == 14, "twelve coloured pellet configs, the Main Engine and the Whimsical Radar");
 	std::set<std::string> ids, configShapes;
 	for (int i = 0; i < configs; i++) {
 		TestPelletConfig c;
@@ -553,10 +553,16 @@ void testPelletTables()
 		if (model == "ust5") {
 			// The disc's Main Engine config (standin_objects.cpp): a ship part (type 3), no colour, 20 to 40 carriers,
 			// scale 1.65, ship joint 3, its own shape.
-			check(i == configs - 1, "the Main Engine is the last config");
+			check(i == configs - 2, "the Main Engine follows the coloured configs");
 			check(idString(c.shape) == "ust5" && idString(c.unused) == "none" && c.joint == 3, "Main Engine: shape ust5, no split, repair joint 3");
 			check(c.mPelletType() == 3 && c.mPelletColor() == -1 && c.mCarryMin() == 20 && c.mCarryMax() == 40 && c.mScale() == 1.65f,
 			      "Main Engine: type 3, colour -1, 20 to 40 carriers, scale 1.65 (the disc's)");
+			continue;
+		}
+		if (model == "uf01") {
+			check(i == configs - 1, "the Whimsical Radar is the last config");
+			check(idString(c.shape) == "uf01" && idString(c.unused) == "none" && c.joint == -1, "Whimsical Radar: shape uf01, no split, no repair joint");
+			check(c.mPelletType() == 3 && c.mPelletColor() == -1 && c.mCarryMin() == 10 && c.mCarryMax() == 20, "Whimsical Radar: type 3, colour -1, 10 to 20 carriers");
 			continue;
 		}
 		check(model.size() == 4 && (model[1] == 'b' || model[1] == 'r' || model[1] == 'y') && model[0] == 'p', "config id " + model + " is p<colour><number>");

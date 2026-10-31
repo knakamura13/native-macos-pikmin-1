@@ -361,6 +361,14 @@ std::map<std::string, LayoutReq> requirements()
 	// The tutorial scenarios: TUT_NukiAndFree's two pages, TUT_GetEngine's page, the Day 1 diary entry's two pages.
 	for (const char* f : { "tu_tx38_00.blo", "tu_tx38_01.blo", "tu_tx15.blo", "re_a_00.blo", "re_a_01.blo" }) m[f].reqs = { { "tx00", 'A' } };
 
+	// W2 scenarios (#94): the bomb, nectar and carry-blocked texts, the part "get only" pages of
+	// ufo_part_discovery and the Whimsical Radar's "get" pages of ship_part_carry.
+	for (const char* f : { "tu_tx27_00.blo", "tu_tx27_01.blo", "tu_tx29.blo", "tu_tx30.blo", "tu_tx14.blo", "auf_f_0.blo", "tu_tx24.blo", "ufo_a_0.blo", "ufo_b_0.blo", "ufo_c_0.blo",
+	                       "ufo_d_0.blo", "ufo_e_0.blo", "ufo_f_0.blo", "ufo_g_0.blo", "ufo_h_0.blo", "ufo_i_0.blo", "ufo_j_0.blo", "ufo_k_0.blo", "ufo_l_0.blo", "ufo_m_0.blo",
+	                       "ufo_n_0.blo", "ufo_o_0.blo", "ufo_p_0.blo", "ufo_q_0.blo", "ufo_r_0.blo", "ufo_s_0.blo", "ufo_t_0.blo", "ufo_u_0.blo", "ufo_v_0.blo", "ufo_w_0.blo",
+	                       "ufo_x_0.blo", "ufo_y_0.blo", "ufo_z_0.blo", "ufo_a1_0.blo", "ufo_b1_0.blo", "ufo_c1_0.blo" })
+		m[f].reqs = { { "tx00", 'A' } };
+
 	// captain_death: the results chain (ogResult.cpp, ogSave.cpp, ogMemChk.cpp, ogFileSelect.cpp ...).
 	// Tags built from NUL padding ('hai', 'fp') are written with tag3().
 	auto tag3 = [](const char* t) {
@@ -837,7 +845,7 @@ int main()
 	{
 		std::vector<nectar::StandinLayout> layouts = nectar::standinBloLayouts();
 		std::map<std::string, LayoutReq> reqs      = requirements();
-		check(layouts.size() == 78, "78 layouts: prior 77 plus re_k_00 (first Pikmin death diary, W1 hazards)");
+		check(layouts.size() == 114, "114 layouts: prior 77, re_k_00 (W1 hazards) and 36 W2 text pages (#94)");
 		const char* bootOrder[] = { "black.blo", "pause.blo", "pause_ok.blo", "gameover.blo", "gameove2.blo", "count.blo",
 			                        "con01.blo", "sund.blo",  "account.blo",  "play09.blo",   "play10.blo",   "play_day.blo" };
 		for (size_t i = 0; i < 12 && i < layouts.size(); i++) check(layouts[i].file == bootOrder[i], std::string("load order: ") + bootOrder[i]);

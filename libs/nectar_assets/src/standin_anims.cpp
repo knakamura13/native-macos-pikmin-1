@@ -80,6 +80,31 @@ StandInAnimSet buildPikiSet()
 				e.eventType = 1;
 				a.info.eventKeys.push_back(e);
 			}
+		} else if (i == kAnimInfoMizunomi) {
+			// Loop window frames 10 to 20 (anim keys 1 and 2): info keys loop start, loop end.
+			a.frameCount    = kStandInDefaultFrames;
+			a.info.animKeys = { 0, 10, 20, kStandInDefaultFrames - 1 };
+			a.info.flags    = 5;
+			a.info.speed    = 30.0f;
+			for (const auto& [key, type] : { std::pair<int, int> { 1, 0 }, { 2, 1 } }) {
+				AnimKeyRecord k;
+				k.frame   = key;
+				k.keyType = std::uint8_t(type);
+				a.info.infoKeys.push_back(k);
+			}
+		} else if (i == kAnimInfoPick) {
+			// ActPick grabs the bomb on KEY_Action0 (frame 10) and ends on KEY_Finished.
+			a.frameCount    = kStandInDefaultFrames;
+			a.info.animKeys = { 0, 10, kStandInDefaultFrames - 1 };
+			a.info.flags    = 5;
+			a.info.speed    = 30.0f;
+			a.info.infoKeys = { actionKey(1) };
+		} else if (i == kAnimInfoGrowUp1 || i == kAnimInfoGrowUp2) {
+			a.frameCount    = kStandInDefaultFrames;
+			a.info.animKeys = { 0, 10, kStandInDefaultFrames - 1 };
+			a.info.flags    = 5;
+			a.info.speed    = 30.0f;
+			a.info.infoKeys = { actionKey(1) };
 		} else {
 			a.frameCount    = kStandInDefaultFrames;
 			a.info.animKeys = { 0, kStandInDefaultFrames - 1 };

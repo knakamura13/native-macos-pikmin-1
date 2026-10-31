@@ -262,6 +262,27 @@ std::vector<StandinLayout> standinBloLayouts()
 	// startDamageEffect), whose page is bloFile_APunchUFO.
 	out.push_back(tutorialPage("tu_tx31.blo"));
 
+	// bomb_firsts, nectar_growth, carry_blocked: the texts the game opens by itself, with no cinema
+	// (ogTutorialData.cpp): TUT_BombInfo (bloFile_BombInfo, two pages) after the first bomb
+	// explodes (DemoFlags::update), TUT_Mitu (bloFile_Mitu) at the first flower from nectar
+	// (PikiGrowupState::procAnimMsg) and TUT_Rute (bloFile_Rute) when a carry has no way
+	// (ActTransport::moveGuruGuru).
+	for (const char* f : { "tu_tx27_00.blo", "tu_tx27_01.blo", "tu_tx29.blo", "tu_tx30.blo" })
+		out.push_back(tutorialPage(f));
+	// ufo_part_discovery: movie 12 is no cinema, it asks for TUT_GetParts directly
+	// (MoviePlayer::startMovie), which with SHIPTEXT_PartDiscovery opens the part's
+	// "get only" page (bloFile_PartsGetOnly_*). One page per part; the Main Engine's is tu_tx14.
+	for (const char* f : { "tu_tx14.blo",  "ufo_a_0.blo", "ufo_b_0.blo", "ufo_c_0.blo", "ufo_d_0.blo", "ufo_e_0.blo",  "ufo_f_0.blo",  "ufo_g_0.blo",
+	                       "ufo_h_0.blo",  "ufo_i_0.blo", "ufo_j_0.blo", "ufo_k_0.blo", "ufo_l_0.blo", "ufo_m_0.blo",  "ufo_n_0.blo",  "ufo_o_0.blo",
+	                       "ufo_p_0.blo",  "ufo_q_0.blo", "ufo_r_0.blo", "ufo_s_0.blo", "ufo_t_0.blo", "ufo_u_0.blo",  "ufo_v_0.blo",  "ufo_w_0.blo",
+	                       "ufo_x_0.blo",  "ufo_y_0.blo", "ufo_z_0.blo", "ufo_a1_0.blo", "ufo_b1_0.blo", "ufo_c1_0.blo" })
+		out.push_back(tutorialPage(f));
+
+	// ship_part_carry: delivering the Whimsical Radar (uf01) opens its "get" text
+	// (bloFile_PartsGet_uf01: auf_f_0 and tu_tx24) from the demo78 stand-in's TUT_GetParts key.
+	for (const char* f : { "auf_f_0.blo", "tu_tx24.blo" })
+		out.push_back(tutorialPage(f));
+
 	// captain_death: the day-end chain after the captain falls (coverage/terminals.md
 	// T06). Pages of the diary (ogScrMessageMgr), the results screen and its save step
 	// (ogSaveMgr and the memory-card and file-select screens it builds in its constructor).
