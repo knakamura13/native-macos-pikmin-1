@@ -302,6 +302,10 @@ void pc_gfx_set_min_render_size(int width, int height);
 // is the same target PIKMIN_FRAME_DUMP reads (finished frame before the window blit).
 bool pc_gfx_write_scene_png(const char* path, unsigned int sourceFramebuffer, int width, int height, int* outW,
                             int* outH);
+// Capture-tick window resize: sync drawable + native FBO before the sim tick renders.
+void pc_gfx_scenario_prepare_capture(int renderW, int renderH);
+// Netplay presentation pass after a capture-tick resize (GX mapping + clear).
+void pc_gfx_scenario_presentation_pass_begin(void);
 #endif
 
 /**

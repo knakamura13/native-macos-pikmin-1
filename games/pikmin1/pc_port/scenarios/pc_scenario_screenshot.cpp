@@ -49,7 +49,7 @@ void parseCaptureWindow()
 	}
 }
 
-void applyWindowSize(int w, int h)
+void applyWindowSize(int w, int h, bool syncCaptureTarget)
 {
 	pc_settings_scenario_set_window_size(w, h);
 	pc_window_set_window_size(w, h);
@@ -58,6 +58,7 @@ void applyWindowSize(int w, int h)
 	// this, a capture-tick resize can leave the presentation pass drawing at the
 	// old 64x36 mapping while readback uses the enlarged (empty) FBO.
 	pc_window_poll_events(nullptr);
+	if (syncCaptureTarget) pc_gfx_scenario_prepare_capture(w, h);
 }
 
 void beginCaptureWindow()
@@ -68,7 +69,7 @@ void beginCaptureWindow()
 	}
 	// Lock 4:3 so the internal target matches GameCube GX 640x480 (not drawable hor+).
 	pc_gfx_set_aspect_ratio_mode(1);
-	applyWindowSize(sCaptureWindowW, sCaptureWindowH);
+	applyWindowSize(sCaptureWindowW, sCaptureWindowH, true);
 	sSizedUpThisTick = true;
 }
 
@@ -79,7 +80,7 @@ void endCaptureWindow()
 		pc_gfx_set_aspect_ratio_mode(sSavedAspectMode);
 		sSavedAspectValid = false;
 	}
-	applyWindowSize(sBaseWindowW, sBaseWindowH);
+	applyWindowSize(sBaseWindowW, sBaseWindowH, false);
 	sSizedUpThisTick = false;
 }
 
