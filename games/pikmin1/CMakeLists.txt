@@ -465,6 +465,8 @@ if (PIKMIN_BUILD_SCENARIOS)
         pc_port/scenarios/scenario_tutorial_firsts.cpp
         pc_port/scenarios/scenario_tutorial_day1.cpp
         pc_port/scenarios/scenario_title_boot.cpp
+        pc_port/scenarios/scenario_settings.cpp
+        pc_port/scenarios/scenario_throw_release_mods.cpp
         pc_port/gl/pc_gfx_png_write.cpp)
 endif()
 
@@ -2229,7 +2231,13 @@ if(PIKMIN_BUILD_SCENARIOS)
             day_end_no_day_limit:sandbox_objects:30,60 challenge_day_end:sandbox_objects:30,60
             # The tutorial stand-in stage (stages/practice.ini, stage id Practice at index 0,
             # tools/scenarios/standin_practice_stage.h): the tutorial-only milestones.
-            tutorial_skip:practice:30,60 tutorial_firsts:practice:30,60 tutorial_day1:practice:30,60)
+            tutorial_skip:practice:30,60 tutorial_firsts:practice:30,60 tutorial_day1:practice:30,60
+            hardmode_teki_life:sandbox_all_objects:30 hardmode_teki_life_off:sandbox_all_objects:30
+            hardmode_boss_life:sandbox_all_objects:30 hardmode_boss_life_off:sandbox_all_objects:30
+            hardmode_cheats:sandbox:30 settings_health_pct:sandbox:30 settings_health_pct_off:sandbox:30
+            settings_invincible:sandbox:30 settings_invincible_off:sandbox:30 speedrun_cheats:sandbox:30
+            unlock_zones:sandbox:30 settings_menu_pause:sandbox:30
+            throw_release_quick_grab:sandbox:30,60)
         string(REPLACE ":" ";" parts "${entry}")
         list(GET parts 0 scenario)
         list(GET parts 1 stage)
@@ -2341,6 +2349,18 @@ if(PIKMIN_BUILD_SCENARIOS)
             -DSECOND_ENV=PIKMIN_SCENARIO_STAGE=stages/sandbox_objects.ini -DEXPECT_DIFFER=1
             -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/check_scenario_determinism.cmake)
     set_tests_properties(scenario_determinism_negative_boot_smoke_30 PROPERTIES
+        FIXTURES_REQUIRED scenario_standin_tree
+        WORKING_DIRECTORY "${PIKMIN_STANDIN_DATA}"
+        ENVIRONMENT "${PIKMIN_STANDIN_ENV}"
+        TIMEOUT 1200)
+
+    add_test(NAME scenario_input_replay_boot_smoke_30
+        COMMAND ${CMAKE_COMMAND}
+            -DGAME=$<TARGET_FILE:${NECTAR_GAME}>
+            -DSCENARIO=boot_smoke -DRATE=30
+            -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/scenario-input-replay
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/check_scenario_input_replay.cmake)
+    set_tests_properties(scenario_input_replay_boot_smoke_30 PROPERTIES
         FIXTURES_REQUIRED scenario_standin_tree
         WORKING_DIRECTORY "${PIKMIN_STANDIN_DATA}"
         ENVIRONMENT "${PIKMIN_STANDIN_ENV}"

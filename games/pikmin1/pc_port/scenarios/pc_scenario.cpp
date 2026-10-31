@@ -46,6 +46,7 @@
 #include "netplay/pc_state_hash.h"
 #include "Dolphin/pad.h"
 #include "pc_permadeath.h"
+#include "pc_speedrun.h"
 #include "gl/pc_gfx.h"
 #include "pc_window.h"
 #include "randomizer/pc_randomizer.h"
@@ -91,6 +92,7 @@ unsigned sBetweenTicks     = 0;
 const char* sMapCourseRequest = nullptr; ///< crossesDays(): enter this course from MapSelect when set
 std::string sStageFile     = kDefaultStageFile;
 std::filesystem::path sScratchDir; // NECTAR_SAVE_DIR for this run, removed at exit
+std::string sScenarioReplayPath;     // --scenario-replay: replay file for EC-62
 
 // Hand-off (issue #76). --scenario-handoff: the scripted part runs in a visible
 // window at real-time pacing, and scenarioHandOff() gives the game to the
@@ -129,8 +131,8 @@ HandoffProbe sProbe;
 constexpr int kProbeStickThreshold = 50; // the stick held up reads about 127
 
 // Environment variables the game reads that change the sim, the input or the
-// exit path. A scenario run starts without them (PIKMIN_INPUT_REPLAY is
-// rejected instead, in pc_scenario_parse_argv).
+// exit path. PIKMIN_INPUT_REPLAY is set only through --scenario-replay after the
+// cleared-env pass (coverage EC-62).
 const char* const kClearedEnv[] = {
 	"PIKMIN_INPUT_RECORD",
 	"PIKMIN_UNLOCK_ALL",
@@ -314,6 +316,19 @@ void providerThunk(PcInputPad pads[4])
 		sProbe.realStickY = pc_netplay_pad_status()[0].stickY;
 	}
 	provideScriptedPads(pads);
+#if defined(PIKI_PC_PORT) && defined(PIKI_PC_SETTINGS_MENU)
+	if (pc_settings_menu_is_open()) {
+		for (int i = 0; i < 4; i++) {
+			pads[i].button         = 0;
+			pads[i].stickX         = 0;
+			pads[i].stickY         = 0;
+			pads[i].substickX      = 0;
+			pads[i].substickY      = 0;
+			pads[i].triggerLeft    = 0;
+			pads[i].triggerRight   = 0;
+		}
+	}
+#endif
 	if (sProbe.active) {
 		sProbe.scriptedStickY = pads[0].stickY;
 		sProbe.providerRan    = true;
@@ -648,6 +663,12 @@ int pc_scenario_parse_argv(int argc, char** argv)
 				usage("--scenario-screenshot must be tick:path (for example 100:out.png)");
 				return PC_SCENARIO_EXIT_USAGE;
 			}
+		} else if (std::strcmp(argv[i], "--scenario-replay") == 0) {
+			if (i + 1 >= argc) {
+				usage("--scenario-replay needs a file path");
+				return PC_SCENARIO_EXIT_USAGE;
+			}
+			sScenarioReplayPath = argv[++i];
 		} else {
 			for (const char* flag : kRejectedFlags) {
 				if (rejected == nullptr && std::strcmp(argv[i], flag) == 0) rejected = flag;
@@ -659,9 +680,11 @@ int pc_scenario_parse_argv(int argc, char** argv)
 		usage((std::string("--scenario cannot be combined with ") + rejected).c_str());
 		return PC_SCENARIO_EXIT_USAGE;
 	}
-	if (const char* envReplay = std::getenv("PIKMIN_INPUT_REPLAY"); envReplay != nullptr && *envReplay != '\0') {
-		usage("--scenario cannot be combined with PIKMIN_INPUT_REPLAY");
-		return PC_SCENARIO_EXIT_USAGE;
+	if (sScenarioReplayPath.empty()) {
+		if (const char* envReplay = std::getenv("PIKMIN_INPUT_REPLAY"); envReplay != nullptr && *envReplay != '\0') {
+			usage("--scenario cannot be combined with PIKMIN_INPUT_REPLAY (use --scenario-replay)");
+			return PC_SCENARIO_EXIT_USAGE;
+		}
 	}
 	for (PcScenario* s : pc_scenario_all()) {
 		if (std::strcmp(s->name(), name) == 0) sScenario = s;
@@ -730,6 +753,7 @@ int pc_scenario_parse_argv(int argc, char** argv)
 	// Everything a scenario run must not inherit from the machine.
 	SDL_setenv("SDL_AUDIODRIVER", "dummy", 1);
 	for (const char* var : kClearedEnv) clearEnv(var);
+	if (!sScenarioReplayPath.empty()) setEnv("PIKMIN_INPUT_REPLAY", sScenarioReplayPath.c_str());
 	{
 		// Always a fresh save dir (an ambient NECTAR_SAVE_DIR is not kept). SDL_GetTicks
 		// is about 0 before SDL_Init, so the process id keeps concurrent runs apart.
@@ -805,8 +829,11 @@ void pc_scenario_pre_stage(void)
 
 	// What CardSelect would have done on its no-save new-game path, without
 	// writing a save (#61, skip-path equivalence).
+	if (sScenario->hardMode()) pc_hardmode_set_pending(true);
 	pc_permadeath_begin_new_run();
 	pc_hardmode_begin_new_run();
+	pc_hardmode_set_pending(false);
+	if (sScenario->speedrunMode()) pc_speedrun_set_active(true);
 	pc_randomizer_begin_new_run();
 	gameflow.mGamePrefs.mHasSaveGame = false;
 	gameflow.mIsChallengeMode        = FALSE;
