@@ -72,6 +72,7 @@ PcScenario* pc_scenario_make_pikmin_cap_1(void);
 PcScenario* pc_scenario_make_pikmin_cap_250(void);
 PcScenario* pc_scenario_make_pikmin_cap_999(void);
 PcScenario* pc_scenario_make_day_clock(void);
+PcScenario* pc_scenario_make_demo_timers(void);
 PcScenario* pc_scenario_make_title_boot(void);
 PcScenario* pc_scenario_make_piki_hazard_deaths(void);
 PcScenario* pc_scenario_make_piki_hazard_fire_red_fail(void);

@@ -197,15 +197,13 @@ zen::DrawCMresult* pc_scenario_challenge_window(void);
 // Text windows createTutorialWindow has opened since the process started; with a
 // non-null lastTextId, the EnumTutorial of the last one (-1 before the first).
 int pc_scenario_text_windows_opened(int* lastTextId);
-// The live GameCoreSection (null outside a running NewPikiGame), the countdown
-// window RunningModeState draws from mNightCountdown, and whether the map menu
-// (ogScrMenuMgr, MOVIECMD_CreateMenuWindow) is open.
+// The live GameCoreSection (null outside a running NewPikiGame) and the countdown
+// window RunningModeState draws from mNightCountdown.
 struct GameCoreSection;
 namespace zen {
 struct DrawCountDown;
 } // namespace zen
 GameCoreSection* pc_scenario_gamecore(void);
 zen::DrawCountDown* pc_scenario_countdown_window(void);
-bool pc_scenario_map_menu_open(void);
 
 #endif
