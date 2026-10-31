@@ -7,7 +7,7 @@
 //   stand-in  PIKMIN_SCENARIO_STAGE=stages/sandbox_onions.ini (standin_objects_stage.h):
 //             the object stage's map with Onions placed as on the disc's courses, red,
 //             yellow and blue Onions from generators not named `next` and a yellow Onion
-//             from a `next` generator at another spot. No world map, no landing movie.
+//             from a `next` generator at another spot. No landing movie on stand-ins.
 //   disc      the runner's default stage, Forest of Hope (stages/stage1.ini), whose
 //             default.gen has the same four (read 2026-10-28; kCourses below).
 // GenObjectItem::birth (genItem.cpp) creates an Onion from a `next` generator only
@@ -62,8 +62,8 @@
 //                         none from the other generator.
 //
 // Not covered on the stand-in tree: the landing (the stand-in stages play no landing
-// movie, standin-cinema.md, so the Onion is born where its generator puts it) and the
-// world map itself. On the stand-in course the red Onion stays in GOAL_BootInit, since
+// movie, standin-cinema.md, so the Onion is born where its generator puts it). On the
+// stand-in course the red Onion stays in GOAL_BootInit, since
 // the run starts on Day 2 with a new game; on the disc the scenario sets the red boot
 // bit Day 1 would have. Only the red Onion's presence is asserted.
 #include "scenarios/pc_scenario_list.h"

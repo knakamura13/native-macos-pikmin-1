@@ -40,6 +40,10 @@ dataDir/stages/sandbox_onions/1.gen
 dataDir/stages/sandbox_onions/2.gen
 dataDir/stages/sandbox_onions/init.gen
 dataDir/stages/sandbox_onions/plants.gen
+# Forest of Hope (stage1.ini) after the world map on Day 3 (onion_day3).
+dataDir/stages/stage1/2.gen
+dataDir/stages/stage1/init.gen
+dataDir/stages/stage1/plants.gen
 # The tutorial stage (standin_practice_stage.h) writes default.gen, init.gen and
 # the Day 1 file 0.gen; plants.gen is guarded like the others.
 dataDir/stages/practice/plants.gen
@@ -136,6 +140,13 @@ dataDir/cinemas/demo16.cin
 # above for the other day ends.
 dataDir/cinemas/demo14.cin
 dataDir/cinemas/demo15.cin
+# title_boot: titles.cpp opening movie (TITLECMD_ShowStartMenu at frame 0).
+dataDir/cinemas/opening.cin
+# IntroGame after a new file on the stand-in tree (card select, skip tutorial).
+dataDir/cinemas/demo01.cin
+dataDir/cinemas/demo02.cin
+# onion_day3 Day 3 landing movie on stages/stage1.ini (stand-in tree).
+dataDir/cinemas/demo65.cin
 
 # captain_death: the three textures EffectMgr2D registers that effects.bun does
 # not hold (the file-select and results screens build the 2D effect manager when
