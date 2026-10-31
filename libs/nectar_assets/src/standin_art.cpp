@@ -246,7 +246,11 @@ Kind kindForPath(const std::string& path)
 
 void buildPikiBody(Model& m, const StandInModelSpec& spec, bool red, bool yellow, bool blue)
 {
-	const Rgba8 skin = spec.colour;
+	// Flat-shaded stand-ins: use saturated body colours so lighting does not read as grey/black.
+	Rgba8 skin = spec.colour;
+	if (red) skin = { 255, 45, 50, 255 };
+	else if (yellow) skin = { 255, 215, 35, 255 };
+	else if (blue) skin = { 55, 95, 255, 255 };
 	const int skinMat = addMaterial(m, skin);
 	const int outlineMat = addMaterial(m, { 25, 25, 30, 255 });
 	const int leafMat = addMaterial(m, { 40, 170, 55, 255 });

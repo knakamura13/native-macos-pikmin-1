@@ -88,8 +88,8 @@ std::vector<StandInModelSpec> buildSpecs()
 		m.collInfo = std::move(coll);
 		s.push_back(std::move(m));
 	};
-	const Rgba8 grey { 160, 160, 160, 255 }, white { 240, 240, 240, 255 }, red { 230, 40, 40, 255 }, blue { 40, 60, 230, 255 },
-	    yellow { 230, 210, 40, 255 };
+	const Rgba8 grey { 160, 160, 160, 255 }, white { 240, 240, 240, 255 }, red { 255, 45, 50, 255 }, blue { 55, 95, 255, 255 },
+	    yellow { 255, 215, 35, 255 };
 
 	// gameSetup.cpp shapeList: peletas. Radio y centro de 'cent' del disco.
 	add("objects/pellets/white1.mod", kPelletRig, white, 5.0f, centOnly(10.0f, 5.0f));
