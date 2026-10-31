@@ -350,7 +350,7 @@ std::map<std::string, LayoutReq> requirements()
 		                 'P'));
 	}
 	// ogScrMessageMgr::ogScrMessageMgr: curs and a_bt pictures (search(.., true)).
-	m["tu_base.blo"].reqs = { { "curs", 'P' }, { "a_bt", 'P' } };
+	m["tu_base.blo"].reqs = { { "curs", 'P' }, { "a_bt", 'P' }, { "capu", 'P' }, { "base", 'P' } };
 	// ogMsgCtrlTagMgr: maru, ten and han text boxes (the last two are 3-letter tags
 	// with a leading NUL), each with text of at most 7 bytes (char[8] buffers).
 	m["wait_char.blo"].reqs = { { "maru", 'T' }, { std::string("\0ten", 4), 'T' }, { std::string("\0han", 4), 'T' } };
@@ -483,6 +483,111 @@ std::map<std::string, LayoutReq> requirements()
 		l.reqs       = list({ "piki", "w_01" }, 'P');
 		cat(l.reqs, list({ "w_00", "x_00" }, 'A'));
 		cat(l.reqs, list({ "c_ml", "c_mc", "c_mr", "c_ll", "c_lc", "c_lr", "c_sl", "c_sc", "c_sr", "c_s1" }, 'P'));
+	}
+	// World map and title screens (#99).
+	m["w_wipe.blo"].reqs = run("wp%02d", 0, 4, 'P');
+	{
+		auto tag4req = [](const char* t) {
+			std::string s(t);
+			if (s.size() > 4) s.resize(4);
+			return std::string(4 - s.size(), '\0') + s;
+		};
+		m["w_icon.blo"].reqs = { { tag4req("ri"), 'P' }, { "ci_b", 'P' }, { "ci_r", 'P' }, { "ci_y", 'P' } };
+	}
+	cat(m["w_title.blo"].reqs, run("map%d", 1, 5, 'P'));
+	m["w_moni.blo"].reqs = run("mi_%d", 1, 5, 'P');
+	{
+		std::vector<Req>& d = m["w_data1.blo"].reqs;
+		cat(d, list({ "dc_c", "dc_l", "dc_r", "ro_l", "ro_c", "ro_r", "rt_l", "rt_c", "rt_r", "bp_l", "bp_c", "bp_r", "rp_l", "rp_c", "rp_r",
+		              "yp_l", "yp_c", "yp_r", "p_bc", "p_rc", "p_yc" },
+		            'P'));
+	}
+	{
+		std::vector<Req>& d = m["w_data2.blo"].reqs;
+		cat(d, run("pa%02d", 0, 13, 'P'));
+		cat(d, run("pn%02d", 0, 13, 'P'));
+	}
+	{
+		auto tag4req = [](const char* t) {
+			std::string s(t);
+			if (s.size() > 4) s.resize(4);
+			return std::string(4 - s.size(), '\0') + s;
+		};
+		std::vector<Req>& p = m["w_point.blo"].reqs;
+		p                   = { { tag4req("x_1"), 'P' }, { "x_1s", 'P' }, { "po01", 'P' } };
+		for (int i = 2; i <= 5; i++) {
+			char bx[8], bxs[8], bpo[8];
+			std::snprintf(bx, sizeof bx, "x_%d", i);
+			std::snprintf(bxs, sizeof bxs, "x_%ds", i);
+			std::snprintf(bpo, sizeof bpo, "po%02d", i);
+			p.push_back({ tag4req(bx), 'P' });
+			p.push_back({ bxs, 'P' });
+			p.push_back({ bpo, 'P' });
+		}
+		cat(p, run("sli%d", 1, 5, 'P'));
+		cat(p, run("ony%d", 1, 5, 'A'));
+		cat(p, run("cha%d", 1, 5, 'A'));
+	}
+	m["w_line.blo"].reqs = run("sli%d", 1, 5, 'P');
+	m["w_back.blo"].reqs = {};
+	{
+		LayoutReq& l = m["w_ok.blo"];
+		l.reqs       = menuSet(2);
+		cat(l.reqs, list({ "z**l", "z**r" }, 'P'));
+		l.menuItems = 2;
+	}
+	{
+		LayoutReq& l = m["pause_w.blo"];
+		l.reqs       = menuSet(2);
+		cat(l.reqs, list({ "back" }, 'P'));
+		l.menuItems = 2;
+	}
+	{
+		std::vector<Req>& r = m["m_menu_r.blo"].reqs;
+		r                   = list({ "abtn" }, 'P');
+		cat(r, run("i%02du", 0, 30, 'P'));
+		cat(r, run("i%02dd", 0, 30, 'P'));
+		cat(r, run("pi%02d", 0, 29, 'A'));
+		cat(r, run("pk%02d", 14, 30, 'P'));
+		cat(r, list({ "z00l", "z00r" }, 'P'));
+	}
+	{
+		std::vector<Req>& h = m["cha_hi.blo"].reqs;
+		h                   = list({ "ttal", "char", "best" }, 'A');
+		h.push_back({ "b_00", 'P' });
+		cat(h, run("p_%02d", 0, 5, 'T'));
+		cat(h, run("d_%02d", 0, 5, 'T'));
+		cat(h, run("lp%02d", 0, 5, 'T'));
+		cat(h, run("dp%02d", 0, 5, 'T'));
+		cat(h, run("pm_%d", 0, 5, 'A'));
+	}
+	m["press_s.blo"].reqs = { { "root", 'A' } };
+	m["m_menu_b.blo"].reqs = {};
+	for (const char* f : { "m_select.blo", "v_select.blo", "ms_selec.blo" }) {
+		LayoutReq& l = m[f];
+		l.reqs       = menuSet(2);
+		cat(l.reqs, list({ "back" }, 'P'));
+		l.menuItems = 2;
+	}
+	{
+		LayoutReq& l = m["m_selec2.blo"];
+		l.reqs       = menuSet(3);
+		cat(l.reqs, list({ "back" }, 'P'));
+		l.menuItems = 3;
+	}
+	{
+		LayoutReq& l = m["option.blo"];
+		l.reqs       = menuSet(4);
+		cat(l.reqs, list({ "back" }, 'P'));
+		l.menuItems = 4;
+	}
+	{
+		LayoutReq& l = m["s_select.blo"];
+		l.reqs       = menuSet(2);
+		cat(l.reqs, list({ "on21", "on22", "back" }, 'P'));
+		cat(l.reqs, list({ "on_c", "offc" }, 'T'));
+		cat(l.reqs, run("on%02d", 1, 20, 'P'));
+		l.menuItems = 2;
 	}
 	return m;
 }
@@ -732,8 +837,7 @@ int main()
 	{
 		std::vector<nectar::StandinLayout> layouts = nectar::standinBloLayouts();
 		std::map<std::string, LayoutReq> reqs      = requirements();
-		check(layouts.size() == 56, "56 layouts: 12 on the boot path, 8 for day30_clock, 2 for the stand-in cinema text keys, 17 for captain_death, "
-		                            "1 for captain_damage, 2 diary pages for day_end, 4 for extinction_day30, 4 for challenge mode, 1 diary page for onion_day3, 5 for the tutorial scenarios");
+		check(layouts.size() == 77, "77 layouts: prior 56 plus 21 world-map and title screens (#99)");
 		const char* bootOrder[] = { "black.blo", "pause.blo", "pause_ok.blo", "gameover.blo", "gameove2.blo", "count.blo",
 			                        "con01.blo", "sund.blo",  "account.blo",  "play09.blo",   "play10.blo",   "play_day.blo" };
 		for (size_t i = 0; i < 12 && i < layouts.size(); i++) check(layouts[i].file == bootOrder[i], std::string("load order: ") + bootOrder[i]);
@@ -767,8 +871,12 @@ int main()
 				for (const BloPane& c : p->children) stack.push_back(&c);
 			}
 			// pk00.. and at00.. are omitted so PikaAlphaMgr and ogTexAnimMgr find nothing.
-			for (const std::string& t : tags) check(!(t.size() == 4 && (t.compare(0, 2, "pk") == 0 || t.compare(0, 2, "at") == 0) && std::isdigit(static_cast<unsigned char>(t[2]))),
-			                                        l.file + ": optional animation pane '" + t + "' is present");
+			// m_menu_r.blo (ogDrawSelectDiary) needs pk14..pk43; the world map diary uses them.
+			for (const std::string& t : tags) {
+				if (l.file == "m_menu_r.blo" && t.size() == 4 && t.compare(0, 2, "pk") == 0) continue;
+				check(!(t.size() == 4 && (t.compare(0, 2, "pk") == 0 || t.compare(0, 2, "at") == 0) && std::isdigit(static_cast<unsigned char>(t[2]))),
+				        l.file + ": optional animation pane '" + t + "' is present");
+			}
 
 			auto it = reqs.find(l.file);
 			if (it != reqs.end()) {

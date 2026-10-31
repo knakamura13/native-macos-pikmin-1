@@ -122,6 +122,8 @@ bool standInTextureFiles(std::vector<StandInFile>& out, std::string& error)
 	StandInFile fx { "effects/tex/effects.bun", {}, false };
 	if (!standInEffectTexBundle(fx.bytes, error)) return false;
 	out.push_back(std::move(fx));
+	for (const char* w : { "waku", "waku02", "waku03" })
+		out.push_back({ std::string("effects/tex/") + w + ".bti", bti, false });
 
 	// screen.bun: una entrada BTI por cada nombre de screenTextureNames(). En el
 	// disco esas texturas solo viven dentro del bundle (el arranque no las abre

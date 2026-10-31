@@ -345,6 +345,20 @@ std::vector<Movie> movies()
 		m.cinema.cuts = { cut };
 		list.push_back(m);
 	}
+
+	// Title opening (titles.cpp CinematicPlayer): ShowStartMenu at frame 0.
+	{
+		Movie m;
+		m.cin            = "dataDir/cinemas/opening.cin";
+		m.cinema.flags   = 0;
+		m.cinema.scenes  = { "cinemas/opening/op_stand.dsk" };
+		m.sceneFrames    = { 30 };
+		CinCut cut;
+		cut.endFrame  = 30;
+		cut.keys      = { notify(0, 0, 0) };
+		m.cinema.cuts = { cut };
+		list.push_back(m);
+	}
 	return list;
 }
 
