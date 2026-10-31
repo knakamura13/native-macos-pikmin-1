@@ -77,6 +77,7 @@ const std::vector<PcScenario*>& pc_scenario_all(void)
 		pc_scenario_make_tutorial_skip(),
 		pc_scenario_make_tutorial_firsts(),
 		pc_scenario_make_tutorial_day1(),
+		pc_scenario_make_title_boot(),
 		[] { static ExitZero s; return static_cast<PcScenario*>(&s); }(),
 		pc_scenario_make_free_play(),
 		pc_scenario_make_first_yellow(),

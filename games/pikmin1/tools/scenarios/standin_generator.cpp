@@ -438,6 +438,7 @@ bool standInCinemas(Tree& tree, std::string& error)
 	std::vector<nectar::StandInCinemaFile> files;
 	if (!nectar::writeStandInCinemas(files, error)) return fail(error, "stand-in cinemas: " + error);
 	for (const auto& f : files) tree[f.path] = textBytes(f.text);
+	tree["dataDir/cinemas/opening.ini"] = textBytes("# Stand-in title opening (titles.cpp reads dayMgr optionally)\n");
 	return true;
 }
 

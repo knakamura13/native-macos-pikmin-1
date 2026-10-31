@@ -6,7 +6,7 @@
 #include "nectar_mapcore/compile.h"
 #include "nectar_mapcore/map.h"
 
-#include <cstdio>
+#include <cstring>
 
 namespace standin {
 
@@ -202,6 +202,17 @@ bool addObjectsStage(std::map<std::string, std::vector<std::uint8_t>>& tree, std
 	// The Onion stage: the same .ini (map, day_multiply), its own generator folder.
 	tree[std::string("dataDir/") + kOnionsStageIni]                       = compiled.ini;
 	tree[std::string("dataDir/stages/sandbox_onions/default.gen")] = nectar::writeObjectGenFile(onionGenerators());
+	// Story courses for the world map (#99): stage1 uses the Onion layout; the rest boot the same map empty.
+	const Bytes onionGen = nectar::writeObjectGenFile(onionGenerators());
+	const Bytes emptyGen = nectar::writeObjectGenFile({});
+	tree["dataDir/stages/stage1.ini"]            = compiled.ini;
+	tree["dataDir/stages/stage1/default.gen"]    = onionGen;
+	for (const char* ini : { "stages/stage2.ini", "stages/stage3.ini", "stages/last.ini" }) {
+		tree[std::string("dataDir/") + ini] = compiled.ini;
+		std::string genPath = std::string("dataDir/") + ini;
+		genPath.replace(genPath.size() - 4, 4, "/default.gen");
+		tree[genPath] = emptyGen;
+	}
 	return true;
 }
 

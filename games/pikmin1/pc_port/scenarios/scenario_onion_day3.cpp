@@ -34,8 +34,8 @@
 // Map select: what the world map lists, read where DrawWorldMap's start reads it
 //   (drawWorldMap.cpp: the Onion cursors and the per-colour counts, displayPikiCount).
 //   On the disc the real world map is then built and A picks the course under the
-//   cursor and confirms. The stand-in tree has no world map screens, so the runner
-//   enters the course itself (pc_scenario_on_map_select: enterCourse, the start hour).
+//   cursor and confirms. The stand-in tree now runs the same world map screens
+//   (onMapSelect returns nullptr; providePadsBetweenStages confirms the course).
 // Day 3 (stage 2): day 3; the container and display bits; the yellow Onion born from
 //   the generator not named `next`, none at the `next` spot; booted (GOAL_Wait); on the
 //   ground (on the disc after the landing movie, watched); holding the one Pikmin that
@@ -122,6 +122,8 @@ struct CourseOnions {
 const CourseOnions kCourses[] = {
 	// standin_objects_stage.h (the stand-in generator's header is not on the game's include path).
 	{ "stages/sandbox_onions.ini", { -120.0f, -250.0f }, { -280.0f, -250.0f }, { -200.0f, -400.0f }, true, { -300.0f, 0.0f } },
+	// The stand-in story Forest stage (same Onion layout, selected on the world map after Day 2).
+	{ "stages/stage1.ini", { -120.0f, -250.0f }, { -280.0f, -250.0f }, { -200.0f, -400.0f }, true, { -300.0f, 0.0f } },
 	// The disc's default.gen (VERSION_GPIE01_01 install, read-only with nectar::loadGen, 2026-10-28):
 	// Forest of Hope has a `next` yellow Onion where it is found; The Impact Site has none.
 	{ "stages/stage1.ini", { -377.7f, 2155.7f }, { -64.3f, 1976.6f }, { -306.4f, 1823.6f }, true, { -1635.9f, 2117.9f } },
@@ -229,9 +231,16 @@ public:
 
 	void providePadsBetweenStages(unsigned ticks, PcInputPad& pad) override
 	{
-		// The disc's world map: A picks the course under the cursor (the one just played) and
-		// A confirms (the confirm window opens on Yes). Never START (pause) or B (file select).
-		if (mTree == Disc && ticks > 3u * unsigned(pc_scenario_ticks_per_second()) && ticks % 20 == 0) pad.button |= PAD_BUTTON_A;
+		if (mPhase != Between) return;
+		const unsigned rate = unsigned(pc_scenario_ticks_per_second());
+		// DrawWorldMap::modeStart ~1 s; from Impact Site (point 0) Forest of Hope is
+		// LINK_Down (WorldMapCoursePointMgr::init). Stick edges become keyClick.
+		if (ticks < rate) return;
+		if (ticks < 6u * rate) {
+			if (ticks % 20 == 0) pad.stickY = -72;
+			return;
+		}
+		if (ticks >= 245u * rate / 30u) pc_scenario_request_map_course("stages/stage1.ini");
 	}
 
 	void onStageReady() override
@@ -239,6 +248,7 @@ public:
 		if (pc_scenario_stage_number() == 1) {
 			day2Ready();
 		} else {
+			enter(Day3Load, mLastTick);
 			day3Ready();
 		}
 	}
@@ -265,9 +275,12 @@ public:
 			return nullptr;
 		}
 		if (mVariant == ReloadV && !reload(t)) return nullptr;
-		enter(Day3Load, t);
-		// The stand-in tree has no world map screens: the runner enters the course itself.
-		return mTree == StandIn ? kStage : nullptr;
+		if (mTree == StandIn) {
+			// Day 2 on sandbox_onions (STAGE_TESTMAP): Forest is not opened by story progress.
+			SET_STAGE_OPEN(gameflow.mPlayState.mCourseOpenFlags, STAGE_Forest);
+		}
+		// Day3Load waits until stage 2 is ready (the world map runs when this returns nullptr).
+		return nullptr;
 	}
 
 	void providePads(unsigned t, PcInputPad& pad) override
