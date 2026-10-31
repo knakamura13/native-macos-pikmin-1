@@ -53,8 +53,10 @@ public:
 			const f32 base = teki->getParameterF(TPF_Life);
 			const f32 max  = teki->getMaxLife();
 			const f32 want = pc_hardmode_teki_life(base);
-			if (std::fabs(max - want) > 0.01f || std::fabs(teki->mHealth - want) > 0.01f) {
-				scenarioFailf(0, "teki max life 1.33x base on Hard", "base %.2f max %.2f health %.2f want %.2f", base, max, teki->mHealth, want);
+			const f32 scaled = base * 1.33f;
+			if (std::fabs(max - scaled) > 0.01f || std::fabs(max - want) > 0.01f || std::fabs(teki->mHealth - want) > 0.01f) {
+				scenarioFailf(0, "teki max life 1.33x base on Hard", "base %.2f max %.2f health %.2f want %.2f scaled %.2f", base, max,
+				              teki->mHealth, want, scaled);
 				return;
 			}
 			checked++;
@@ -78,6 +80,7 @@ public:
 			scenarioFailf(0, "Hard mode off (negative control)", "on");
 			return;
 		}
+		int checked = 0;
 		Iterator it(tekiMgr);
 		CI_LOOP(it)
 		{
@@ -89,7 +92,9 @@ public:
 				scenarioFailf(0, "teki life equals base with Hard off", "base %.2f max %.2f health %.2f", base, max, teki->mHealth);
 				return;
 			}
+			checked++;
 		}
+		if (checked < 1) scenarioFailf(0, "at least one enemy on the stage", "%d", checked);
 	}
 
 	void onTick(unsigned tick) override
@@ -110,6 +115,8 @@ public:
 			scenarioFailf(0, "Hard mode forces Infinite Day off", "getter %d", pc_settings_get_infinite_day());
 			return;
 		}
+		pc_settings_scenario_set_navi_health_pct(200);
+		pc_settings_scenario_set_teki_health_pct(200);
 		if (pc_settings_get_navi_health_pct() != 100 || pc_settings_get_teki_health_pct() != 100) {
 			scenarioFailf(0, "Hard mode pins health pct to 100", "navi %d teki %d", pc_settings_get_navi_health_pct(),
 			              pc_settings_get_teki_health_pct());
@@ -272,6 +279,10 @@ public:
 			scenarioFailf(0, "speedrun active", "off");
 			return;
 		}
+		pc_settings_scenario_set_quick_grab(1);
+		pc_settings_scenario_set_infinite_day(1);
+		pc_settings_scenario_set_piki_invincible(1);
+		pc_settings_scenario_set_unlock_zones(1);
 		if (pc_settings_get_quick_grab() != 0 || pc_settings_get_infinite_day() != 0 || pc_settings_get_piki_invincible() != 0
 		    || pc_settings_get_unlock_zones() != 0) {
 			scenarioFailf(0, "speedrun returns vanilla cheat getters", "quick %d infinite %d inv %d unlock %d",
