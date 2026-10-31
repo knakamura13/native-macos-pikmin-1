@@ -127,15 +127,23 @@ copied_files=(
     tools/mac/save_mode.py
     tools/mac/resolve_save_for_build.sh
     games/pikmin1/pc_port/pc_build_window_title.h
+    games/pikmin1/pc_port/dolphin_stubs/pc_card_save_root.cpp
+    games/pikmin1/pc_port/dolphin_stubs/pc_card_save_root.h
+    games/pikmin1/pc_port/dolphin_stubs/card_stubs.cpp
+    games/pikmin2/pc_port/dolphin_stubs/card_stubs.cpp
+    games/pikmin2/pc_port/dolphin_stubs/pc_card_save_root.h
+    games/pikmin1/pc_port/launcher/gci_save_import.cpp
+    games/pikmin1/pc_port/launcher/gci_save_import.h
 )
 overlay="${script_dir}/upstream-launcher.patch"
 window_overlay="${script_dir}/upstream-window-title.patch"
+central_save_overlay="${script_dir}/upstream-central-save.patch"
 
 # Fingerprint of everything this fork adds, so --if-changed rebuilds when the
 # packaging changes even if upstream did not.
 packaging_fingerprint() {
     local file
-    for file in "${overlay}" "${window_overlay}" "${copied_files[@]/#/${repo}/}"; do
+    for file in "${overlay}" "${window_overlay}" "${central_save_overlay}" "${copied_files[@]/#/${repo}/}"; do
         shasum -a 256 "${file}" 2>/dev/null || sha256sum "${file}"
     done | awk '{print $1}' | { shasum -a 256 2>/dev/null || sha256sum; } | awk '{print $1}'
 }
@@ -172,11 +180,16 @@ fingerprint="$(packaging_fingerprint)"
 
 if [[ "${if_changed}" -eq 1 ]]; then
     manifest="${install_dir}/${app_name}/Contents/Resources/build-info.json"
-    if [[ -f "${manifest}" ]] && python3 - "${manifest}" "${sha}" "${fingerprint}" <<'PY'
+    resolve_args=(--home "${HOME}" --non-interactive)
+    # shellcheck disable=SC1090
+    eval "$(bash "${script_dir}/resolve_save_for_build.sh" "${resolve_args[@]}" -- ${save_flag_args[@]+"${save_flag_args[@]}"})"
+    if [[ -f "${manifest}" ]] && python3 - "${manifest}" "${sha}" "${fingerprint}" "${PIKMIN_SAVE_MODE:-central}" "${NECTAR_SAVE_DIR:-}" <<'PY'
 import json, sys
 m = json.load(open(sys.argv[1]))
 sys.exit(0 if m.get('role') == 'upstream' and m.get('sha') == sys.argv[2]
-         and m.get('packaging_fingerprint') == sys.argv[3] else 1)
+         and m.get('packaging_fingerprint') == sys.argv[3]
+         and m.get('save_mode') == sys.argv[4]
+         and m.get('configured_save_directory') == sys.argv[5] else 1)
 PY
     then
         printf 'Up to date: %s has upstream %s.\n' "${install_dir}/${app_name}" "${sha}"
@@ -219,12 +232,14 @@ fi
 
 git -C "${source_dir}" apply --check "${overlay}"
 git -C "${source_dir}" apply --check "${window_overlay}"
+git -C "${source_dir}" apply --check "${central_save_overlay}"
 if [[ "${check}" -eq 1 ]]; then
     printf 'Upstream %s: identity overlays apply cleanly.\n' "${sha}"
     exit 0
 fi
 git -C "${source_dir}" apply "${overlay}"
 git -C "${source_dir}" apply "${window_overlay}"
+git -C "${source_dir}" apply "${central_save_overlay}"
 changed="$(git -C "${source_dir}" diff --name-only)"
 expected="$(printf '%s\n' "${patched_files[@]}" | LC_ALL=C sort)"
 if [[ "$(printf '%s\n' "${changed}" | LC_ALL=C sort)" != "${expected}" ]]; then

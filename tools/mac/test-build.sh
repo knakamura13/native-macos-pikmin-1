@@ -166,7 +166,8 @@ write_wrapper() {
     local game_bin="$7"
     local launcher_bin="$8"
     local title="$9"
-    local q_data_home q_config_home q_cache_home q_data_root q_save q_game_bin q_launcher_bin q_title
+    local save_read_only="${10:-0}"
+    local q_data_home q_config_home q_cache_home q_data_root q_save q_game_bin q_launcher_bin q_title q_read_only q_mode
     q_data_home="$(printf '%q' "${data_home}")"
     q_config_home="$(printf '%q' "${config_home}")"
     q_cache_home="$(printf '%q' "${cache_home}")"
@@ -175,6 +176,29 @@ write_wrapper() {
     q_launcher_bin="$(printf '%q' "${launcher_bin}")"
     q_save="$(printf '%q' "${save_dir}")"
     q_title="$(printf '%q' "${title}")"
+    q_read_only="$(printf '%q' "${save_read_only}")"
+    q_mode="$(printf '%q' "${PIKMIN_SAVE_MODE:-central}")"
+    if [[ "${PIKMIN_SAVE_MODE:-central}" == "fresh" ]]; then
+        cat > "${file}" <<EOF
+#!/bin/bash
+set -euo pipefail
+export XDG_DATA_HOME=${q_data_home}
+export XDG_CONFIG_HOME=${q_config_home}
+export XDG_CACHE_HOME=${q_cache_home}
+export NECTAR_PIKMIN1_DIR=${q_data_root}
+export NECTAR_PIKMIN1_EXECUTABLE=${q_game_bin}
+fresh="\$(mktemp -d "\${TMPDIR:-/tmp}/open-nectar-fresh.XXXXXX")"
+mkdir -p "\$fresh/card0"
+export NECTAR_SAVE_DIR="\$fresh"
+export PIKMIN_BUILD_INFO="\$(dirname -- "\$0")/../Resources/build-info.json"
+export PIKMIN_BUNDLE_MANAGED=1
+export PIKMIN_LAUNCHER_TITLE=${q_title}
+unset NECTAR_EXECUTABLE_PATH PIKMIN_EXECUTABLE_PATH
+exec ${q_launcher_bin} "\$@"
+EOF
+        chmod +x "${file}"
+        return 0
+    fi
     cat > "${file}" <<EOF
 #!/bin/bash
 set -euo pipefail
@@ -183,7 +207,11 @@ export XDG_CONFIG_HOME=${q_config_home}
 export XDG_CACHE_HOME=${q_cache_home}
 export NECTAR_PIKMIN1_DIR=${q_data_root}
 export NECTAR_PIKMIN1_EXECUTABLE=${q_game_bin}
+export PIKMIN_SAVE_MODE=${q_mode}
 export NECTAR_SAVE_DIR=${q_save}
+if [[ ${q_read_only} == "1" ]]; then
+  export NECTAR_SAVE_READ_ONLY=1
+fi
 export PIKMIN_BUILD_INFO="\$(dirname -- "\$0")/../Resources/build-info.json"
 export PIKMIN_BUNDLE_MANAGED=1
 export PIKMIN_LAUNCHER_TITLE=${q_title}
@@ -216,6 +244,7 @@ write_test_app() {
     local sha="$9"
     local branch="${10}"
     local snapshot="${11:-${sha:0:12}}"
+    local save_read_only="${12:-0}"
     local macos="${app}/Contents/MacOS"
     local resources="${app}/Contents/Resources"
     local title="Open Nectar Test — ${branch} [${snapshot}]"
@@ -228,8 +257,8 @@ write_test_app() {
     mkdir -p "${macos}" "${resources}"
     write_wrapper "${macos}/open-nectar" \
         "${data_home}" "${config_home}" "${cache_home}" \
-        "${data_root}" "${save_dir}" "${game_bin}" "${launcher_bin}" "${title}"
-    local data_home_xml config_home_xml cache_home_xml data_root_xml game_bin_xml save_xml
+        "${data_root}" "${save_dir}" "${game_bin}" "${launcher_bin}" "${title}" "${NECTAR_SAVE_READ_ONLY:-0}"
+    local data_home_xml config_home_xml cache_home_xml data_root_xml game_bin_xml save_xml save_ro_xml=""
     local sha_json branch_json
     sha_json="$(json_escape "${sha}")"
     branch_json="$(json_escape "${branch}")"
@@ -239,6 +268,11 @@ write_test_app() {
     data_root_xml="$(xml_escape "${data_root}")"
     game_bin_xml="$(xml_escape "${game_bin}")"
     save_xml="$(xml_escape "${save_dir}")"
+    if [[ "${save_read_only}" == "1" ]]; then
+        save_ro_xml="
+        <key>NECTAR_SAVE_READ_ONLY</key>
+        <string>1</string>"
+    fi
     cat > "${app}/Contents/Info.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -275,7 +309,7 @@ write_test_app() {
         <key>NECTAR_PIKMIN1_EXECUTABLE</key>
         <string>${game_bin_xml}</string>
         <key>NECTAR_SAVE_DIR</key>
-        <string>${save_xml}</string>
+        <string>${save_xml}</string>${save_ro_xml}
     </dict>
 </dict>
 </plist>
@@ -362,7 +396,7 @@ FAKE
     chmod +x "${fake}"
     write_test_app "${app}" "${data_home}" "${config_home}" "${cache_home}" \
         "${data_root}" "${central_save}" "${tmp}/bin/nectar" "${fake}" \
-        "0123456789abcdef" "fixture"
+        "0123456789abcdef" "fixture" "0123456789ab" "0"
     wrapper="${app}/Contents/MacOS/open-nectar"
     HOME="${home}" output="$("${wrapper}")"
     [[ "${output}" == *"XDG_DATA_HOME=${data_home}"* ]]
@@ -383,7 +417,7 @@ FAKE
     fi
     local other_app="${root}/other/Open Nectar Test.app" fixture_id other_id
     write_test_app "${other_app}" "${data_home}" "${config_home}" "${cache_home}" \
-        "${data_root}" "${central_save}" "${tmp}/bin/nectar" "${fake}" "0123456789abcdef" "fixture" "another-snapshot"
+        "${data_root}" "${central_save}" "${tmp}/bin/nectar" "${fake}" "0123456789abcdef" "fixture" "another-snapshot" "0"
     fixture_id="$(sed -n '/<key>CFBundleIdentifier<\/key>/{n;s/.*<string>\(.*\)<\/string>.*/\1/p;}' "${app}/Contents/Info.plist")"
     other_id="$(sed -n '/<key>CFBundleIdentifier<\/key>/{n;s/.*<string>\(.*\)<\/string>.*/\1/p;}' "${other_app}/Contents/Info.plist")"
     [[ -n "${fixture_id}" && -n "${other_id}" && "${fixture_id}" != "${other_id}" ]]
@@ -470,6 +504,7 @@ cache_home="${data_home}/cache"
 data_root="${data_home}/pikmin-native"
 configured_save_dir="${NECTAR_SAVE_DIR}"
 save_mode_label="${PIKMIN_SAVE_MODE_LABEL}"
+save_read_only="${NECTAR_SAVE_READ_ONLY:-0}"
 app="${dest}/Open Nectar Test.app"
 mkdir -p "${build_dir}" "${data_home}"
 
@@ -496,7 +531,7 @@ cp "${game_source}" "${game_bin}"
 cp "${launcher_source}" "${launcher_bin}"
 
 write_test_app "${app}" "${data_home}" "${config_home}" "${cache_home}" \
-    "${data_root}" "${configured_save_dir}" "${game_bin}" "${launcher_bin}" "${sha}" "${identity}" "${snapshot}"
+    "${data_root}" "${configured_save_dir}" "${game_bin}" "${launcher_bin}" "${sha}" "${identity}" "${snapshot}" "${save_read_only}"
 python3 "${script_dir}/build_identity.py" --repo "${repo}" \
     --output "${app}/Contents/Resources/build-info.json" --game "${game_bin}" \
     --launcher "${launcher_bin}" --cache "${build_dir}/CMakeCache.txt" --data "${data_root}" --role feature \
