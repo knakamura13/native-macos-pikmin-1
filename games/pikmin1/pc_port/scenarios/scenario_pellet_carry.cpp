@@ -124,32 +124,35 @@ public:
 				fail(t, "EC-44: no more than max (2) carriers join", "%d carriers", mMaxCarriers);
 				return;
 			}
-			if (delivered()) return finishDelivery(t, "red 1-pellet", 1, [&] {
-				if (mMaxCarriers != 2) {
-					fail(t, "two carriers lift the pellet", "at most %d carriers", mMaxCarriers);
-					return;
-				}
-				mCfg->mCarryMinPikis(1);
-				startBig(t, "pr05", Other);
-			});
+			if (delivered())
+				return finishDelivery(t, "red 1-pellet", 1, [this](unsigned tick) {
+					if (mMaxCarriers != 2) {
+						fail(tick, "two carriers lift the pellet", "at most %d carriers", mMaxCarriers);
+						return;
+					}
+					mCfg->mCarryMinPikis(1);
+					startBig(tick, "pr05", Other);
+				});
 			if (span > 90 * rate) fail(t, "EC-44: with 2 carriers the pellet reaches the Onion within 90 s", "state %d, carriers %d, at (%.0f, %.0f), moved %.1f", mPellet->getState(),
 			                           (int)mPellet->mCarrierCounter, mPellet->mSRT.t.x, mPellet->mSRT.t.z, flatDistance(mPellet->mSRT.t, mStart));
 			return;
 		case Other:
-			if (delivered()) return finishDelivery(t, "red 5-pellet into the blue Onion (non-matching)", 1, [&] { startBig(t, "pb05", Same); });
+			if (delivered())
+				return finishDelivery(t, "red 5-pellet into the blue Onion (non-matching)", 1, [this](unsigned tick) { startBig(tick, "pb05", Same); });
 			if (span > 90 * rate) fail(t, "EC-45: the red 5-pellet reaches the Onion within 90 s", "state %d, carriers %d, at (%.0f, %.0f)", mPellet->getState(),
 			                           (int)mPellet->mCarrierCounter, mPellet->mSRT.t.x, mPellet->mSRT.t.z);
 			return;
 		case Same:
-			if (delivered()) return finishDelivery(t, "blue 5-pellet into the blue Onion (matching)", 3, [&] {
-				if (playerState->mDemoFlags.isFlag(DEMOFLAG_CollectFirstPellet)) {
-					fail(t, "DF10 is Practice-only", "flag 10 set");
-					return;
-				}
-				std::printf("[scenario] pellet_carry: getPellets %d (was %d), flags %s\n", (int)GameStat::getPellets, mPellets, setBits(demoFlags()).c_str());
-				mPhase = Done;
-				scenarioPass();
-			});
+			if (delivered())
+				return finishDelivery(t, "blue 5-pellet into the blue Onion (matching)", 3, [this](unsigned tick) {
+					if (playerState->mDemoFlags.isFlag(DEMOFLAG_CollectFirstPellet)) {
+						fail(tick, "DF10 is Practice-only", "flag 10 set");
+						return;
+					}
+					std::printf("[scenario] pellet_carry: getPellets %d (was %d), flags %s\n", (int)GameStat::getPellets, mPellets, setBits(demoFlags()).c_str());
+					mPhase = Done;
+					scenarioPass();
+				});
 			if (span > 90 * rate) fail(t, "PL5: the blue 5-pellet reaches the Onion within 90 s", "state %d, carriers %d, at (%.0f, %.0f)", mPellet->getState(),
 			                           (int)mPellet->mCarrierCounter, mPellet->mSRT.t.x, mPellet->mSRT.t.z);
 			return;
@@ -161,7 +164,7 @@ public:
 					fail(t, mWantSeedsText, "%s: %d seeds", mWhat, seeds);
 					return;
 				}
-				mNext();
+				mNext(t);
 			} else if (span > 30 * rate) {
 				fail(t, "the Onion finishes emitting and waits again within 30 s", "Onion state %d, left to emit %d", C_SAI(mOnion)->getCurrID(mOnion), mOnion->mSAICtx.mCurrAnimId);
 			}
@@ -196,7 +199,7 @@ private:
 		mWantSeeds      = wantSeeds;
 		mWantSeedsText  = wantSeeds == 3 ? "EC-45: a pellet into an Onion of its colour adds its matching seeds (p06 = 3)" : "EC-45: a pellet into an Onion of another colour adds its non-matching seeds (p07 = 1)";
 		mBorn0          = GameStat::bornPikis[Blue];
-		mNext           = next;
+		mNext           = std::move(next);
 		enter(Settle, t);
 	}
 
@@ -225,7 +228,7 @@ private:
 	Vector3f mStart;
 	std::vector<int> mFlags;
 	std::vector<Piki*> mLanding;
-	std::function<void()> mNext;
+	std::function<void(unsigned)> mNext;
 };
 
 } // namespace

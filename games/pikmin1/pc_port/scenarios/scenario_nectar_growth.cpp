@@ -111,6 +111,10 @@ public:
 				std::printf("[scenario] nectar_growth: the flower stood on the puddle for 3 s (%.0f units off), state %d: no drink\n",
 				            flatDistance(mFlower->mSRT.t, mPuddle->mSRT.t), mFlower->getState());
 				mSubject = putPiki(navi, Bud);
+				if (!mSubject) {
+					fail(t, "a bud Pikmin is born beside the puddle", "spawnPiki returned null");
+					return;
+				}
 				mSawAbsorb = mSawGrow = false;
 				enter(BudPhase, t);
 			}
@@ -164,6 +168,10 @@ public:
 			if (Creature* puddle = findPuddle()) {
 				mPuddle    = puddle;
 				mSubject   = putPiki(navi, Leaf);
+				if (!mSubject) {
+					fail(t, "a leaf Pikmin is born beside the puddle", "spawnPiki returned null");
+					return;
+				}
 				mSawAbsorb = mSawGrow = false;
 				enter(LeafPhase, t);
 			} else if (span > 20 * rate) {

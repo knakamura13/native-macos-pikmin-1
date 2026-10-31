@@ -330,6 +330,8 @@ std::vector<StandinLayout> standinBloLayouts()
 	}
 	// The diary page of a day that ends with the captain down (ResultFlags::getDocument).
 	out.push_back(tutorialPage("re_j_00.blo"));
+	// First Pikmin death diary page (RESFLAG path from ogResult.cpp re_k_00).
+	out.push_back(tutorialPage("re_k_00.blo"));
 	{ // ogMakeDefault.cpp, ogScrMakeDefaultMgr::ogScrMakeDefaultMgr: data_pf.blo.
 		Kids k;
 		k.add(box("tx00", "Stand-in text.")).add(box("pfok", "Stand-in text.")).add(box("pfxx", "Stand-in text."));

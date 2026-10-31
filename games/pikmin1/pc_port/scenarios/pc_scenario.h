@@ -36,6 +36,10 @@ public:
 	// challenge path (gameflow.mIsChallengeMode, PlayerState::setChallengeMode) instead of
 	// forcing story mode (coverage/terminals.md T17, T18).
 	virtual bool challengeMode() const { return false; }
+	// Hard mode: pending flag is set before pc_hardmode_begin_new_run (coverage T22, EC-56).
+	virtual bool hardMode() const { return false; }
+	// Speedrun mode: pc_speedrun_set_active(true) before the stage (coverage T23).
+	virtual bool speedrunMode() const { return false; }
 	// Runs once when the stage is ready, before tick 0.
 	virtual void onStageReady() { }
 	// Fills pad 0 for this tick; pads 1-3 arrive neutral. Called every tick, before the sim.

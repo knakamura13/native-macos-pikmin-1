@@ -149,8 +149,14 @@ public:
 			int textId                   = -1;
 			const int opened             = pc_scenario_text_windows_opened(&textId);
 			if (fresh.empty()) {
-				if (t - mBlast > 4 * rate) fail(t, "DF20: flag 20 sets within 4 s of the first bomb exploding", "no new flag, state %d", state);
-				if (opened != mTexts0) fail(t, "the text waits for the flag (they come together)", "%d windows before the flag", opened - mTexts0);
+				if (t - mBlast > 4 * rate) {
+					fail(t, "DF20: flag 20 sets within 4 s of the first bomb exploding", "no new flag, state %d", state);
+					return;
+				}
+				if (opened != mTexts0) {
+					fail(t, "the text waits for the flag (they come together)", "%d windows before the flag", opened - mTexts0);
+					return;
+				}
 				return;
 			}
 			const float delay = (t - mBlast) / float(rate);
@@ -185,7 +191,6 @@ public:
 					fail(t, "a red Pikmin is born", "birth returned null");
 					return;
 				}
-				mLive0 = liveCount(Red) + liveCount(Yellow);
 				enter(Death, t);
 			} else if (span > 15 * rate) {
 				fail(t, "the bomb text opens and closes within 15 s", "windows %d (was %d), overlay %d", opened, mTexts0, (int)gameflow.mIsUIOverlayActive);
@@ -265,7 +270,7 @@ private:
 
 	Phase mPhase        = RedPhase;
 	unsigned mPhaseTick = 0, mLit = 0, mBlast = 0, mWindow = 0;
-	int mTexts0 = 0, mLive0 = 0;
+	int mTexts0 = 0;
 	bool mSawText = false;
 	BombItem* mBomb = nullptr;
 	BombItem* mFar  = nullptr;
