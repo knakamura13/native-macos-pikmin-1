@@ -2233,6 +2233,7 @@ if(PIKMIN_BUILD_SCENARIOS)
             # tools/scenarios/standin_practice_stage.h): the tutorial-only milestones.
             tutorial_skip:practice:30,60 tutorial_firsts:practice:30,60 tutorial_day1:practice:30,60
             hardmode_teki_life:sandbox_all_objects:30 hardmode_teki_life_off:sandbox_all_objects:30
+            hardmode_boss_life:sandbox_all_objects:30 hardmode_boss_life_off:sandbox_all_objects:30
             hardmode_cheats:sandbox:30 settings_health_pct:sandbox:30 settings_health_pct_off:sandbox:30
             settings_invincible:sandbox:30 settings_invincible_off:sandbox:30 speedrun_cheats:sandbox:30
             unlock_zones:sandbox:30 settings_menu_pause:sandbox:30

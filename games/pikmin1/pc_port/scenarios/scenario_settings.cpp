@@ -24,6 +24,7 @@
 #include "WorldClock.h"
 #include "gameflow.h"
 #include "GlobalGameOptions.h"
+#include "Boss.h"
 #include "pc_permadeath.h"
 #include "pc_speedrun.h"
 #include "settings/pc_settings.h"
@@ -95,6 +96,86 @@ public:
 			checked++;
 		}
 		if (checked < 1) scenarioFailf(0, "at least one enemy on the stage", "%d", checked);
+	}
+
+	void onTick(unsigned tick) override
+	{
+		if (tick + 1 >= 30) scenarioPass();
+	}
+};
+
+class HardmodeBossLife : public PcScenario {
+public:
+	const char* name() const override { return "hardmode_boss_life"; }
+	bool hardMode() const override { return true; }
+
+	void onStageReady() override
+	{
+		if (!pc_hardmode_active()) {
+			scenarioFailf(0, "Hard mode active", "off");
+			return;
+		}
+		if (bossMgr == nullptr) {
+			scenarioFailf(0, "bossMgr ready", "null");
+			return;
+		}
+		int checked = 0;
+		Iterator it(bossMgr);
+		CI_LOOP(it)
+		{
+			Boss* boss = static_cast<Boss*>(*it);
+			if (boss == nullptr) continue;
+			const f32 base   = C_BOSS_PARM(boss, mMaxHealth);
+			const f32 max    = boss->getMaxLife();
+			const f32 want   = pc_hardmode_teki_life(base);
+			const f32 scaled = base * 1.33f;
+			if (std::fabs(max - scaled) > 0.01f || std::fabs(max - want) > 0.01f
+			    || std::fabs(boss->getCurrentLife() - want) > 0.01f) {
+				scenarioFailf(0, "boss max life 1.33x base on Hard", "base %.2f max %.2f life %.2f want %.2f scaled %.2f", base,
+				              max, boss->getCurrentLife(), want, scaled);
+				return;
+			}
+			checked++;
+		}
+		if (checked < 1) scenarioFailf(0, "at least one boss on the stage", "%d", checked);
+	}
+
+	void onTick(unsigned tick) override
+	{
+		if (tick + 1 >= 30) scenarioPass();
+	}
+};
+
+class HardmodeBossLifeOff : public PcScenario {
+public:
+	const char* name() const override { return "hardmode_boss_life_off"; }
+
+	void onStageReady() override
+	{
+		if (pc_hardmode_active()) {
+			scenarioFailf(0, "Hard mode off (negative control)", "on");
+			return;
+		}
+		if (bossMgr == nullptr) {
+			scenarioFailf(0, "bossMgr ready", "null");
+			return;
+		}
+		int checked = 0;
+		Iterator it(bossMgr);
+		CI_LOOP(it)
+		{
+			Boss* boss = static_cast<Boss*>(*it);
+			if (boss == nullptr) continue;
+			const f32 base = C_BOSS_PARM(boss, mMaxHealth);
+			const f32 max  = boss->getMaxLife();
+			if (std::fabs(max - base) > 0.01f || std::fabs(boss->getCurrentLife() - base) > 0.01f) {
+				scenarioFailf(0, "boss life equals base with Hard off", "base %.2f max %.2f life %.2f", base, max,
+				              boss->getCurrentLife());
+				return;
+			}
+			checked++;
+		}
+		if (checked < 1) scenarioFailf(0, "at least one boss on the stage", "%d", checked);
 	}
 
 	void onTick(unsigned tick) override
@@ -384,6 +465,16 @@ PcScenario* pc_scenario_make_hardmode_teki_life(void)
 PcScenario* pc_scenario_make_hardmode_teki_life_off(void)
 {
 	static HardmodeTekiLifeOff s;
+	return &s;
+}
+PcScenario* pc_scenario_make_hardmode_boss_life(void)
+{
+	static HardmodeBossLife s;
+	return &s;
+}
+PcScenario* pc_scenario_make_hardmode_boss_life_off(void)
+{
+	static HardmodeBossLifeOff s;
 	return &s;
 }
 PcScenario* pc_scenario_make_hardmode_cheats(void)

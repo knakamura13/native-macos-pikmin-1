@@ -60,6 +60,8 @@ PcScenario* pc_scenario_make_tutorial_day1(void);
 PcScenario* pc_scenario_make_title_boot(void);
 PcScenario* pc_scenario_make_hardmode_teki_life(void);
 PcScenario* pc_scenario_make_hardmode_teki_life_off(void);
+PcScenario* pc_scenario_make_hardmode_boss_life(void);
+PcScenario* pc_scenario_make_hardmode_boss_life_off(void);
 PcScenario* pc_scenario_make_hardmode_cheats(void);
 PcScenario* pc_scenario_make_settings_health_pct(void);
 PcScenario* pc_scenario_make_settings_health_pct_off(void);

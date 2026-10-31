@@ -80,6 +80,8 @@ const std::vector<PcScenario*>& pc_scenario_all(void)
 		pc_scenario_make_title_boot(),
 		pc_scenario_make_hardmode_teki_life(),
 		pc_scenario_make_hardmode_teki_life_off(),
+		pc_scenario_make_hardmode_boss_life(),
+		pc_scenario_make_hardmode_boss_life_off(),
 		pc_scenario_make_hardmode_cheats(),
 		pc_scenario_make_settings_health_pct(),
 		pc_scenario_make_settings_health_pct_off(),
