@@ -4,6 +4,8 @@
 
 #include "scenarios/pc_scenario.h"
 
+#include <cerrno>
+#include <climits>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
