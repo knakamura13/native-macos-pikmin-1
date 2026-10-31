@@ -600,9 +600,9 @@ run above is wine 9.0).
 | `onion_day3_unplucked` | as `onion_day3` | The negative control of every Day 3 check: the Onion found, its seed left in the ground. As on the GameCube: boot bit set, no container or display bit, no take-off, map select lists red only, and on Day 3 the `next` yellow Onion is born again (booted, `GOAL_Wait`, empty) and none from the other generator. |
 
 `throw_release` measures K at run time and never hard-codes it. On this tree both
-the stand-in sandbox and a real install give K = 15 at 30 Hz and 18 at 60 Hz
-(measured 2026-10-28), but the stand-in gate is fitted to land there
-(`standin-k-investigation.md`), so a change to the squad AI, collision or the sim
+the stand-in sandbox and a real install give K = 13 at 30 Hz and 22 at 60 Hz
+(after #92's GameCube RNG draw order and the stand-in gate re-fit in
+`standin-k-investigation.md`), so a change to the squad AI, collision or the sim
 RNG can move the two apart.
 
 ## Writing a scenario
@@ -926,8 +926,8 @@ Build it with `cc gl_probe.c $(sdl2-config --cflags --libs) -o gl_probe`.
   enemies, bosses, plants, gates or bridges.
 - Stand-in and disc runs can differ in timing. `throw_release` measures K, the
   press-to-grab delay, per run because the stand-in value need not equal the
-  disc's. Today the two agree (15 at 30 Hz, 18 at 60 Hz), by a fitted sandbox
-  gate, not by construction.
+  disc's. Today the two agree (13 at 30 Hz, 22 at 60 Hz), by a fitted sandbox
+  gate after #92, not by construction.
 - A scenario needs a GL context, even hidden. Without one the run exits 4. On
   Windows, Mesa's `opengl32.dll` and `libgallium_wgl.dll` must sit beside the
   executable.
