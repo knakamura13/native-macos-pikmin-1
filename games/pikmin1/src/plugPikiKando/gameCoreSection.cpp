@@ -625,7 +625,10 @@ void GameCoreSection::cleanupDayEnd()
 	}
 	}
 	if (playerState->getCurrDay() + 1 == playerState->getTotalDays() - 1) {
-		playerState->mResultFlags.setOn(zen::RESFLAG_FinalDay);
+#if defined(PIKI_PC_PORT)
+		if (!pc_settings_get_no_day_advance())
+#endif
+			playerState->mResultFlags.setOn(zen::RESFLAG_FinalDay);
 	}
 	if (playerState->getCurrParts() >= 11 && playerState->getCurrDay() >= 9) {
 		playerState->mResultFlags.setOn(zen::RESFLAG_Collect10Parts);
