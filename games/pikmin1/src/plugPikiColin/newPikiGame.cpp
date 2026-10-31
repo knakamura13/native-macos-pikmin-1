@@ -2598,9 +2598,17 @@ public:
 
 			gfx.setCamera(&mGameCamera);
 			mGameCamera.update(f32(gfx.mScreenWidth) / f32(gfx.mScreenHeight), mGameCamera.mFov, pc_first_person_active() ? 3.0f : 100.0f, mCameraFarClip);
+#if PIKI_SCENARIOS && defined(PIKI_PC_PORT)
+			pc_scenario_apply_debug_camera(&mGameCamera);
+#endif
 		}
 #if defined(PIKI_PC_PORT)
 		}
+#if PIKI_SCENARIOS
+		if (gfx.mCamera) {
+			pc_scenario_apply_debug_camera(gfx.mCamera);
+		}
+#endif
 #endif
 
 #if defined(PIKI_PC_PORT)

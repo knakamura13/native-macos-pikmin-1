@@ -37,6 +37,7 @@
 #include "nectar_mapcore/map.h"
 #include "standin_all_objects_stage.h"
 #include "standin_objects_stage.h"
+#include "standin_showcase_stage.h"
 #include "standin_practice_stage.h"
 #include "standin_water_stage.h"
 
@@ -95,8 +96,9 @@ bool sandboxSourceMod(Bytes& out, std::string& error)
 		nectar::ModMaterial mat;
 		mat.flags   = nectar::MOD_MAT_OPAQUE;
 		mat.texAttr = -1;
-		mat.colour  = { 110, 150, 90, 255 }; // grass-ish green
-		if (i == 0) mat.colour = { 120, 110, 100, 255 }; // walls: rock grey
+		mat.colour  = { 110, 150, 90, 255 }; // grass green
+		if (i == 1) mat.colour = { 90, 130, 70, 255 }; // darker grass
+		if (i == 14) mat.colour = { 105, 145, 85, 255 }; // floor grass (compileMap floor material)
 		m.materials.push_back(mat);
 	}
 	if (!nectar::writeModTables(m, out, error)) return fail(error, "sandbox source .mod: " + error);
@@ -213,6 +215,11 @@ bool stagesIni(Tree& tree, std::string& error)
 	water.name    = "sandbox_water";
 	water.file    = standin::kWaterStageIni;
 	entries.push_back(water);
+	nectar::StagesEntry showcase;
+	showcase.visible = false;
+	showcase.name    = "sandbox_showcase";
+	showcase.file    = standin::kShowcaseStageIni;
+	entries.push_back(showcase);
 
 	std::string text;
 	if (!nectar::writeStagesIni(entries, text, error)) return fail(error, "stages.ini: " + error);
@@ -466,7 +473,7 @@ bool buildTree(Tree& tree, std::string& error)
 	tree.clear();
 	return parmFiles(tree, error) && archives(tree, error) && stagesIni(tree, error) && sandboxMap(tree, error) && siblingStandIns(tree, error)
 	    && standInCinemas(tree, error) && audioStandIns(tree, error) && standin::addObjectsStage(tree, error) && standin::addAllObjectsStage(tree, error)
-	    && standin::addWaterStage(tree, error)
+	    && standin::addWaterStage(tree, error) && standin::addShowcaseStage(tree, error)
 	    && standin::addPracticeStage(tree, error);
 }
 

@@ -1,5 +1,7 @@
 #include "nectar_assets/standin_ui.h"
 
+#include "nectar_assets/standin_layout.h"
+
 #include <cstdio>
 
 namespace nectar {
@@ -115,6 +117,22 @@ BloPane sized(BloPane p, int w, int h)
 	return p;
 }
 
+BloPane placed(BloPane p, standin_layout::Rect r)
+{
+	p.x = r.x;
+	p.y = r.y;
+	p.w = r.w;
+	p.h = r.h;
+	return p;
+}
+
+BloPane texPic(const std::string& tag, const char* tex, standin_layout::Rect r)
+{
+	BloPane p = pic(tag);
+	p.texture = tex;
+	return placed(p, r);
+}
+
 // Una etiqueta de menos de cuatro letras ('hai', 'fp'): el u32 lleva NUL delante.
 std::string tag3(const char* t)
 {
@@ -217,22 +235,54 @@ std::vector<StandinLayout> standinBloLayouts()
 	}
 	{ // drawGameInfo.cpp:774-807.
 		Kids k;
-		k.add(pane("stat")).add(pane("goal")).add(pane("suni"));
-		for (const char* t : { "sunc", "sun1", "sun2", "moon" }) k.add(pic(t));
+		k.add(placed(pane("stat"), standin_layout::kPlay09Stat));
+		k.add(placed(pane("goal"), standin_layout::kPlay09Goal));
+		k.add(placed(pane("suni"), standin_layout::kPlay09Suni));
+		k.add(texPic("sunc", "dot_32.bti", standin_layout::kPlay09Sunc));
+		k.add(texPic("sun1", "w08_160.bti", standin_layout::kPlay09Sun1));
+		k.add(texPic("sun2", "ws08_160.bti", standin_layout::kPlay09Sun2));
+		k.add(texPic("moon", "ws08_yel.bti", standin_layout::kPlay09Moon));
 		out.push_back(layout("play09.blo", k));
 	}
 	{ // drawGameInfo.cpp:814-830. `life` es un panel simple: LifeIconCallBack se
 		// construye sobre PANETYPE_Pane y con una imagen aborta.
 		Kids k;
-		k.add(pane("li_i")).add(pane("na_i")).add(pic("navi")).add(pane("life")).add(pic("pin1")).add(pic("pin2"));
+		k.add(placed(pane("li_i"), standin_layout::kPlay10LiI));
+		k.add(placed(pane("na_i"), standin_layout::kPlay10NaI));
+		k.add(texPic("navi", "rp_l64.bti", standin_layout::kPlay10Navi));
+		k.add(placed(pane("life"), standin_layout::kPlay10Life));
 		out.push_back(layout("play10.blo", k));
 	}
 	{ // drawGameInfo.cpp:725-745, 832-840.
 		Kids k;
-		k.add(pic("piki")).add(pane("w_00")).add(pane("x_00")).add(pic("w_01"));
-		for (const char* t : { "c_ml", "c_mc", "c_mr", "c_ll", "c_lc", "c_lr", "c_sl", "c_sc", "c_sr", "c_s1", "dc_c", "dc_l", "dc_r", "dcsc",
-		                       "dcsl", "dcsr" })
-			k.add(pic(t));
+		k.add(texPic("piki", "piki0.bti", standin_layout::kPlayDayPiki));
+		k.add(placed(pane("w_00"), { 638, 478, 1, 1 }));
+		k.add(placed(pane("x_00"), { 639, 478, 1, 1 }));
+		k.add(texPic("w_01", "dot_32.bti", { 637, 478, 1, 1 }));
+		const int cx = standin_layout::kCounterStartX;
+		const int y0 = standin_layout::kCounterRow0Y;
+		const int y1 = standin_layout::kCounterRow1Y;
+		const int step = standin_layout::kCounterStep;
+		const int cell = standin_layout::kCounterCell;
+		auto counter = [&](const char* tag, const char* tex, int col, int row) {
+			k.add(texPic(tag, tex, { cx + col * step, row == 0 ? y0 : y1, cell, cell }));
+		};
+		counter("c_ml", "0_64.bti", 0, 0);
+		counter("c_mc", "1_64.bti", 1, 0);
+		counter("c_mr", "2_64.bti", 2, 0);
+		counter("c_ll", "3_64.bti", 0, 1);
+		counter("c_lc", "4_64.bti", 1, 1);
+		counter("c_lr", "5_64.bti", 2, 1);
+		counter("c_sl", "6_64.bti", 3, 0);
+		counter("c_sc", "7_64.bti", 4, 0);
+		counter("c_sr", "8_64.bti", 5, 0);
+		counter("c_s1", "9_64.bti", 6, 0);
+		k.add(placed(pic("dc_l"), { standin_layout::kPlayDayDate.x, standin_layout::kPlayDayDate.y, cell, cell }));
+		k.add(placed(pic("dc_c"), { standin_layout::kPlayDayDate.x + 40, standin_layout::kPlayDayDate.y, cell, cell }));
+		k.add(placed(pic("dc_r"), { standin_layout::kPlayDayDate.x + 80, standin_layout::kPlayDayDate.y, cell, cell }));
+		k.add(texPic("dcsc", "1_sha64.bti", { standin_layout::kPlayDayDate.x + 40, standin_layout::kPlayDayDate.y + 2, cell, cell }));
+		k.add(texPic("dcsl", "0_sha64.bti", { standin_layout::kPlayDayDate.x, standin_layout::kPlayDayDate.y + 2, cell, cell }));
+		k.add(texPic("dcsr", "2_sha64.bti", { standin_layout::kPlayDayDate.x + 80, standin_layout::kPlayDayDate.y + 2, cell, cell }));
 		out.push_back(layout("play_day.blo", k));
 	}
 

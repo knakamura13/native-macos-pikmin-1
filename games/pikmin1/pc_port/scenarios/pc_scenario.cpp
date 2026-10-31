@@ -4,6 +4,7 @@
 
 #include "scenarios/pc_scenario_list.h"
 #include "scenarios/pc_scenario_screenshot.h"
+#include "zen/DrawGameInfo.h"
 
 #include <SDL.h>
 
@@ -51,6 +52,7 @@
 #include "pc_window.h"
 #include "randomizer/pc_randomizer.h"
 #include "settings/pc_settings.h"
+#include "Camera.h"
 
 #if defined(_WIN32)
 #include <direct.h>
@@ -729,6 +731,8 @@ int pc_scenario_parse_argv(int argc, char** argv)
 	}
 	if (const char* stage = std::getenv("PIKMIN_SCENARIO_STAGE")) {
 		if (*stage != '\0') sStageFile = stage;
+	} else if (const char* scenarioStage = sScenario->stageFile()) {
+		sStageFile = scenarioStage;
 	}
 	// The window size, WxH (default in pc_settings.cpp). The sim does not read it.
 	int windowWidth = 0, windowHeight = 0;
@@ -796,6 +800,50 @@ int pc_scenario_parse_argv(int argc, char** argv)
 }
 
 bool pc_scenario_active(void) { return sActive; }
+
+static PcScenarioDebugCamera sDebugCamera {};
+
+bool pc_scenario_uses_disc_free_assets(void)
+{
+	const char* data = std::getenv("PIKMIN_SCENARIO_DATA_DIR");
+	return data != nullptr && *data != '\0';
+}
+
+static int sCreatureUnlitDrawDepth = 0;
+
+void pc_scenario_push_creature_unlit_draw(void)
+{
+	if (pc_scenario_uses_disc_free_assets()) sCreatureUnlitDrawDepth++;
+}
+
+void pc_scenario_pop_creature_unlit_draw(void)
+{
+	if (sCreatureUnlitDrawDepth > 0) sCreatureUnlitDrawDepth--;
+}
+
+bool pc_scenario_creature_unlit_draw(void) { return sCreatureUnlitDrawDepth > 0; }
+
+void pc_scenario_set_debug_camera(const PcScenarioDebugCamera& cam) { sDebugCamera = cam; }
+
+void pc_scenario_clear_debug_camera(void) { sDebugCamera = {}; }
+
+bool pc_scenario_apply_debug_camera(Camera* cam)
+{
+	if (!cam) return false;
+	if (!sActive || !sDebugCamera.active) return false;
+	Vector3f eye(sDebugCamera.eyeX, sDebugCamera.eyeY, sDebugCamera.eyeZ);
+	Vector3f focus(sDebugCamera.focusX, sDebugCamera.focusY, sDebugCamera.focusZ);
+	cam->mFov = sDebugCamera.fov;
+	cam->calcVectors(eye, focus);
+	// calcVectors() ends with update(1.0f, …) using the gameplay near plane left on
+	// the camera (typically 100). Showcase rigs sit ~40 units from the subject, so
+	// the whole field clips and the capture is a green horizon strip over black.
+	f32 aspect = pc_gfx_get_window_aspect_ratio();
+	if (aspect <= 0.0f) aspect = 640.0f / 480.0f;
+	const f32 farClip = cam->mFar > 0.0f ? cam->mFar : 2600.0f;
+	cam->update(aspect, cam->mFov, 3.0f, farClip);
+	return true;
+}
 
 bool pc_scenario_screenshot_frame_active(void) { return sActive && !sVerdict && sStageReady && sIntroDone; }
 
@@ -1145,6 +1193,27 @@ bool scenarioCheckThrowWaitPreconditions(unsigned tick, Navi* navi)
 	}
 	scenarioFailf(tick, "info 63 has a type-2 info key", "%d info keys, none of type 2", iKeys);
 	return false;
+}
+
+static zen::DrawGameInfo* sRegisteredHud = nullptr;
+
+void pc_scenario_register_draw_game_info(zen::DrawGameInfo* hud)
+{
+	sRegisteredHud = hud;
+}
+
+void pc_scenario_unregister_draw_game_info(void)
+{
+	sRegisteredHud = nullptr;
+}
+
+bool pc_scenario_check_hud_layout(const char** why)
+{
+	if (!sRegisteredHud) {
+		if (why) *why = "DrawGameInfo not registered";
+		return false;
+	}
+	return sRegisteredHud->checkStandInHudLayout(why);
 }
 
 #endif

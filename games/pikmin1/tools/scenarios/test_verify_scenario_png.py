@@ -12,6 +12,7 @@ from verify_scenario_png import (
     compare_golden,
     distinct_color_count,
     read_png_rgb,
+    verify_showcase_composition,
 )
 
 ROOT = Path(__file__).resolve().parent
@@ -65,8 +66,9 @@ def run_self_test() -> None:
     w, h, pixels = read_png_rgb(str(GOLDEN))
     assert w == 640 and h == 480
     n = distinct_color_count(pixels)
-    if not (100 <= n <= 160):
-        raise AssertionError(f"golden distinct colours {n}, expected about 126 (100..160)")
+    # Stand-in art (#115) uses more distinct flat-shaded colours than grey cubes (~126).
+    if not (100 <= n <= 400):
+        raise AssertionError(f"golden distinct colours {n}, expected flat-shaded stand-in range (100..400)")
 
     with tempfile.TemporaryDirectory() as tmp:
         tmp_path = Path(tmp)
@@ -92,6 +94,12 @@ def run_self_test() -> None:
         bad_ok, _ = compare_golden(pixels, bad_px, tolerance=10, max_diff_ratio=0.03)
         if bad_ok:
             raise AssertionError("magenta bottom quarter must fail golden compare")
+
+        ok_show, _ = verify_showcase_composition(
+            w, h, pixels, max_near_black_ratio=0.95, min_center_non_grass=0, min_center_distinct=0
+        )
+        if not ok_show:
+            raise AssertionError("boot golden must pass loose showcase composition helper")
 
     print(f"verify_scenario_png self-test ok (golden {n} distinct colours)")
 

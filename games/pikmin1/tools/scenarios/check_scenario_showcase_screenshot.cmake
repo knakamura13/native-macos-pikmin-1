@@ -1,0 +1,54 @@
+# standin_showcase capture at tick 120 with composition guards (issue #115).
+cmake_minimum_required(VERSION 3.16)
+
+foreach(var GAME WORK_DIR)
+    if(NOT DEFINED ${var})
+        message(FATAL_ERROR "check_scenario_showcase_screenshot.cmake: ${var} is not set")
+    endif()
+endforeach()
+
+if(NOT DEFINED PIKMIN_STANDIN_DATA)
+    message(FATAL_ERROR "check_scenario_showcase_screenshot.cmake: PIKMIN_STANDIN_DATA is not set")
+endif()
+
+set(capture_w 640)
+set(capture_h 480)
+set(pos_png "${WORK_DIR}/standin_showcase_t120.png")
+file(MAKE_DIRECTORY "${WORK_DIR}")
+
+execute_process(
+    COMMAND ${CMAKE_COMMAND} -E env "PIKMIN_SCENARIO_DATA_DIR=${PIKMIN_STANDIN_DATA}"
+        "${GAME}" --scenario standin_showcase --scenario-tick-rate 30
+        --scenario-screenshot "120:${pos_png}"
+    OUTPUT_VARIABLE out
+    ERROR_VARIABLE err
+    RESULT_VARIABLE rc)
+message("${out}${err}")
+
+if(NOT rc STREQUAL "0")
+    message(FATAL_ERROR "standin_showcase with screenshot exited ${rc}")
+endif()
+
+find_package(Python3 COMPONENTS Interpreter REQUIRED)
+set(verify "${CMAKE_CURRENT_LIST_DIR}/verify_scenario_png.py")
+
+execute_process(
+    COMMAND "${Python3_EXECUTABLE}" "${verify}" "${pos_png}"
+        --expect-width ${capture_w}
+        --expect-height ${capture_h}
+        --require-non-blank
+        --min-distinct-colors 120
+        --min-variance 120.0
+        --max-near-black-ratio 0.20
+        --min-center-non-grass 800
+        --min-center-distinct 10
+        --min-saturated-red 350
+        --min-saturated-yellow 350
+        --min-saturated-blue 350
+        --max-center-near-black-ratio 0.18
+    RESULT_VARIABLE pos_rc)
+if(NOT pos_rc STREQUAL "0")
+    message(FATAL_ERROR "standin_showcase PNG composition check failed")
+endif()
+
+message("standin_showcase screenshot checks passed")
