@@ -1,0 +1,52 @@
+#!/usr/bin/env python3
+"""Require successful throw-release logs and equal calibration K per tick rate."""
+import argparse
+import json
+import pathlib
+import re
+
+
+def collect(directory):
+    values = {}
+    for rate in (30, 60):
+        path = pathlib.Path(directory) / f'scenario_throw_release_{rate}.log'
+        text = path.read_text()
+        matches = re.findall(r'^\[scenario\] throw_release calibration: K = (\d+) ticks\r?$', text, re.M)
+        if len(matches) != 1 or int(matches[0]) < 3:
+            raise ValueError(f'{path}: expected exactly one valid calibration')
+        if not re.search(r'^\[scenario\] PASS\b', text, re.M) or re.search(r'^\[scenario\] FAIL\b', text, re.M):
+            raise ValueError(f'{path}: missing PASS or reported FAIL')
+        if 'sessionSeed=0' not in text:
+            raise ValueError(f'{path}: missing fixed session seed evidence')
+        values[str(rate)] = int(matches[0])
+    return values
+
+
+def compare(sources):
+    if len(sources) < 2:
+        raise ValueError('at least two distinct sources are required')
+    values = {name: collect(directory) for name, directory in sources.items()}
+    for rate in ('30', '60'):
+        if len({v[rate] for v in values.values()}) != 1:
+            raise ValueError(f'{rate} Hz calibration differs: {values}')
+    return values
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('sources', nargs='+', metavar='NAME=DIR')
+    args = parser.parse_args()
+    sources = {}
+    for source in args.sources:
+        name, sep, directory = source.partition('=')
+        if not sep or not name or not directory or name in sources:
+            parser.error(f'invalid or duplicate source: {source}')
+        sources[name] = directory
+    try:
+        print(json.dumps(compare(sources), indent=2))
+    except (OSError, ValueError) as error:
+        parser.exit(1, f'FAIL: {error}\n')
+
+
+if __name__ == '__main__':
+    main()
