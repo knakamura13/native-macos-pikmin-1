@@ -464,6 +464,9 @@ if (PIKMIN_BUILD_SCENARIOS)
         pc_port/scenarios/scenario_tutorial_skip.cpp
         pc_port/scenarios/scenario_tutorial_firsts.cpp
         pc_port/scenarios/scenario_tutorial_day1.cpp
+        pc_port/scenarios/scenario_ufo_part_discovery.cpp
+        pc_port/scenarios/scenario_pellet_table.cpp
+        pc_port/scenarios/scenario_pellet_carry.cpp
         pc_port/scenarios/scenario_title_boot.cpp
         pc_port/gl/pc_gfx_png_write.cpp)
 endif()
@@ -2021,7 +2024,7 @@ endif()
 if(PIKMIN_BUILD_SCENARIOS)
     set(PIKMIN_SCENARIO_SCRATCH "${CMAKE_CURRENT_BINARY_DIR}/scenario-scratch")
     file(MAKE_DIRECTORY "${PIKMIN_SCENARIO_SCRATCH}")
-    foreach(scenario boot_smoke throw_release day30_clock)
+    foreach(scenario boot_smoke throw_release day30_clock pellet_table)
         foreach(rate 30 60)
             add_test(NAME scenario_${scenario}_${rate}_disc
                 COMMAND ${NECTAR_GAME} --scenario ${scenario} --scenario-tick-rate ${rate})
@@ -2230,6 +2233,29 @@ if(PIKMIN_BUILD_SCENARIOS)
             # The tutorial stand-in stage (stages/practice.ini, stage id Practice at index 0,
             # tools/scenarios/standin_practice_stage.h): the tutorial-only milestones.
             tutorial_skip:practice:30,60 tutorial_firsts:practice:30,60 tutorial_day1:practice:30,60)
+        string(REPLACE ":" ";" parts "${entry}")
+        list(GET parts 0 scenario)
+        list(GET parts 1 stage)
+        list(GET parts 2 rates)
+        string(REPLACE "," ";" rates "${rates}")
+        foreach(rate IN LISTS rates)
+            add_test(NAME scenario_${scenario}_${rate}
+                COMMAND ${CMAKE_COMMAND}
+                    -DGAME=$<TARGET_FILE:${NECTAR_GAME}>
+                    -DSCENARIO=${scenario} -DRATE=${rate}
+                    -DALLOWLIST=${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/standin-open-allowlist.txt
+                    -DLOG_DIR=${CMAKE_CURRENT_BINARY_DIR}/scenario-logs
+                    -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/run_standin_scenario.cmake)
+            set_tests_properties(scenario_${scenario}_${rate} PROPERTIES
+                FIXTURES_REQUIRED scenario_standin_tree
+                WORKING_DIRECTORY "${PIKMIN_STANDIN_DATA}"
+                ENVIRONMENT "PIKMIN_SCENARIO_DATA_DIR=${PIKMIN_STANDIN_DATA};PIKMIN_SCENARIO_STAGE=stages/${stage}.ini"
+                TIMEOUT 600)
+        endforeach()
+    endforeach()
+
+    # Disc-free W2 scenarios (coverage/milestones.md, issue #94), name:stage:rates.
+    foreach(entry pellet_table:sandbox:30,60 ufo_part_discovery:sandbox:30,60)
         string(REPLACE ":" ";" parts "${entry}")
         list(GET parts 0 scenario)
         list(GET parts 1 stage)

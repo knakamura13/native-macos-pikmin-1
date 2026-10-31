@@ -69,6 +69,16 @@ constexpr int kAnimInfoKuttuku = 71; ///< PIKIANIM_Kuttuku (48)
 // anim keys [0, 10, 13, 18, 20, 29], KEY_Action0 at 10, loop 13 to 18,
 // KEY_Action1 at 20, flags 5, speed 30.
 constexpr int kAnimInfoPickLoop = 68; ///< PIKIANIM_PickLoop (46)
+// Drinking nectar (nectar_growth): PikiAbsorbState (PIKIANIM_Mizunomi, info 67) starts
+// drinking on KEY_LoopStart and sets mHasAbsorbedNectar on its first exec there, so
+// KEY_Finished then moves to PikiGrowupState, which plays GrowUp1 (info 39, the first
+// flowering; GrowUp2, info 40, a second one) and turns the sprout into the next flower
+// on its KEY_Action0 (PikiGrowupState::procAnimMsg). These three are NOT measured on
+// the disc: the stand-in keeps the generic 40 frames and adds only the keys the states
+// wait on (loop start 10 to loop end 20 for Mizunomi, Action0 at frame 10 for GrowUp).
+constexpr int kAnimInfoGrowUp1  = 39; ///< PIKIANIM_GrowUp1 (17)
+constexpr int kAnimInfoGrowUp2  = 40; ///< PIKIANIM_GrowUp2 (18)
+constexpr int kAnimInfoMizunomi = 67; ///< PIKIANIM_Mizunomi (47)
 
 /// One info: its AnimMgr record and the frame count of its payload.
 struct StandInAnim {
