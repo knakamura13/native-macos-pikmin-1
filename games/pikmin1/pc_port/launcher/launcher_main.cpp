@@ -1182,6 +1182,30 @@ void usage(const char* argv0)
               << "In game, F1 opens graphics, controls and gameplay settings.\n";
 }
 
+#if defined(__APPLE__)
+// Finder and AppKit sometimes inject these; they are not Open Nectar options.
+bool consumeAppleLaunchArgument(const std::string& arg, int& i, int argc, char** argv)
+{
+    if (arg != "-ApplePersistenceIgnoreState" || i + 1 >= argc) return false;
+    const std::string value = argv[i + 1];
+    if (value != "YES" && value != "NO") return false;
+    ++i;
+    return true;
+}
+
+int userArgumentCount(int argc, char** argv)
+{
+    int count = 0;
+    for (int i = 1; i < argc; ++i) {
+        if (consumeAppleLaunchArgument(argv[i], i, argc, argv)) continue;
+        ++count;
+    }
+    return count;
+}
+#else
+int userArgumentCount(int argc, char**) { return std::max(0, argc - 1); }
+#endif
+
 #if PIKMIN_LAUNCHER_NETPLAY
 // Scripted Host Co-op / Join Co-op without the window, for tests: the same
 // CoopFlow and game start as the panel, with the paste replaced by files.
@@ -1295,6 +1319,9 @@ int main(int argc, char** argv)
         else if (arg == "--extract-only") extractOnly = true;
         else if (arg == "--skip-verify") skipVerify = true;
         else if (arg == "--help" || arg == "-h") { usage(argv[0]); return 0; }
+#if defined(__APPLE__)
+        else if (consumeAppleLaunchArgument(arg, i, argc, argv)) continue;
+#endif
         else { usage(argv[0]); return 2; }
     }
 
@@ -1366,8 +1393,9 @@ int main(int argc, char** argv)
             if (ec) std::this_thread::sleep_for(std::chrono::milliseconds(300));
         }
     }
-    const bool openWindow = argc == 1 || (crashReport && argc == (crashFile.empty() ? 2 : 3))
-                         || (argc == 3 && !movedFrom.empty());
+    const int userArgs = userArgumentCount(argc, argv);
+    const bool openWindow = userArgs == 0 || (crashReport && userArgs == (crashFile.empty() ? 1 : 2))
+                         || (userArgs == 2 && !movedFrom.empty());
     // El juego lo hereda: si falla, vuelve a abrir este launcher con
     // --crash-report para mostrar el informe al momento.
     if (const fs::path self = platform::executablePath(); !self.empty()) {
@@ -1381,7 +1409,7 @@ int main(int argc, char** argv)
     // abre el de la instalación, que es el que juega y actualiza. Antes se
     // copia a la instalación lo que trae este paquete: si es una versión
     // nueva, la instalación queda al día (partidas y ajustes no se tocan).
-    if (argc == 1 && !isInstallFolder) {
+    if (userArgs == 0 && !isInstallFolder) {
         const fs::path installed = rememberedInstallDirectory();
         std::error_code ec;
         if (!installed.empty() && !fs::equivalent(installed, sourceDirectory, ec)
