@@ -46,6 +46,10 @@ execute_process(
         --min-saturated-yellow 350
         --min-saturated-blue 350
         --max-center-near-black-ratio 0.18
+        # Red onion back left, silver ship back right, nothing run off the frame.
+        --onion-region 15,0,205,280 --min-onion-red 6000
+        --ship-region 355,115,610,265 --min-ship-silver 6000
+        --max-edge-object-pixels 20
     RESULT_VARIABLE pos_rc)
 if(NOT pos_rc STREQUAL "0")
     message(FATAL_ERROR "standin_showcase PNG composition check failed")

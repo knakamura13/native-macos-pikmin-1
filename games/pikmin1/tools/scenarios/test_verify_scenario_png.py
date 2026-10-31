@@ -10,7 +10,11 @@ from pathlib import Path
 
 from verify_scenario_png import (
     compare_golden,
+    count_in_region,
     distinct_color_count,
+    edge_object_pixels,
+    is_saturated_red,
+    is_silver,
     read_png_rgb,
     verify_showcase_composition,
 )
@@ -100,6 +104,30 @@ def run_self_test() -> None:
         )
         if not ok_show:
             raise AssertionError("boot golden must pass loose showcase composition helper")
+
+    # Showcase guards on synthetic frames: grass with a red block, a silver block,
+    # and a model running off the left border.
+    sw, sh = 64, 48
+    grass = (85, 150, 70)
+    frame = [grass] * (sw * sh)
+    for y in range(5, 15):
+        for x in range(5, 15):
+            frame[y * sw + x] = (230, 50, 55)
+        for x in range(40, 50):
+            frame[y * sw + x] = (215, 220, 235)
+    if count_in_region(sw, sh, frame, (0, 0, 20, 20), is_saturated_red) != 100:
+        raise AssertionError("red block must count 100 saturated red pixels")
+    if count_in_region(sw, sh, frame, (0, 0, 20, 20), is_silver) != 0:
+        raise AssertionError("red block must not count as silver")
+    if count_in_region(sw, sh, frame, (35, 0, 60, 20), is_silver) != 100:
+        raise AssertionError("silver block must count 100 silver pixels")
+    if edge_object_pixels(sw, sh, frame, y_max=40) != 0:
+        raise AssertionError("frame with models inside must have a clear border")
+    for y in range(20, 30):
+        for x in range(0, 6):
+            frame[y * sw + x] = (230, 50, 55)
+    if edge_object_pixels(sw, sh, frame, y_max=40) != 20:
+        raise AssertionError("model on the left border must leave 20 border pixels (2 columns x 10 rows)")
 
     print(f"verify_scenario_png self-test ok (golden {n} distinct colours)")
 

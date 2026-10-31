@@ -259,6 +259,59 @@ def verify_showcase_composition(
         f"sat R/Y/B {sat_r}/{sat_y}/{sat_b}, center dark {center_dark * 100:.1f}%)",
     )
 
+def is_silver(r: int, g: int, b: int) -> bool:
+    """Light grey to white with a cool tint: the ship hull's bands."""
+    return min(r, g, b) >= 170 and max(r, g, b) - min(r, g, b) <= 40 and b >= r
+
+
+def parse_region(text: str) -> tuple[int, int, int, int]:
+    parts = [int(v) for v in text.split(",")]
+    if len(parts) != 4 or parts[0] >= parts[2] or parts[1] >= parts[3]:
+        raise ValueError(f"region must be x0,y0,x1,y1 with x0<x1 and y0<y1, got {text!r}")
+    return parts[0], parts[1], parts[2], parts[3]
+
+
+def count_in_region(
+    width: int,
+    height: int,
+    pixels: list[tuple[int, int, int]],
+    region: tuple[int, int, int, int],
+    predicate,
+) -> int:
+    x0, y0, x1, y1 = region
+    n = 0
+    for y in range(max(0, y0), min(height, y1)):
+        for x in range(max(0, x0), min(width, x1)):
+            if predicate(*pixels[y * width + x]):
+                n += 1
+    return n
+
+
+def edge_object_pixels(
+    width: int,
+    height: int,
+    pixels: list[tuple[int, int, int]],
+    *,
+    y_max: int = 390,
+    band: int = 2,
+) -> int:
+    """Non-grass pixels on the top, left and right borders (above the HUD rows).
+
+    The ground and the dark horizon are both greenish; a model running off the
+    frame leaves its own colours on the border.
+    """
+    n = 0
+    for y in range(min(band, height)):
+        for x in range(width):
+            if not is_grass_pixel(*pixels[y * width + x]):
+                n += 1
+    for y in range(band, min(y_max, height)):
+        for x in list(range(min(band, width))) + list(range(max(0, width - band), width)):
+            if not is_grass_pixel(*pixels[y * width + x]):
+                n += 1
+    return n
+
+
 def compare_golden(
     golden: list[tuple[int, int, int]],
     actual: list[tuple[int, int, int]],
@@ -342,6 +395,16 @@ def main() -> int:
     p.add_argument("--min-saturated-red", type=int, default=0)
     p.add_argument("--min-saturated-yellow", type=int, default=0)
     p.add_argument("--min-saturated-blue", type=int, default=0)
+    p.add_argument("--onion-region", default="", help="x0,y0,x1,y1 where the onion bulb must be")
+    p.add_argument("--min-onion-red", type=int, default=0, help="min saturated red pixels in --onion-region")
+    p.add_argument("--ship-region", default="", help="x0,y0,x1,y1 where the ship hull must be")
+    p.add_argument("--min-ship-silver", type=int, default=0, help="min silver/white pixels in --ship-region")
+    p.add_argument(
+        "--max-edge-object-pixels",
+        type=int,
+        default=-1,
+        help="fail if more non-grass pixels than this sit on the top/left/right borders (a model clipped by the frame)",
+    )
     p.add_argument(
         "--max-center-near-black-ratio",
         type=float,
@@ -416,6 +479,31 @@ def main() -> int:
             return 1
         if showcase_guard:
             print(msg)
+    try:
+        if args.min_onion_red > 0:
+            n = count_in_region(w, h, pixels, parse_region(args.onion_region), is_saturated_red)
+            if n < args.min_onion_red:
+                print(f"onion region has {n} saturated red pixels (need >= {args.min_onion_red})", file=sys.stderr)
+                return 1
+            print(f"onion red ok ({n})")
+        if args.min_ship_silver > 0:
+            n = count_in_region(w, h, pixels, parse_region(args.ship_region), is_silver)
+            if n < args.min_ship_silver:
+                print(f"ship region has {n} silver pixels (need >= {args.min_ship_silver})", file=sys.stderr)
+                return 1
+            print(f"ship silver ok ({n})")
+    except ValueError as e:
+        print(str(e), file=sys.stderr)
+        return 1
+    if args.max_edge_object_pixels >= 0:
+        n = edge_object_pixels(w, h, pixels)
+        if n > args.max_edge_object_pixels:
+            print(
+                f"{n} non-grass pixels on the frame border (max {args.max_edge_object_pixels}); a model is clipped",
+                file=sys.stderr,
+            )
+            return 1
+        print(f"frame border clear ({n})")
     if args.golden:
         try:
             gw, gh, gpixels = read_png_rgb(args.golden)
