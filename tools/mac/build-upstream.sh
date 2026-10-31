@@ -39,6 +39,7 @@ app_name="Open Nectar.app"
 builds_root="${PIKMIN_BUILDS_ROOT:-${HOME}/OpenNectar-builds.noindex}"
 ref="refs/remotes/upstream/main"
 output="" build="" data="" install_dir="" check=0 install=0 if_changed=0 fetch=1
+save_flag_args=()
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --ref) ref="$2"; shift 2 ;;
@@ -50,6 +51,14 @@ while [[ $# -gt 0 ]]; do
         --if-changed) if_changed=1; shift ;;
         --no-fetch) fetch=0; shift ;;
         --check) check=1; shift ;;
+        --fresh-save|--sandbox-save|--read-only-save|--choose-save)
+            save_flag_args+=("$1")
+            shift
+            ;;
+        --save-name|--save-dir)
+            save_flag_args+=("$1" "$2")
+            shift 2
+            ;;
         -h|--help) sed -n '2,32p' "$0"; exit 0 ;;
         *) printf 'Unknown argument: %s\n' "$1" >&2; exit 2 ;;
     esac
@@ -115,6 +124,8 @@ copied_files=(
     games/pikmin1/packaging/macos/build-app.sh
     games/pikmin1/packaging/macos/controls.conf
     tools/mac/build_identity.py
+    tools/mac/save_mode.py
+    tools/mac/resolve_save_for_build.sh
     games/pikmin1/pc_port/pc_build_window_title.h
 )
 overlay="${script_dir}/upstream-launcher.patch"
@@ -239,7 +250,7 @@ PIKMIN_BUILD_ROLE=upstream PIKMIN_DATA_ROOT="${data}" PIKMIN_LAUNCHER_OVERLAY="$
     PIKMIN_WINDOW_OVERLAY="${window_overlay}" PIKMIN_ALLOWED_CHANGES="${allowed}" \
     PIKMIN_PACKAGING_FINGERPRINT="${fingerprint}" \
     "${source_dir}/games/pikmin1/packaging/macos/build-app.sh" --build-dir "${build}" --output-dir "${output}" \
-    ${install_args[@]+"${install_args[@]}"} || rc=$?
+    ${install_args[@]+"${install_args[@]}"} ${save_flag_args[@]+"${save_flag_args[@]}"} || rc=$?
 
 if [[ "${default_output}" -eq 1 ]]; then
     # Keep the newest three default outputs; names start with the UTC time.
