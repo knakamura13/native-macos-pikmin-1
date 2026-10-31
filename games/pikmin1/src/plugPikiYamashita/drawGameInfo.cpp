@@ -16,6 +16,9 @@
 #include "pc_art.h"
 #include "pc_coop.h"
 #include "PikiMgr.h"
+#if PIKI_SCENARIOS
+#include "scenarios/pc_scenario.h"
+#endif
 #endif
 #if PIKI_PC_TOUCH
 #include "touch/pc_touch.h"
@@ -728,19 +731,36 @@ zen::DrawGameInfo::DrawGameInfo(zen::DrawGameInfo::playModeFlag playMode)
 	}
 
 	pane = mModeScreenMgr->search('w_00', true);
+#if defined(PIKI_PC_PORT) && PIKI_SCENARIOS
+	if (pc_scenario_uses_disc_free_assets()) {
+		pane->hide();
+	} else
+#endif
 	if (pane->getTypeID() == PANETYPE_Picture) {
 		static_cast<P2DPicture*>(pane)->setBlack(COLOUR_TRANSPARENT);
 		static_cast<P2DPicture*>(pane)->setWhite(Colour(153, 255, 153, 255));
 	}
 
 	pane = mModeScreenMgr->search('x_00', true);
+#if defined(PIKI_PC_PORT) && PIKI_SCENARIOS
+	if (pc_scenario_uses_disc_free_assets()) {
+		pane->hide();
+	} else
+#endif
 	if (pane->getTypeID() == PANETYPE_Picture) {
 		static_cast<P2DPicture*>(pane)->setBlack(COLOUR_TRANSPARENT);
 		static_cast<P2DPicture*>(pane)->setWhite(Colour(153, 255, 153, 255));
 	}
 
 	pane = mModeScreenMgr->search('w_01', true);
-	pane->setCallBack(new MapPikminWindowCallBack(pane));
+#if defined(PIKI_PC_PORT) && PIKI_SCENARIOS
+	if (pc_scenario_uses_disc_free_assets()) {
+		pane->hide();
+	} else
+#endif
+	{
+		pane->setCallBack(new MapPikminWindowCallBack(pane));
+	}
 
 	pane = mModeScreenMgr->search('c_ml', true);
 	pane->setCallBack(new NumberPicCallBack<short>(pane, &pGameInfo->mFormationPikiNum, 100, false));
@@ -824,11 +844,16 @@ zen::DrawGameInfo::DrawGameInfo(zen::DrawGameInfo::playModeFlag playMode)
 	pane = mLowerScreenMgr->search('life', true);
 	pane->setCallBack(new LifeIconCallBack(pane));
 
-	pane = mLowerScreenMgr->search('pin1', true);
-	pane->setCallBack(new LifePinchCallBack(pane));
+#if defined(PIKI_PC_PORT)
+	if (!pc_scenario_uses_disc_free_assets())
+#endif
+	{
+		pane = mLowerScreenMgr->search('pin1', true);
+		pane->setCallBack(new LifePinchCallBack(pane));
 
-	pane = mLowerScreenMgr->search('pin2', true);
-	pane->setCallBack(new LifePinchCallBack(pane));
+		pane = mLowerScreenMgr->search('pin2', true);
+		pane->setCallBack(new LifePinchCallBack(pane));
+	}
 
 	if (playMode == MODE_Story) {
 		pane            = mModeScreenMgr->search('dc_c', true);
@@ -1027,24 +1052,38 @@ void zen::DrawGameInfo::draw(Graphics& gfx)
 #if defined(PIKI_PC_PORT)
 	gHudNaviIndex = mNaviIndex;
 	pGameInfo     = &mInfo;
+	const f32 viewAspect = pc_gfx_get_current_aspect_ratio();
+	int virtW = int(lroundf(480.0f * viewAspect));
+	int virtH = 480;
+	if (virtW < 640) {
+		virtW = 640;
+		virtH = int(lroundf(640.0f / viewAspect));
+	}
+	pc_gfx_set_hud_virtual_size(virtW, virtH);
 	pc_gfx_set_hud_wide(1);
-	const int virtW = pc_gfx_get_hud_virtual_width();
-	const int dx    = virtW - 640;
+	const int dx = virtW - 640;
+	const int dy = virtH - 480;
 	Matrix4f ortho;
-	gfx.setOrthogonal(ortho.mMtx, RectArea(0, 0, virtW, gfx.mScreenHeight));
+	gfx.setOrthogonal(ortho.mMtx, RectArea(0, 0, virtW, virtH));
+#else
+	Matrix4f ortho;
+	gfx.setOrthogonal(ortho.mMtx, RectArea(0, 0, 640, gfx.mScreenHeight));
 #endif
 	mDamageEffect.draw(gfx);
 	gfx.setFog(false);
 	GXSetZMode(GX_FALSE, GX_ALWAYS, GX_FALSE);
 
 #if defined(PIKI_PC_PORT)
-	P2DPerspGraph perspGraph(0, 0, virtW, 480, 30.0f, 1.0f, 5000.0f);
+	P2DPerspGraph perspGraph(0, 0, virtW, virtH, 30.0f, 1.0f, 5000.0f);
 	perspGraph.setPort();
 	if (!pc_vs_active()) // VS: sin indicador del sol (el día no avanza)
 		mUpperScreenMgr->draw(&perspGraph, dx / 2);
-	mLowerScreenMgr->draw(&perspGraph, 0);
-	mModeScreenMgr->draw(&perspGraph, dx);
+	mLowerScreenMgr->drawAt(&perspGraph, 0, dy, 1.0f);
+	setDatePanesVisible(false);
+	mModeScreenMgr->drawAt(&perspGraph, dx, dy, 1.0f);
+	setDatePanesVisible(true);
 	pc_gfx_set_hud_wide(0);
+	pc_gfx_set_hud_virtual_size(0, 0);
 #else
 	P2DPerspGraph perspGraph(0, 0, 640, 480, 30.0f, 1.0f, 5000.0f);
 	perspGraph.setPort();

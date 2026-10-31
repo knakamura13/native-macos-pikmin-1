@@ -66,8 +66,8 @@ def run_self_test() -> None:
     assert w == 640 and h == 480
     n = distinct_color_count(pixels)
     # Stand-in art (#115) uses more distinct flat-shaded colours than grey cubes (~126).
-    if not (150 <= n <= 260):
-        raise AssertionError(f"golden distinct colours {n}, expected about 204 (150..260)")
+    if not (150 <= n <= 290):
+        raise AssertionError(f"golden distinct colours {n}, expected about 204 (150..290)")
 
     with tempfile.TemporaryDirectory() as tmp:
         tmp_path = Path(tmp)

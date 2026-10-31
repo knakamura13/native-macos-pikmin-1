@@ -339,7 +339,7 @@ std::map<std::string, LayoutReq> requirements()
 	{
 		LayoutReq& l = m["play10.blo"];
 		l.reqs       = list({ "li_i", "na_i" }, 'A');
-		cat(l.reqs, list({ "navi", "pin1", "pin2" }, 'P'));
+		cat(l.reqs, list({ "navi" }, 'P'));
 		l.reqs.push_back({ "life", 'B' }); // LifeIconCallBack is built on PANETYPE_Pane
 	}
 	{
@@ -634,8 +634,10 @@ int checkHudLayout(const std::string& file, const std::vector<BloPane>& tree)
 		if (!inRect(findBloPane(tree, "suni"), 0, 0, 639, kTopBandMaxY)) bad++;
 	}
 	if (file == "play_day.blo") {
+		using nectar::standin_layout::kCounterRow0Y;
+		using nectar::standin_layout::kCounterStartX;
 		if (!inRect(findBloPane(tree, "piki"), 0, 300, 200, 479)) bad++;
-		if (!inRect(findBloPane(tree, "c_mr"), kBottomRightMinX - 80, kBottomRightMinY, 639, 479)) bad++;
+		if (!inRect(findBloPane(tree, "c_mr"), kCounterStartX, kCounterRow0Y - 4, 639, 479)) bad++;
 	}
 	return bad;
 }

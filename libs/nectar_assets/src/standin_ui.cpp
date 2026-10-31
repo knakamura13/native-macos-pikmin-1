@@ -251,16 +251,14 @@ std::vector<StandinLayout> standinBloLayouts()
 		k.add(placed(pane("na_i"), standin_layout::kPlay10NaI));
 		k.add(texPic("navi", "rp_l64.bti", standin_layout::kPlay10Navi));
 		k.add(placed(pane("life"), standin_layout::kPlay10Life));
-		k.add(texPic("pin1", "dot_24.bti", { standin_layout::kPlay10Life.x + 8, standin_layout::kPlay10Life.y + 4, 20, 20 }));
-		k.add(texPic("pin2", "dot_24.bti", { standin_layout::kPlay10Life.x + 28, standin_layout::kPlay10Life.y + 24, 20, 20 }));
 		out.push_back(layout("play10.blo", k));
 	}
 	{ // drawGameInfo.cpp:725-745, 832-840.
 		Kids k;
 		k.add(texPic("piki", "piki0.bti", standin_layout::kPlayDayPiki));
-		k.add(placed(pane("w_00"), { 60, 404, 32, 32 }));
-		k.add(placed(pane("x_00"), { 96, 404, 32, 32 }));
-		k.add(texPic("w_01", "dot_32.bti", { 132, 404, 32, 32 }));
+		k.add(placed(pane("w_00"), { 638, 478, 1, 1 }));
+		k.add(placed(pane("x_00"), { 639, 478, 1, 1 }));
+		k.add(texPic("w_01", "dot_32.bti", { 637, 478, 1, 1 }));
 		const int cx = standin_layout::kCounterStartX;
 		const int y0 = standin_layout::kCounterRow0Y;
 		const int y1 = standin_layout::kCounterRow1Y;
@@ -279,9 +277,9 @@ std::vector<StandinLayout> standinBloLayouts()
 		counter("c_sc", "7_64.bti", 4, 0);
 		counter("c_sr", "8_64.bti", 5, 0);
 		counter("c_s1", "9_64.bti", 6, 0);
-		k.add(texPic("dc_c", "1_64.bti", { standin_layout::kPlayDayDate.x + 40, standin_layout::kPlayDayDate.y, cell, cell }));
-		k.add(texPic("dc_l", "0_64.bti", { standin_layout::kPlayDayDate.x, standin_layout::kPlayDayDate.y, cell, cell }));
-		k.add(texPic("dc_r", "2_64.bti", { standin_layout::kPlayDayDate.x + 80, standin_layout::kPlayDayDate.y, cell, cell }));
+		k.add(placed(pic("dc_l"), { standin_layout::kPlayDayDate.x, standin_layout::kPlayDayDate.y, cell, cell }));
+		k.add(placed(pic("dc_c"), { standin_layout::kPlayDayDate.x + 40, standin_layout::kPlayDayDate.y, cell, cell }));
+		k.add(placed(pic("dc_r"), { standin_layout::kPlayDayDate.x + 80, standin_layout::kPlayDayDate.y, cell, cell }));
 		k.add(texPic("dcsc", "1_sha64.bti", { standin_layout::kPlayDayDate.x + 40, standin_layout::kPlayDayDate.y + 2, cell, cell }));
 		k.add(texPic("dcsl", "0_sha64.bti", { standin_layout::kPlayDayDate.x, standin_layout::kPlayDayDate.y + 2, cell, cell }));
 		k.add(texPic("dcsr", "2_sha64.bti", { standin_layout::kPlayDayDate.x + 80, standin_layout::kPlayDayDate.y + 2, cell, cell }));

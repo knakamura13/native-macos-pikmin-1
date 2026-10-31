@@ -38,6 +38,10 @@ inline constexpr int kCounterRow1Y  = 444;
 inline constexpr int kCounterStartX = 48;
 inline constexpr int kTopBandMaxY = 120;
 
+// Bottom-right HUD cluster (life gauge + portrait); used by blo_writer_test.
+inline constexpr int kBottomRightMinX = kPlay10Life.x;
+inline constexpr int kBottomRightMinY = kPlay10Life.y;
+
 inline constexpr bool rectInsideScreen(Rect r)
 {
 	return r.x >= 0 && r.y >= 0 && r.x + r.w <= kScreenW && r.y + r.h <= kScreenH;
