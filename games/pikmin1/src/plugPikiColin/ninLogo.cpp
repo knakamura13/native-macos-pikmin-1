@@ -100,7 +100,7 @@ struct NinLogoSetupSection : public Node {
 			// Con --vs-map (editor de mapas) no se espera al logo.
 			bool pcScenarioBoot = false;
 #if PIKI_SCENARIOS
-			pcScenarioBoot = pc_scenario_active();
+			pcScenarioBoot = pc_scenario_skip_boot_menus();
 #endif
 			if (pcLogoTime < kLogoTime && !pc_vs_direct_requested() && !pc_coop_direct_requested()
 			    && !pc_quicksave_boot_pending() && !pcScenarioBoot) {
@@ -116,8 +116,8 @@ struct NinLogoSetupSection : public Node {
 			}
 #endif
 #if PIKI_SCENARIOS
-			if (pc_scenario_active()) {
-				// --scenario: no title or file select. GameSetup still builds the
+			if (pc_scenario_skip_boot_menus()) {
+				// Before the first stage is ready: skip title and file select. GameSetup still builds the
 				// stage list, playerState and the caches gameplay needs.
 				gameflow.mNextGameSectionID      = SECTION_OnePlayer;
 				gameflow.mNextOnePlayerSectionID = ONEPLAYER_GameSetup;

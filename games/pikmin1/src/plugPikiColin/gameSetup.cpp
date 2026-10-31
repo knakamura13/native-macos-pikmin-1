@@ -269,7 +269,7 @@ void GameSetupSection::update()
 	gameflow.mNextOnePlayerSectionID = ONEPLAYER_CardSelect;
 #if PIKI_SCENARIOS
 	// --scenario goes straight to gameplay; nothing is saved.
-	if (pc_scenario_active()) gameflow.mNextOnePlayerSectionID = ONEPLAYER_NewPikiGame;
+	if (pc_scenario_skip_boot_menus()) gameflow.mNextOnePlayerSectionID = ONEPLAYER_NewPikiGame;
 #endif
 #endif
 

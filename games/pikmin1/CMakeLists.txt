@@ -462,7 +462,8 @@ if (PIKMIN_BUILD_SCENARIOS)
         pc_port/scenarios/scenario_onion_day3.cpp
         pc_port/scenarios/scenario_tutorial_skip.cpp
         pc_port/scenarios/scenario_tutorial_firsts.cpp
-        pc_port/scenarios/scenario_tutorial_day1.cpp)
+        pc_port/scenarios/scenario_tutorial_day1.cpp
+        pc_port/scenarios/scenario_title_boot.cpp)
 endif()
 
 include_directories(
@@ -2099,6 +2100,23 @@ if(PIKMIN_BUILD_SCENARIOS)
                 WORKING_DIRECTORY "${PIKMIN_STANDIN_DATA}"
                 ENVIRONMENT "PIKMIN_SCENARIO_DATA_DIR=${PIKMIN_STANDIN_DATA};PIKMIN_SCENARIO_STAGE=stages/sandbox.ini"
                 TIMEOUT 600)
+        endforeach()
+    endforeach()
+
+    foreach(scenario title_boot)
+        foreach(rate 30)
+            add_test(NAME scenario_${scenario}_${rate}
+                COMMAND ${CMAKE_COMMAND}
+                    -DGAME=$<TARGET_FILE:${NECTAR_GAME}>
+                    -DSCENARIO=${scenario} -DRATE=${rate}
+                    -DALLOWLIST=${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/standin-open-allowlist.txt
+                    -DLOG_DIR=${CMAKE_CURRENT_BINARY_DIR}/scenario-logs
+                    -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/run_standin_scenario.cmake)
+            set_tests_properties(scenario_${scenario}_${rate} PROPERTIES
+                FIXTURES_REQUIRED scenario_standin_tree
+                WORKING_DIRECTORY "${PIKMIN_STANDIN_DATA}"
+                ENVIRONMENT "PIKMIN_SCENARIO_DATA_DIR=${PIKMIN_STANDIN_DATA};PIKMIN_SCENARIO_STAGE=stages/sandbox.ini"
+                TIMEOUT 900)
         endforeach()
     endforeach()
 

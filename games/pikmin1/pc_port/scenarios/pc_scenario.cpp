@@ -87,6 +87,7 @@ unsigned sTick             = 0; // ticks since the stage became ready
 int sStageNumber           = 0;
 bool sBetweenStages        = false;
 unsigned sBetweenTicks     = 0;
+const char* sMapCourseRequest = nullptr; ///< crossesDays(): enter this course from MapSelect when set
 std::string sStageFile     = kDefaultStageFile;
 std::filesystem::path sScratchDir; // NECTAR_SAVE_DIR for this run, removed at exit
 
@@ -281,6 +282,10 @@ void provideScriptedPads(PcInputPad pads[4])
 	// except between stages of a crossesDays() scenario (the world map).
 	if (sBetweenStages && !sStageReady && !sVerdict) {
 		sScenario->providePadsBetweenStages(sBetweenTicks, pads[0]);
+		return;
+	}
+	if (!sStageReady && !sVerdict && !sBetweenStages && !sScenario->skipBootMenus()) {
+		sScenario->providePadsDuringBoot(sBootTicks, pads[0]);
 		return;
 	}
 	if (!sStageReady || sVerdict) return;
@@ -757,6 +762,12 @@ int pc_scenario_parse_argv(int argc, char** argv)
 
 bool pc_scenario_active(void) { return sActive; }
 
+bool pc_scenario_skip_boot_menus(void)
+{
+	if (!sActive || sScenario == nullptr || sStageReady || sBetweenStages) return false;
+	return sScenario->skipBootMenus();
+}
+
 int pc_scenario_exit_code(void) { return sExitCode; }
 
 int pc_scenario_ticks_per_second(void) { return sTicksPerSecond; }
@@ -901,9 +912,24 @@ void pc_scenario_on_tick_end(void)
 		sIntroTicks    = 0;
 		sBetweenStages = true;
 		sBetweenTicks  = 0;
+		sMapCourseRequest = nullptr;
 		std::printf("[scenario] soft reset after tick %u (next section %d): waiting for stage %d\n", sTick - 1, (int)gameflow.mNextOnePlayerSectionID,
 		            sStageNumber + 1);
 	}
+}
+
+void pc_scenario_request_map_course(const char* stageFile)
+{
+	if (!sActive || sVerdict || !sBetweenStages || stageFile == nullptr) return;
+	sMapCourseRequest = stageFile;
+}
+
+const char* pc_scenario_consume_map_course(void)
+{
+	if (!sActive || sVerdict || !sBetweenStages || sMapCourseRequest == nullptr) return nullptr;
+	const char* file = sMapCourseRequest;
+	sMapCourseRequest = nullptr;
+	return file;
 }
 
 bool pc_scenario_on_map_select(void)
@@ -934,6 +960,8 @@ bool pc_scenario_on_map_select(void)
 }
 
 int pc_scenario_stage_number(void) { return sStageNumber; }
+
+const char* pc_scenario_requested_stage_file(void) { return sStageFile.c_str(); }
 
 void scenarioPass(void)
 {

@@ -57,5 +57,6 @@ PcScenario* pc_scenario_make_onion_day3_skip(void);
 PcScenario* pc_scenario_make_tutorial_skip(void);
 PcScenario* pc_scenario_make_tutorial_firsts(void);
 PcScenario* pc_scenario_make_tutorial_day1(void);
+PcScenario* pc_scenario_make_title_boot(void);
 
 #endif

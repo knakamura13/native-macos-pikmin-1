@@ -122,6 +122,14 @@ std::string tag3(const char* t)
 	return std::string(4 - s.size(), '\0') + s;
 }
 
+// Any tag up to four characters, NUL-padded to four bytes (P2DPane tags).
+std::string tag4(const char* t)
+{
+	std::string s(t);
+	if (s.size() > 4) s.resize(4);
+	return std::string(4 - s.size(), '\0') + s;
+}
+
 // Cursores z00l / z00r (SpectrumCursorMgr::init): una pareja basta.
 void cursors(Kids& k) { k.add(pic("z00l")).add(pic("z00r")); }
 
@@ -232,7 +240,7 @@ std::vector<StandinLayout> standinBloLayouts()
 	// las páginas que abre. Pantalla base: curs y a_bt imágenes, base opcional.
 	{
 		Kids k;
-		k.add(pic("base")).add(pic("curs")).add(pic("a_bt"));
+		k.add(pic("base")).add(pic("capu")).add(pic("curs")).add(pic("a_bt"));
 		out.push_back(layout("tu_base.blo", k));
 	}
 	{ // ogSub.cpp:835-857: maru, ten y han son cajas cuyo texto copia ogMsgCtrlTagMgr
@@ -455,6 +463,159 @@ std::vector<StandinLayout> standinBloLayouts()
 	// bloFile_Res_Table: re_a_00, re_a_01).
 	for (const char* f : { "tu_tx38_00.blo", "tu_tx38_01.blo", "tu_tx15.blo", "re_a_00.blo", "re_a_01.blo" })
 		out.push_back(tutorialPage(f));
+
+	// World map, title and file-select screens (#99). Tags match search(.., true) in
+	// drawWorldMap.cpp, drawWMPause.cpp, ogTitle.cpp, ogStart.cpp, drawHiScore.cpp,
+	// ogDiary.cpp (m_menu_r).
+	auto wmConfirm = []() {
+		Kids k = drawMenuSet(2);
+		k.add(pic("z**l")).add(pic("z**r"));
+		return k;
+	};
+	{
+		Kids k;
+		k.pics("wp%02d", 0, 4);
+		out.push_back(layout("w_wipe.blo", k));
+	}
+	{
+		Kids k;
+		k.add(pic(tag4("ri"))).add(pic("ci_b")).add(pic("ci_r")).add(pic("ci_y"));
+		out.push_back(layout("w_icon.blo", k));
+	}
+	{
+		Kids k;
+		for (int i = 1; i <= 5; i++) k.add(pic(tagf("map%d", i)));
+		out.push_back(layout("w_title.blo", k));
+	}
+	{
+		Kids k;
+		for (int i = 1; i <= 5; i++) k.add(pic(tagf("mi_%d", i)));
+		out.push_back(layout("w_moni.blo", k));
+	}
+	{
+		Kids k;
+		for (const char* t : { "dc_c", "dc_l", "dc_r", "ro_l", "ro_c", "ro_r", "rt_l", "rt_c", "rt_r", "bp_l", "bp_c", "bp_r", "rp_l", "rp_c", "rp_r",
+		                       "yp_l", "yp_c", "yp_r", "p_bc", "p_rc", "p_yc" })
+			k.add(pic(t));
+		out.push_back(layout("w_data1.blo", k));
+	}
+	{
+		Kids k;
+		for (int i = 0; i < 13; i++) {
+			k.add(pic(tagf("pa%02d", i)));
+			k.add(pic(tagf("pn%02d", i)));
+		}
+		out.push_back(layout("w_data2.blo", k));
+	}
+	{
+		Kids k;
+		k.add(pic(tag4("x_1"))).add(pic("x_1s")).add(pic("po01"));
+		for (int i = 2; i <= 5; i++) {
+			char bx[8], bxs[8], bpo[8];
+			std::snprintf(bx, sizeof bx, "x_%d", i);
+			std::snprintf(bxs, sizeof bxs, "x_%ds", i);
+			std::snprintf(bpo, sizeof bpo, "po%02d", i);
+			k.add(pic(tag4(bx)));
+			k.add(pic(bxs));
+			k.add(pic(bpo));
+		}
+		for (int i = 1; i <= 5; i++) {
+			k.add(pic(tagf("sli%d", i)));
+			k.add(pane(tagf("ony%d", i)));
+			k.add(pane(tagf("cha%d", i)));
+		}
+		out.push_back(layout("w_point.blo", k));
+	}
+	{
+		Kids k;
+		for (int i = 1; i <= 5; i++) k.add(pic(tagf("sli%d", i)));
+		out.push_back(layout("w_line.blo", k));
+	}
+	{
+		Kids k;
+		out.push_back(layout("w_back.blo", k));
+	}
+	{
+		Kids k = wmConfirm();
+		out.push_back(layout("w_ok.blo", k));
+	}
+	{
+		Kids k = drawMenuSet(2);
+		k.add(pic("back"));
+		out.push_back(layout("pause_w.blo", k));
+	}
+	{
+		Kids k;
+		k.add(pic("abtn"));
+		for (int i = 0; i < 30; i++) {
+			k.add(pic(tagf("i%02du", i)));
+			k.add(pic(tagf("i%02dd", i)));
+			k.add(pane(tagf("pi%02d", i)));
+		}
+		for (int i = 14; i <= 43; i++) k.add(pic(tagf("pk%02d", i)));
+		cursors(k);
+		out.push_back(layout("m_menu_r.blo", k));
+	}
+	{
+		Kids k;
+		out.push_back(layout("m_menu_b.blo", k));
+	}
+	{
+		Kids k;
+		k.add(pane("ttal")).add(pane("char"));
+		k.add(with(pane("best"), { pic("b_00") }));
+		for (int i = 0; i < 5; i++) {
+			k.add(box(tagf("p_%02d", i), "00"));
+			k.add(box(tagf("d_%02d", i), "00"));
+			k.add(box(tagf("lp%02d", i), "0000"));
+			k.add(box(tagf("dp%02d", i), "0000"));
+			k.add(pane(tagf("pm_%d", i)));
+		}
+		for (int j = 0; j < 5; j++)
+			for (int i = 0; i < 5; i++) {
+				char buf[8];
+				std::snprintf(buf, sizeof buf, "%d_%02d", j, i);
+				k.add(box(buf, "000"));
+			}
+		out.push_back(layout("cha_hi.blo", k));
+	}
+	{
+		Kids k;
+		k.add(pane("root"));
+		out.push_back(layout("press_s.blo", k));
+	}
+	auto titleMenu = [](int items) {
+		Kids k = drawMenuSet(items);
+		k.add(pic("back"));
+		return k;
+	};
+	{
+		Kids k = titleMenu(2);
+		out.push_back(layout("m_select.blo", k));
+	}
+	{
+		Kids k = titleMenu(3);
+		out.push_back(layout("m_selec2.blo", k));
+	}
+	{
+		Kids k = titleMenu(4);
+		out.push_back(layout("option.blo", k));
+	}
+	{
+		Kids k = titleMenu(2);
+		k.add(pic("on21")).add(pic("on22")).add(box("on_c", "on")).add(box("offc", "off"));
+		for (int i = 1; i <= 10; i++) k.add(pic(tagf("on%02d", i)));
+		for (int i = 11; i <= 20; i++) k.add(pic(tagf("on%02d", i)));
+		out.push_back(layout("s_select.blo", k));
+	}
+	{
+		Kids k = titleMenu(2);
+		out.push_back(layout("v_select.blo", k));
+	}
+	{
+		Kids k = titleMenu(2);
+		out.push_back(layout("ms_selec.blo", k));
+	}
 
 	return out;
 }

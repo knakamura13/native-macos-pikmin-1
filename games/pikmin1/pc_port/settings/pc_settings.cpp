@@ -5205,6 +5205,19 @@ bool pc_newgame_prompt_chose_hard(void) { return sNewGamePromptHard; }
 
 bool pc_newgame_prompt_chose_skip_tutorial(void) { return sNewGamePromptSkipTutorial; }
 
+#if PIKI_SCENARIOS
+void pc_newgame_prompt_scenario_auto_accept(void)
+{
+	if (!sNewGamePromptOpen) return;
+	sNewGamePromptRules  = false;
+	sNewGamePromptHard   = false;
+	sNewGamePromptSkipTutorial = false;
+	sNewGamePromptResult = PC_NEWGAME_NORMAL;
+	sNewGamePromptOpen   = false;
+	pc_tutorial_skip_set_pending(true);
+}
+#endif
+
 void pc_tutorial_skip_set_pending(bool on) { sTutorialSkipPending = on; }
 bool pc_tutorial_skip_pending(void) { return sTutorialSkipPending; }
 void pc_tutorial_skip_clear_pending(void) { sTutorialSkipPending = false; }
@@ -6107,7 +6120,18 @@ void pcCaptainPromptInput() {
         pc_captain_preview_release();
     }
 }
+
 }
+#if PIKI_SCENARIOS
+void pc_captain_prompt_scenario_auto_accept(void)
+{
+    if (!sCaptainPromptOpen) return;
+    pc_coop_set_captain(0, PC_CAPTAIN_OLIMAR);
+    sCaptainPromptResult = PC_DEVASSIGN_OK;
+    sCaptainPromptOpen   = false;
+    pc_captain_preview_release();
+}
+#endif
 
 void pc_captain_prompt_open(void) {
     pc_captain_custom_refresh(); // personajes instalados con el juego abierto
