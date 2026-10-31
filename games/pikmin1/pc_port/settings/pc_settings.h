@@ -268,6 +268,10 @@ int  pc_newgame_prompt_result(void);
 bool pc_newgame_prompt_chose_hard(void);
 /// True after accepting the new-game prompt with "Skip tutorial: Yes".
 bool pc_newgame_prompt_chose_skip_tutorial(void);
+#if PIKI_SCENARIOS
+/// Headless scenario runs: accept Normal / Standard / no skip-tutorial without SDL input.
+void pc_newgame_prompt_scenario_auto_accept(void);
+#endif
 
 /* One-shot request carried from file select to the first playable tutorial
    stage. It is not a saved rule: the resulting day-2 save is a normal save. */
@@ -308,6 +312,9 @@ void pc_captain_prompt_open(void);
 bool pc_captain_prompt_active(void);
 int  pc_captain_prompt_result(void);
 void pc_captain_prompt_draw(void);
+#if PIKI_SCENARIOS
+void pc_captain_prompt_scenario_auto_accept(void);
+#endif
 int  pc_devassign_prompt_result(void);
 
 /// Debug shortcuts F5 and F6, off by default.

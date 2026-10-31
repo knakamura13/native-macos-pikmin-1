@@ -61,15 +61,22 @@ public:
 	// Called when OnePlayerSection builds MapSelect for a crossesDays() scenario.
 	// Return the stages.ini `file` of the course to enter: the runner then does what
 	// MapSelectSetupSection::enterCourse and its exit do and goes to NewPikiGame
-	// without building the world map (the stand-in tree has no world map screens).
-	// Return nullptr to build the real MapSelectSection (disc) and drive it with
+	// without building the world map (fast path when a scenario returns a course).
+	// Return nullptr to build MapSelectSection and DrawWorldMap (stand-in or disc);
+	// drive it with providePadsBetweenStages and/or pc_scenario_request_map_course.
 	// providePadsBetweenStages.
 	virtual const char* onMapSelect() { return nullptr; }
 	// Pad 0 between a soft reset and the next stage ready (the real world map).
 	virtual void providePadsBetweenStages(unsigned /*ticksSinceReset*/, PcInputPad& /*pad0*/) { }
+	// Pad 0 while title or file select runs before the first stage (title_boot).
+	virtual void providePadsDuringBoot(unsigned /*bootTicks*/, PcInputPad& /*pad0*/) { }
 	// Whether the intro gate pulses START over the opening movie of stage `stageNumber`
 	// (1 = the first). False lets the movie run to its end; A still closes text.
 	virtual bool introSkipsMovies(int /*stageNumber*/) const { return true; }
+	// Whether the runner skips the title and file-select sections on the first boot
+	// (ninLogo.cpp, gameSetup.cpp). False for title_boot; after the first skip, or
+	// after a soft reset to title or card select, the real screens run.
+	virtual bool skipBootMenus() const { return true; }
 	// Whether the runner's GameStat invariant check runs after this tick. A scenario
 	// turns it off only where the original game's own counting breaks it (say why).
 	virtual bool checksGameStat() const { return true; }
@@ -91,6 +98,12 @@ void pc_scenario_on_tick_end(void);    // System::run, after every tick includin
 // OnePlayerSection, case ONEPLAYER_MapSelect: true when a crossesDays() scenario
 // chose the next course itself (gameflow.mNextOnePlayerSectionID is then NewPikiGame).
 bool pc_scenario_on_map_select(void);
+// After onMapSelect returns nullptr the world map runs; a scenario may request a
+// course from MapSelect once (providePadsBetweenStages, ~245 ticks at 30 Hz).
+void pc_scenario_request_map_course(const char* stageFile);
+const char* pc_scenario_consume_map_course(void);
+// True while the first stage is still booting and the scenario wants title/card skipped.
+bool pc_scenario_skip_boot_menus(void);
 
 // For scenarios.
 int pc_scenario_stage_number(void); // 1 for the first stage, 2 after the first soft reset, ...
