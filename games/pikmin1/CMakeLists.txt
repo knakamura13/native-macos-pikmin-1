@@ -2410,6 +2410,7 @@ if(PIKMIN_BUILD_SCENARIOS)
         COMMAND ${CMAKE_COMMAND}
             -DGAME=$<TARGET_FILE:${NECTAR_GAME}>
             -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/scenario-screenshots/boot_smoke_30
+            $<$<STREQUAL:${CMAKE_SYSTEM_NAME},Linux>:-DGOLDEN_COMPARE=1>
             -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/check_scenario_screenshot.cmake)
     set_tests_properties(scenario_screenshot_boot_smoke_30 PROPERTIES
         FIXTURES_REQUIRED scenario_standin_tree

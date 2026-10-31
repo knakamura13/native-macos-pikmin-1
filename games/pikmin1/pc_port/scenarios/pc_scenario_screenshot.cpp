@@ -28,9 +28,14 @@ struct Capture {
 std::vector<Capture> sCaptures;
 int sBaseWindowW = 64;
 int sBaseWindowH = 36;
-int sCaptureWindowW = 128;
-int sCaptureWindowH = 72;
+// Game GX draws in a 640x480 virtual space; the port maps that to the internal
+// render target. Captures below that size (for example 128x72) read back a
+// mostly empty framebuffer on headless CI.
+int sCaptureWindowW = 640;
+int sCaptureWindowH = 480;
 bool sSizedUpThisTick = false;
+int sSavedAspectMode = 0;
+bool sSavedAspectValid = false;
 
 void parseCaptureWindow()
 {
@@ -49,6 +54,29 @@ void applyWindowSize(int w, int h)
 	pc_settings_scenario_set_window_size(w, h);
 	pc_window_set_window_size(w, h);
 	pc_gfx_set_render_resolution(w, h);
+}
+
+void beginCaptureWindow()
+{
+	if (!sSavedAspectValid) {
+		sSavedAspectMode = pc_gfx_get_aspect_ratio_mode();
+		sSavedAspectValid = true;
+	}
+	// Lock 4:3 so the internal target matches GameCube GX 640x480 (not drawable hor+).
+	pc_gfx_set_aspect_ratio_mode(1);
+	applyWindowSize(sCaptureWindowW, sCaptureWindowH);
+	sSizedUpThisTick = true;
+}
+
+void endCaptureWindow()
+{
+	if (!sSizedUpThisTick) return;
+	if (sSavedAspectValid) {
+		pc_gfx_set_aspect_ratio_mode(sSavedAspectMode);
+		sSavedAspectValid = false;
+	}
+	applyWindowSize(sBaseWindowW, sBaseWindowH);
+	sSizedUpThisTick = false;
 }
 
 std::vector<Capture> capturesForTick(unsigned tick)
@@ -91,8 +119,7 @@ void pc_scenario_screenshot_on_tick_begin(unsigned tick)
 	sSizedUpThisTick = false;
 	if (sCaptures.empty()) return;
 	if (capturesForTick(tick).empty()) return;
-	applyWindowSize(sCaptureWindowW, sCaptureWindowH);
-	sSizedUpThisTick = true;
+	beginCaptureWindow();
 }
 
 bool writeCapture(const Capture& c, unsigned tick, unsigned sourceFramebuffer, int width, int height)
@@ -123,8 +150,7 @@ void pc_scenario_screenshot_present_hook(unsigned sourceFramebuffer, int width, 
 
 void pc_scenario_screenshot_on_tick_end(unsigned tick)
 {
-	if (sSizedUpThisTick) applyWindowSize(sBaseWindowW, sBaseWindowH);
-	sSizedUpThisTick = false;
+	endCaptureWindow();
 	(void)tick;
 }
 
