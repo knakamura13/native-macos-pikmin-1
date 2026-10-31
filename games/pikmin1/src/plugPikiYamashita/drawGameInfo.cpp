@@ -844,7 +844,7 @@ zen::DrawGameInfo::DrawGameInfo(zen::DrawGameInfo::playModeFlag playMode)
 	pane = mLowerScreenMgr->search('life', true);
 	pane->setCallBack(new LifeIconCallBack(pane));
 
-#if defined(PIKI_PC_PORT)
+#if defined(PIKI_PC_PORT) && PIKI_SCENARIOS
 	if (!pc_scenario_uses_disc_free_assets())
 #endif
 	{
