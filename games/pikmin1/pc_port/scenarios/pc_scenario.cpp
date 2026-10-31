@@ -3,6 +3,7 @@
 #if PIKI_SCENARIOS
 
 #include "scenarios/pc_scenario_list.h"
+#include "scenarios/pc_scenario_screenshot.h"
 
 #include <SDL.h>
 
@@ -265,7 +266,7 @@ void startWatchdog(const char* name)
 void usage(const char* msg)
 {
 	std::fprintf(stderr, "[scenario] %s\n", msg);
-	std::fprintf(stderr, "usage: nectar --scenario <name> [--scenario-tick-rate 30|60] [--scenario-visible] [--scenario-realtime] [--scenario-handoff]\n");
+	std::fprintf(stderr, "usage: nectar --scenario <name> [--scenario-tick-rate 30|60] [--scenario-visible] [--scenario-realtime] [--scenario-handoff] [--scenario-screenshot tick:path]...\n");
 	std::fprintf(stderr, "scenarios:");
 	for (PcScenario* s : pc_scenario_all()) {
 		if (!s->testOnly()) std::fprintf(stderr, " %s", s->name());
@@ -638,6 +639,15 @@ int pc_scenario_parse_argv(int argc, char** argv)
 			sRealtime = true;
 		} else if (std::strcmp(argv[i], "--scenario-handoff") == 0) {
 			sHandoffRequested = true;
+		} else if (std::strcmp(argv[i], "--scenario-screenshot") == 0) {
+			if (i + 1 >= argc) {
+				usage("--scenario-screenshot needs tick:path");
+				return PC_SCENARIO_EXIT_USAGE;
+			}
+			if (!pc_scenario_screenshot_parse_arg(argv[++i])) {
+				usage("--scenario-screenshot must be tick:path (for example 100:out.png)");
+				return PC_SCENARIO_EXIT_USAGE;
+			}
 		} else {
 			for (const char* flag : kRejectedFlags) {
 				if (rejected == nullptr && std::strcmp(argv[i], flag) == 0) rejected = flag;
@@ -751,6 +761,7 @@ int pc_scenario_parse_argv(int argc, char** argv)
 	pc_settings_scenario_enable();
 	pc_settings_scenario_set_fps_mode(rate == 60 ? 1 : 0);
 	if (windowWidth > 0) pc_settings_scenario_set_window_size(windowWidth, windowHeight);
+	pc_scenario_screenshot_set_base_window_size(windowWidth > 0 ? windowWidth : 64, windowHeight > 0 ? windowHeight : 36);
 	pc_gfx_set_min_render_size(1, 1); // the window size, below the player's 160x120 floor
 	pc_window_set_hidden(!visible);
 	pc_input_log_set_provider(providerThunk);
@@ -761,6 +772,10 @@ int pc_scenario_parse_argv(int argc, char** argv)
 }
 
 bool pc_scenario_active(void) { return sActive; }
+
+bool pc_scenario_screenshot_frame_active(void) { return sActive && !sVerdict && sStageReady && sIntroDone; }
+
+unsigned pc_scenario_sim_tick(void) { return sTick; }
 
 bool pc_scenario_skip_boot_menus(void)
 {
@@ -848,6 +863,12 @@ void pc_scenario_on_stage_ready(void)
 	            drawableHeight, renderWidth, renderHeight);
 }
 
+void pc_scenario_on_tick_begin(void)
+{
+	if (!sActive || sVerdict || !sStageReady || !sIntroDone) return;
+	pc_scenario_screenshot_on_tick_begin(sTick);
+}
+
 void pc_scenario_on_tick_end(void)
 {
 	if (!sActive) return;
@@ -902,6 +923,7 @@ void pc_scenario_on_tick_end(void)
 	sScenario->onTick(sTick);
 	if (!sVerdict && sScenario->checksGameStat()) checkGameStatInvariants(sTick);
 	if (sStateStats) trackStates();
+	pc_scenario_screenshot_on_tick_end(sTick);
 	++sTick;
 	// A crossesDays() scenario continues past the soft reset that ends the day: from
 	// the next tick the stage objects are being torn down, so the scenario is not
