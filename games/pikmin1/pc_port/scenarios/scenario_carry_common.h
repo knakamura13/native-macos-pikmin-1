@@ -73,7 +73,16 @@ inline void spawnRow(Navi* navi, int colour, int n, float x, float z, std::vecto
 /// What a thrown Pikmin does when it lands (PikiFlyingState::procBounceMsg): look for work in range and take it.
 inline void land(std::vector<Piki*>& landing)
 {
-	for (Piki* p : landing) p->actOnSituaton();
+	if (landing.empty()) return;
+	int modes[16] = {};
+	for (Piki* p : landing) {
+		p->actOnSituaton();
+		modes[p->mMode & 15]++;
+	}
+	std::printf("[scenario] %zu Pikmin looked for work; modes:", landing.size());
+	for (int m = 0; m < 16; m++)
+		if (modes[m]) std::printf(" %d x%d", m, modes[m]);
+	std::printf("\n");
 	landing.clear();
 }
 

@@ -30,6 +30,7 @@
 
 #if PIKI_SCENARIOS
 
+#include <algorithm>
 #include <cstdio>
 #include <functional>
 #include <vector>
@@ -64,14 +65,12 @@ public:
 			if (p->mConfig->mModelId.mId == id("pr01")) mPellet = p;
 		}
 		std::printf("[scenario] pellet_carry: blue Onion %d, red 1-pellet %d, flags %s\n", (int)(mOnion != nullptr), (int)(mPellet != nullptr), setBits(demoFlags()).c_str());
-		if (!mOnion || !mPellet || carriersWanted("pr01") != 2) {
-			// pr01's stand-in config is 1 to 2 carriers; the scenario makes it 2 to 2 below.
-		}
 		mCfg = mPellet ? mPellet->mConfig : nullptr;
 		if (!mOnion || !mPellet || mCfg->mCarryMinPikis() != 1 || mCfg->mCarryMaxPikis() != 2) {
 			fail(0, "the object stage's blue Onion and red 1-pellet (1 to 2 carriers)", "Onion %d, pellet %d", (int)(mOnion != nullptr), (int)(mPellet != nullptr));
 			return;
 		}
+		mOnion->pcSnapLanded();
 		mCfg->mCarryMinPikis(2);
 		mFlags   = demoFlags();
 		mStart   = mPellet->mSRT.t;
@@ -98,14 +97,14 @@ public:
 		}
 		if (t % (5 * rate) == 0 && mPellet) {
 			std::printf("[scenario-progress] t=%u phase %d: pellet state %d carriers %d at (%.0f, %.0f), blue seeds born %d\n", t, (int)mPhase, mPellet->getState(),
-			            (int)mPellet->mCarrierCount, mPellet->mSRT.t.x, mPellet->mSRT.t.z, GameStat::bornPikis[Blue] - mBorn0);
+			            (int)mPellet->mCarrierCounter, mPellet->mSRT.t.x, mPellet->mSRT.t.z, GameStat::bornPikis[Blue] - mBorn0);
 		}
 		switch (mPhase) {
 		case Min:
-			mMaxCarriers = std::max(mMaxCarriers, (int)mPellet->mCarrierCount);
+			mMaxCarriers = std::max(mMaxCarriers, (int)mPellet->mCarrierCounter);
 			if (flatDistance(mPellet->mSRT.t, mStart) > 1.0f || mPellet->getState() != PELSTATE_Normal) {
 				fail(t, "EC-44: one carrier of a 2-carrier pellet does not move it", "moved %.1f in %.1f s, state %d, carriers %d", flatDistance(mPellet->mSRT.t, mStart),
-				     span / float(rate), mPellet->getState(), (int)mPellet->mCarrierCount);
+				     span / float(rate), mPellet->getState(), (int)mPellet->mCarrierCounter);
 				return;
 			}
 			if (span >= 3 * rate) {
@@ -120,7 +119,7 @@ public:
 			}
 			return;
 		case Max:
-			mMaxCarriers = std::max(mMaxCarriers, (int)mPellet->mCarrierCount);
+			mMaxCarriers = std::max(mMaxCarriers, (int)mPellet->mCarrierCounter);
 			if (mMaxCarriers > 2) {
 				fail(t, "EC-44: no more than max (2) carriers join", "%d carriers", mMaxCarriers);
 				return;
@@ -134,12 +133,12 @@ public:
 				startBig(t, "pr05", Other);
 			});
 			if (span > 90 * rate) fail(t, "EC-44: with 2 carriers the pellet reaches the Onion within 90 s", "state %d, carriers %d, at (%.0f, %.0f), moved %.1f", mPellet->getState(),
-			                           (int)mPellet->mCarrierCount, mPellet->mSRT.t.x, mPellet->mSRT.t.z, flatDistance(mPellet->mSRT.t, mStart));
+			                           (int)mPellet->mCarrierCounter, mPellet->mSRT.t.x, mPellet->mSRT.t.z, flatDistance(mPellet->mSRT.t, mStart));
 			return;
 		case Other:
 			if (delivered()) return finishDelivery(t, "red 5-pellet into the blue Onion (non-matching)", 1, [&] { startBig(t, "pb05", Same); });
 			if (span > 90 * rate) fail(t, "EC-45: the red 5-pellet reaches the Onion within 90 s", "state %d, carriers %d, at (%.0f, %.0f)", mPellet->getState(),
-			                           (int)mPellet->mCarrierCount, mPellet->mSRT.t.x, mPellet->mSRT.t.z);
+			                           (int)mPellet->mCarrierCounter, mPellet->mSRT.t.x, mPellet->mSRT.t.z);
 			return;
 		case Same:
 			if (delivered()) return finishDelivery(t, "blue 5-pellet into the blue Onion (matching)", 3, [&] {
@@ -152,7 +151,7 @@ public:
 				scenarioPass();
 			});
 			if (span > 90 * rate) fail(t, "PL5: the blue 5-pellet reaches the Onion within 90 s", "state %d, carriers %d, at (%.0f, %.0f)", mPellet->getState(),
-			                           (int)mPellet->mCarrierCount, mPellet->mSRT.t.x, mPellet->mSRT.t.z);
+			                           (int)mPellet->mCarrierCounter, mPellet->mSRT.t.x, mPellet->mSRT.t.z);
 			return;
 		case Settle:
 			if (t - mPhaseTick >= 2 * rate && C_SAI(mOnion)->getCurrID(mOnion) == GoalAI::GOAL_Wait && mOnion->mSAICtx.mCurrAnimId == 0 && mOnion->mSAICtx.mCounter == 0) {
@@ -173,8 +172,6 @@ public:
 
 private:
 	enum Phase { Min, Max, Other, Same, Settle, Done };
-
-	static int carriersWanted(const char*) { return 2; }
 
 	void enter(Phase p, unsigned t)
 	{

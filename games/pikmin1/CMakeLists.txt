@@ -2255,7 +2255,8 @@ if(PIKMIN_BUILD_SCENARIOS)
     endforeach()
 
     # Disc-free W2 scenarios (coverage/milestones.md, issue #94), name:stage:rates.
-    foreach(entry pellet_table:sandbox:30,60 ufo_part_discovery:sandbox:30,60)
+    foreach(entry pellet_table:sandbox:30,60 ufo_part_discovery:sandbox:30,60
+        pellet_carry:sandbox_objects:30,60)
         string(REPLACE ":" ";" parts "${entry}")
         list(GET parts 0 scenario)
         list(GET parts 1 stage)
