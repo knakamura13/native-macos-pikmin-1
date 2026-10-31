@@ -3388,9 +3388,6 @@ void pc_gfx_reset_ui_state(void) {
     }
 }
 
-#if PIKI_SCENARIOS
-static bool sScenarioCaptureResizePending = false;
-
 // Re-read SDL drawable size and resize the native colour/depth target if
 // sRenderResolution* / aspect / scale demand it. Shared by begin_frame and the
 // scenario capture-tick resize (64x36 -> 640x480 mid-run).
@@ -3442,6 +3439,9 @@ static void sync_native_render_target(void)
     }
     glBindFramebuffer_ptr(GL_FRAMEBUFFER, sNativeFramebuffer);
 }
+
+#if PIKI_SCENARIOS
+static bool sScenarioCaptureResizePending = false;
 
 void pc_gfx_scenario_prepare_capture(int renderW, int renderH)
 {
