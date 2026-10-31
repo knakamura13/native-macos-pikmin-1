@@ -73,6 +73,7 @@ Teki* findBulborb()
 
 enum Step {
 	FireColours,
+	FireBlueDeath,
 	AttackNonLethal,
 	AttackKill,
 	PikiFlick,
@@ -127,6 +128,7 @@ public:
 				}
 				mRed->stimulate(InteractFire(mNavi, 0.0f));
 				mBlueFire->stimulate(InteractFire(mNavi, 0.0f));
+				mBlueDeadBefore = GameStat::deadPikis[kBlue];
 			}
 			if (t >= mStepTick + 2) {
 				if (mRed == nullptr || mBlueFire == nullptr) {
@@ -146,23 +148,35 @@ public:
 					return;
 				}
 				std::printf("[scenario] piki_hazard_deaths: fire immunity tick %u\n", t);
-				mStep = AttackNonLethal;
+				mStep = FireBlueDeath;
 				mStepTick = t + 1;
 			} else if (t - mStepTick > 5 * rate) {
 				scenarioFailf(t, "fire colour check within 5 s", "red state %d blue state %d", mRed->getState(), mBlueFire->getState());
 			}
 			break;
+		case FireBlueDeath:
+			if (mBlueFire && (mBlueFire->getState() == PIKISTATE_Dying || mBlueFire->getState() == PIKISTATE_Dead || !mBlueFire->isAlive()
+			                  || GameStat::deadPikis[kBlue] > mBlueDeadBefore)) {
+				std::printf("[scenario] piki_hazard_deaths: blue fire death deadPikis %d tick %u\n", GameStat::deadPikis[kBlue], t);
+				mBlueFire = nullptr;
+				mStep     = AttackNonLethal;
+				mStepTick = t + 1;
+			} else if (t - mStepTick > 60 * rate) {
+				scenarioFailf(t, "blue burned Pikmin reaches Dying/Dead or deadPikis", "state %d dead %d", mBlueFire ? mBlueFire->getState() : -1,
+				              GameStat::deadPikis[kBlue]);
+			}
+			break;
 		case AttackNonLethal:
 			if (t == mStepTick) {
-				if (mBlueFire) mBlueFire->kill(false);
 				mVictim = spawnAt(mNavi, kBlue, -80.0f, 0.0f, PikiMode::FreeMode);
 				if (mVictim == nullptr) {
 					scenarioFailf(t, "a Pikmin for attack", "spawn failed");
 					return;
 				}
+				mHealthBefore = mVictim->mHealth;
 				mVictim->stimulate(InteractAttack(mNavi, nullptr, 40.0f, false));
 			}
-			if (t >= mStepTick + 2 && mVictim->mHealth > 0.0f && mVictim->getState() != PIKISTATE_Dying) {
+			if (t >= mStepTick + 2 && mVictim->mHealth > 0.0f && mVictim->getState() != PIKISTATE_Dying && mVictim->mHealth < mHealthBefore - 30.0f) {
 				std::printf("[scenario] piki_hazard_deaths: non-lethal attack health %.1f state %d\n", mVictim->mHealth, mVictim->getState());
 				mStep = AttackKill;
 				mStepTick = t + 1;
@@ -343,7 +357,8 @@ private:
 	Teki* mBulborb = nullptr;
 	Piki *mRed = nullptr, *mBlueFire = nullptr, *mVictim = nullptr;
 	bool mFlickSeen = false, mPressSeen = false, mFlownSeen = false;
-	int mPlateBefore = 0;
+	int mPlateBefore = 0, mBlueDeadBefore = 0;
+	float mHealthBefore = 0.0f;
 	int mWhistlePads = 0;
 };
 

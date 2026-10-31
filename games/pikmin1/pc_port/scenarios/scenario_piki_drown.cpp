@@ -53,11 +53,14 @@ void dropOntoWater(Piki* piki, float x, float z)
 	piki->mFSM->transit(piki, PIKISTATE_Flying);
 }
 
-enum Phase { DropRed, WaitRed, DropBlue, WaitBlue, DropYellow, WhistleRescue, Done };
+enum Phase { DropBlue, WaitBlue, DropYellow, WhistleRescue, DropRed, WaitRed, Done };
 
 class PikiDrown : public PcScenario {
 public:
 	const char* name() const override { return "piki_drown"; }
+
+	// First Pikmin death can open the re_k diary overlay; run that last so whistle rescue is not interrupted.
+	bool checksGameStat() const override { return mPhase < DropRed; }
 
 	void onStageReady() override
 	{
@@ -84,31 +87,8 @@ public:
 		if (mPhase == Done) return;
 		const unsigned rate = (unsigned)pc_scenario_ticks_per_second();
 		switch (mPhase) {
-		case DropRed:
-			if (t == 0) {
-				mRed = spawnShore(mNavi, kRed, kShoreX, kShoreZ);
-				if (mRed == nullptr) {
-					scenarioFailf(t, "red Pikmin for drown", "spawn failed");
-					return;
-				}
-				dropOntoWater(mRed, kWaterX, kWaterZ);
-				mPhase = WaitRed;
-				mPhaseTick = t;
-			}
-			break;
-		case WaitRed:
-			if (mRed && (mRed->getState() == PIKISTATE_Drown || GameStat::deadPikis[kRed] > 0 || mRed->getState() == PIKISTATE_Dying
-			             || mRed->getState() == PIKISTATE_Dead)) {
-				std::printf("[scenario] piki_drown: red drowned deadPikis %d state %d tick %u\n", GameStat::deadPikis[kRed], mRed->getState(), t);
-				mPhase = DropBlue;
-				mPhaseTick = t;
-			} else if (t - mPhaseTick > 30 * rate) {
-				scenarioFailf(t, "red thrown into water enters Drown or dies within 30 s", "state %d dead %d", mRed ? mRed->getState() : -1,
-				              GameStat::deadPikis[kRed]);
-			}
-			break;
 		case DropBlue:
-			if (mBlue == nullptr) {
+			if (t == 0) {
 				mBlue = spawnShore(mNavi, kBlue, kShoreX, kShoreZ + 10.0f);
 				if (mBlue == nullptr) {
 					scenarioFailf(t, "blue Pikmin for immunity", "spawn failed");
@@ -163,15 +143,38 @@ public:
 				std::printf("[scenario] piki_drown: yellow in Drown tick %u\n", t);
 			}
 			if (mRescueArmed && mRescueDrownSeen && mYellow->isAlive() && mYellow->getState() != PIKISTATE_Drown && mYellow->getState() != PIKISTATE_Dying
-			    && mYellow->getState() != PIKISTATE_Dead && mYellow->mInWaterTimer == 0) {
+			    && mYellow->getState() != PIKISTATE_Dead && mYellow->mInWaterTimer == 0
+			    && (mYellow->mMode == PikiMode::FormationMode || mYellow->getState() == PIKISTATE_Emotion)) {
 				std::printf("[scenario] piki_drown: whistle rescue out of water state %d tick %u\n", mYellow->getState(), t);
-				mPhase = Done;
-				scenarioPass();
+				mPhase = DropRed;
+				mPhaseTick = t;
 			} else if (mRescueArmed && t - mRescueTick > 45 * rate) {
 				scenarioFailf(t, "whistle rescue leaves Drown within 45 s", "state %d inWaterTimer %d drown seen %d", mYellow->getState(), mYellow->mInWaterTimer,
 				              (int)mRescueDrownSeen);
 			} else if (t - mPhaseTick > 60 * rate) {
 				scenarioFailf(t, "yellow enters Drown for rescue test", "state %d", mYellow->getState());
+			}
+			break;
+		case DropRed:
+			if (mRed == nullptr) {
+				mRed = spawnShore(mNavi, kRed, kShoreX, kShoreZ);
+				if (mRed == nullptr) {
+					scenarioFailf(t, "red Pikmin for drown", "spawn failed");
+					return;
+				}
+				dropOntoWater(mRed, kWaterX, kWaterZ);
+				mPhase = WaitRed;
+				mPhaseTick = t;
+			}
+			break;
+		case WaitRed:
+			if (mRed && (GameStat::deadPikis[kRed] > 0 || mRed->getState() == PIKISTATE_Dying || mRed->getState() == PIKISTATE_Dead)) {
+				std::printf("[scenario] piki_drown: red drowned deadPikis %d state %d tick %u\n", GameStat::deadPikis[kRed], mRed->getState(), t);
+				mPhase = Done;
+				scenarioPass();
+			} else if (t - mPhaseTick > 45 * rate) {
+				scenarioFailf(t, "red thrown into water reaches Dying/Dead or deadPikis within 45 s", "state %d dead %d", mRed ? mRed->getState() : -1,
+				              GameStat::deadPikis[kRed]);
 			}
 			break;
 		default:
@@ -180,7 +183,7 @@ public:
 	}
 
 private:
-	Phase mPhase = DropRed;
+	Phase mPhase = DropBlue;
 	unsigned mPhaseTick = 0, mRescueTick = 0;
 	Navi* mNavi = nullptr;
 	Piki *mRed = nullptr, *mBlue = nullptr, *mYellow = nullptr;
