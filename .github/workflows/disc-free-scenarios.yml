@@ -23,7 +23,7 @@ permissions:
 
 # A new push to the same PR or branch cancels the run it replaces.
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 
 env:
@@ -138,7 +138,7 @@ jobs:
       - name: FP gate on the scenario binary (Windows)
         if: ${{ !cancelled() && runner.os == 'Windows' && steps.build-p1.outcome == 'success' }}
         run: |
-          pacman -S --noconfirm --needed mingw-w64-x86_64-python
+          pacman -S --noconfirm --needed git mingw-w64-x86_64-python
           python games/pikmin1/tools/netplay/fp_gate.py --objdump "$(cygpath -m "$(which objdump)")" build/pikmin1/bin/nectar.exe
 
       # Scenarios need a GL context (hidden window). A runner that cannot create
@@ -176,7 +176,7 @@ jobs:
         if: ${{ !cancelled() }}
         run: |
           if [ "$RUNNER_OS" = "Windows" ]; then
-            pacman -S --noconfirm --needed mingw-w64-x86_64-python
+            pacman -S --noconfirm --needed git mingw-w64-x86_64-python
           fi
           python3 games/pikmin1/tools/scenarios/record_rng_provenance.py build/pikmin1
 
@@ -328,7 +328,7 @@ jobs:
         if: ${{ !cancelled() }}
         run: |
           if [ "$RUNNER_OS" = "Windows" ]; then
-            pacman -S --noconfirm --needed mingw-w64-x86_64-python
+            pacman -S --noconfirm --needed git mingw-w64-x86_64-python
           fi
           python3 games/pikmin1/tools/scenarios/record_rng_provenance.py build/pikmin1
 
