@@ -314,6 +314,7 @@ set(PC_PORT_SOURCES
     pc_port/pc_window.cpp
     pc_port/pc_keycaps.cpp
     pc_port/pc_gyro.cpp
+    pc_port/pc_xinput_usb.cpp
     pc_port/pc_pad_axis.cpp
     pc_port/pc_menu_pad.cpp
     pc_port/pc_menu_mode.cpp
@@ -692,6 +693,24 @@ if (WIN32)
 endif()
 target_compile_options(${NECTAR_GAME} PRIVATE ${NATIVE_COMPILE_OPTIONS})
 target_link_libraries(${NECTAR_GAME} PRIVATE ${NECTAR_LEGACY} nectar_paths)
+
+# Mandos Xbox 360 (XInput) por USB en macOS, que no trae driver para ellos: se
+# leen con libusb y se presentan a SDL como mando virtual. Apagado por defecto
+# (la dylib de Homebrew no viaja en las releases); scripts/build-macos.sh lo
+# enciende.
+option(PIKMIN_XINPUT_USB "Read USB Xbox 360-protocol controllers with libusb (macOS)" OFF)
+if(PIKMIN_XINPUT_USB)
+    find_path(LIBUSB_INCLUDE_DIR libusb.h HINTS /opt/homebrew /usr/local PATH_SUFFIXES include/libusb-1.0 libusb-1.0)
+    find_library(LIBUSB_LIBRARY NAMES usb-1.0 HINTS /opt/homebrew/lib /usr/local/lib)
+    if(LIBUSB_INCLUDE_DIR AND LIBUSB_LIBRARY)
+        target_include_directories(${NECTAR_GAME} PRIVATE ${LIBUSB_INCLUDE_DIR})
+        target_link_libraries(${NECTAR_GAME} PRIVATE ${LIBUSB_LIBRARY})
+        target_compile_definitions(${NECTAR_GAME} PRIVATE PIKI_XINPUT_USB=1)
+        message(STATUS "USB XInput controllers: libusb ${LIBUSB_LIBRARY}")
+    else()
+        message(WARNING "PIKMIN_XINPUT_USB=ON but libusb was not found (brew install libusb)")
+    endif()
+endif()
 if(NECTAR_ONLINE)
     if(NOT TARGET nectar_net)
         add_subdirectory("${NECTAR_LIBS_DIR}/nectar_net" "${CMAKE_BINARY_DIR}/nectar_net")
@@ -1265,6 +1284,11 @@ if(PIKMIN_BUILD_TESTS AND PIKMIN_BUILD_LAUNCHER)
     target_compile_options(asset_finalize_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
     add_test(NAME asset_finalize_test COMMAND asset_finalize_test)
 
+    # La comprobacion de instalacion del launcher: paquetes obligatorios por region.
+    add_executable(asset_check_test pc_port/launcher/asset_check_test.cpp)
+    target_compile_options(asset_check_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME asset_check_test COMMAND asset_check_test)
+
     add_executable(prepared_image_test pc_port/launcher/prepared_image_test.cpp ${LAUNCHER_PLATFORM_SOURCE})
     target_compile_options(prepared_image_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
     if (WIN32)
@@ -1345,6 +1369,17 @@ if(PIKMIN_BUILD_TESTS)
     target_include_directories(pc_bundle_compat_test PRIVATE pc_port)
     target_compile_options(pc_bundle_compat_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
     add_test(NAME pc_bundle_compat_test COMMAND pc_bundle_compat_test)
+
+    if(APPLE AND PIKMIN_XINPUT_USB AND LIBUSB_INCLUDE_DIR)
+        # Real SDL virtual controllers with a simulated USB transport: no pad/assets needed.
+        add_executable(pc_xinput_usb_test
+            ../../tests/pc_xinput_usb_test.cpp pc_port/pc_xinput_usb.cpp)
+        target_compile_definitions(pc_xinput_usb_test PRIVATE
+                PIKI_XINPUT_USB=1 SDL_CreateThread=pc_xinput_test_create_thread)
+        target_include_directories(pc_xinput_usb_test PRIVATE pc_port ${SDL2_INCLUDE_DIRS} ${LIBUSB_INCLUDE_DIR})
+        target_link_libraries(pc_xinput_usb_test PRIVATE ${SDL2_LIBRARIES} Threads::Threads)
+        add_test(NAME pc_xinput_usb_test COMMAND pc_xinput_usb_test)
+    endif()
 
     add_executable(pc_generator_cache_validation_test
         pc_port/save/pc_generator_cache_validation_test.cpp)
