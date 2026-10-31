@@ -75,6 +75,7 @@ PcScenario* pc_scenario_make_day_clock(void);
 PcScenario* pc_scenario_make_demo_timers(void);
 PcScenario* pc_scenario_make_throw_levels(void);
 PcScenario* pc_scenario_make_whistle_radius(void);
+PcScenario* pc_scenario_make_navi_invincible(void);
 PcScenario* pc_scenario_make_title_boot(void);
 PcScenario* pc_scenario_make_piki_hazard_deaths(void);
 PcScenario* pc_scenario_make_piki_hazard_fire_red_fail(void);

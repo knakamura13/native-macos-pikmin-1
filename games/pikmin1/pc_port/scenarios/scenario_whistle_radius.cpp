@@ -231,7 +231,7 @@ private:
 			}
 			GameStat::workPikis.inc(Blue);
 			piki->init(navi);
-			// Round 2 a quarter turn on, clear of round 1's leftovers.
+			// Round 2 half a step round, clear of round 1's leftovers.
 			const float a = 6.2831853f * (i + 0.5f * mRound) / kMaxPikis;
 			const float r = std::fmax(kAt[mRound][i] * mR, kClear);
 			Vector3f at   = mCentre;

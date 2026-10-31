@@ -94,6 +94,7 @@ const std::vector<PcScenario*>& pc_scenario_all(void)
 		pc_scenario_make_demo_timers(),
 		pc_scenario_make_throw_levels(),
 		pc_scenario_make_whistle_radius(),
+		pc_scenario_make_navi_invincible(),
 		pc_scenario_make_title_boot(),
 		pc_scenario_make_piki_hazard_deaths(),
 		pc_scenario_make_piki_hazard_fire_red_fail(),
