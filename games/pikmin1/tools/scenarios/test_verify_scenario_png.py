@@ -123,6 +123,10 @@ def run_self_test() -> None:
         raise AssertionError("silver block must count 100 silver pixels")
     if edge_object_pixels(sw, sh, frame, y_max=40) != 0:
         raise AssertionError("frame with models inside must have a clear border")
+    for x in range(10, 20):
+        frame[x] = (0, 0, 0)
+    if edge_object_pixels(sw, sh, frame, y_max=40) != 0:
+        raise AssertionError("black clear colour through the horizon is not a clipped model")
     for y in range(20, 30):
         for x in range(0, 6):
             frame[y * sw + x] = (230, 50, 55)

@@ -298,16 +298,22 @@ def edge_object_pixels(
     """Non-grass pixels on the top, left and right borders (above the HUD rows).
 
     The ground and the dark horizon are both greenish; a model running off the
-    frame leaves its own colours on the border.
+    frame leaves its own colours on the border. Pure black is the clear colour
+    showing through gaps in the far horizon (seen on macOS), not a model: the
+    darkest stand-in material is (15, 15, 20).
     """
+
+    def is_object(px: tuple[int, int, int]) -> bool:
+        return not is_grass_pixel(*px) and max(px) > 4
+
     n = 0
     for y in range(min(band, height)):
         for x in range(width):
-            if not is_grass_pixel(*pixels[y * width + x]):
+            if is_object(pixels[y * width + x]):
                 n += 1
     for y in range(band, min(y_max, height)):
         for x in list(range(min(band, width))) + list(range(max(0, width - band), width)):
-            if not is_grass_pixel(*pixels[y * width + x]):
+            if is_object(pixels[y * width + x]):
                 n += 1
     return n
 
