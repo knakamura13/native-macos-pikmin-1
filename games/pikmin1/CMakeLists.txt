@@ -434,6 +434,7 @@ endif()
 if (PIKMIN_BUILD_SCENARIOS)
     list(APPEND PC_PORT_SOURCES
         pc_port/scenarios/pc_scenario.cpp
+        pc_port/scenarios/pc_scenario_screenshot.cpp
         pc_port/scenarios/pc_scenario_list.cpp
         pc_port/scenarios/scenario_boot_smoke.cpp
         pc_port/scenarios/scenario_throw_release.cpp
@@ -463,7 +464,8 @@ if (PIKMIN_BUILD_SCENARIOS)
         pc_port/scenarios/scenario_tutorial_skip.cpp
         pc_port/scenarios/scenario_tutorial_firsts.cpp
         pc_port/scenarios/scenario_tutorial_day1.cpp
-        pc_port/scenarios/scenario_title_boot.cpp)
+        pc_port/scenarios/scenario_title_boot.cpp
+        pc_port/gl/pc_gfx_png_write.cpp)
 endif()
 
 include_directories(
@@ -2403,6 +2405,27 @@ if(PIKMIN_BUILD_SCENARIOS)
         FIXTURES_REQUIRED scenario_standin_tree
         WORKING_DIRECTORY "${PIKMIN_STANDIN_DATA}"
         ENVIRONMENT "${PIKMIN_STANDIN_OBJECTS_ENV}"
+        TIMEOUT 1200)
+    add_test(NAME scenario_screenshot_boot_smoke_30
+        COMMAND ${CMAKE_COMMAND}
+            -DGAME=$<TARGET_FILE:${NECTAR_GAME}>
+            -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/scenario-screenshots/boot_smoke_30
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/check_scenario_screenshot.cmake)
+    set_tests_properties(scenario_screenshot_boot_smoke_30 PROPERTIES
+        FIXTURES_REQUIRED scenario_standin_tree
+        WORKING_DIRECTORY "${PIKMIN_STANDIN_DATA}"
+        ENVIRONMENT "${PIKMIN_STANDIN_ENV}"
+        TIMEOUT 600)
+    add_test(NAME scenario_screenshot_hash_boot_smoke_30
+        COMMAND ${CMAKE_COMMAND}
+            -DGAME=$<TARGET_FILE:${NECTAR_GAME}>
+            -DSCENARIO=boot_smoke -DRATE=30
+            -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/scenario-screenshots/hash_boot_smoke_30
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/check_scenario_screenshot_hash.cmake)
+    set_tests_properties(scenario_screenshot_hash_boot_smoke_30 PROPERTIES
+        FIXTURES_REQUIRED scenario_standin_tree
+        WORKING_DIRECTORY "${PIKMIN_STANDIN_DATA}"
+        ENVIRONMENT "${PIKMIN_STANDIN_ENV}"
         TIMEOUT 1200)
     # --scenario-handoff with a scenario that has no hand-off point exits 2.
     add_test(NAME scenario_exit_handoff_unsupported

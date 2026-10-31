@@ -179,6 +179,15 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
+      - name: Upload scenario screenshots
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: scenario-screenshots-${{ runner.os }}
+          path: build/pikmin1/scenario-screenshots/**/*.png
+          if-no-files-found: warn
+          retention-days: 14
+
       - name: Upload test logs
         if: failure()
         uses: actions/upload-artifact@v7
