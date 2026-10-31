@@ -107,6 +107,8 @@ bool pc_scenario_skip_boot_menus(void);
 
 // For scenarios.
 int pc_scenario_stage_number(void); // 1 for the first stage, 2 after the first soft reset, ...
+// PIKMIN_SCENARIO_STAGE at run start, or the runner default (stages/stage1.ini).
+const char* pc_scenario_requested_stage_file(void);
 
 // For scenarios.
 int pc_scenario_ticks_per_second(void); // 30 or 60

@@ -961,6 +961,8 @@ bool pc_scenario_on_map_select(void)
 
 int pc_scenario_stage_number(void) { return sStageNumber; }
 
+const char* pc_scenario_requested_stage_file(void) { return sStageFile.c_str(); }
+
 void scenarioPass(void)
 {
 	// sTick is the tick being checked, counted from 0 after the intro gate.

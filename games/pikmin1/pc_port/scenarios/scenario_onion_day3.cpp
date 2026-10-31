@@ -112,8 +112,11 @@ using namespace scenario_progress;
 
 constexpr const char* kStage = "stages/sandbox_onions.ini";
 
+enum Tree { StandIn, Disc };
+
 /// Where a course's Onion generators put the Onions (x, z).
 struct CourseOnions {
+	Tree tree;                       ///< stand-in data tree vs disc install
 	const char* file;
 	float red[2], yellow[2], blue[2]; ///< generators not named `next`
 	bool hasNextYellow;
@@ -121,18 +124,37 @@ struct CourseOnions {
 };
 const CourseOnions kCourses[] = {
 	// standin_objects_stage.h (the stand-in generator's header is not on the game's include path).
-	{ "stages/sandbox_onions.ini", { -120.0f, -250.0f }, { -280.0f, -250.0f }, { -200.0f, -400.0f }, true, { -300.0f, 0.0f } },
+	{ StandIn, "stages/sandbox_onions.ini", { -120.0f, -250.0f }, { -280.0f, -250.0f }, { -200.0f, -400.0f }, true, { -300.0f, 0.0f } },
 	// The stand-in story Forest stage (same Onion layout, selected on the world map after Day 2).
-	{ "stages/stage1.ini", { -120.0f, -250.0f }, { -280.0f, -250.0f }, { -200.0f, -400.0f }, true, { -300.0f, 0.0f } },
+	{ StandIn, "stages/stage1.ini", { -120.0f, -250.0f }, { -280.0f, -250.0f }, { -200.0f, -400.0f }, true, { -300.0f, 0.0f } },
 	// The disc's default.gen (VERSION_GPIE01_01 install, read-only with nectar::loadGen, 2026-10-28):
 	// Forest of Hope has a `next` yellow Onion where it is found; The Impact Site has none.
-	{ "stages/stage1.ini", { -377.7f, 2155.7f }, { -64.3f, 1976.6f }, { -306.4f, 1823.6f }, true, { -1635.9f, 2117.9f } },
-	{ "stages/practice.ini", { -498.2f, 1454.5f }, { -146.0f, 1353.3f }, { -231.7f, 1725.6f }, false, { 0.0f, 0.0f } },
+	{ Disc, "stages/stage1.ini", { -377.7f, 2155.7f }, { -64.3f, 1976.6f }, { -306.4f, 1823.6f }, true, { -1635.9f, 2117.9f } },
+	{ Disc, "stages/practice.ini", { -498.2f, 1454.5f }, { -146.0f, 1353.3f }, { -231.7f, 1725.6f }, false, { 0.0f, 0.0f } },
 };
 
-const CourseOnions* courseFor(const char* file)
+void verifyKCoursesTable()
+{
+	for (size_t i = 0; i < sizeof(kCourses) / sizeof(kCourses[0]); ++i) {
+		for (size_t j = i + 1; j < sizeof(kCourses) / sizeof(kCourses[0]); ++j) {
+			if (kCourses[i].tree != kCourses[j].tree) continue;
+			if (std::strcmp(kCourses[i].file, kCourses[j].file) == 0) {
+				std::fprintf(stderr, "[scenario] onion_day3: kCourses duplicate tree=%d file '%s'\n", (int)kCourses[i].tree, kCourses[i].file);
+				std::abort();
+			}
+		}
+	}
+}
+
+Tree assetTreeFromRequestedStage()
+{
+	return std::strcmp(pc_scenario_requested_stage_file(), kStage) == 0 ? StandIn : Disc;
+}
+
+const CourseOnions* courseFor(const char* file, Tree tree)
 {
 	for (const CourseOnions& c : kCourses) {
+		if (c.tree != tree) continue;
 		if (std::strcmp(c.file, file) == 0) return &c;
 	}
 	return nullptr;
@@ -156,7 +178,6 @@ constexpr unsigned kToAdvanceSeconds[2] = { 10, 180 };
 constexpr unsigned kToResetSeconds[2]   = { 60, 240 };
 
 enum Variant { HandV, WhistleV, HideTextV, ReloadV, UnpluckedV };
-enum Tree { StandIn, Disc };
 
 struct OnionSeen {
 	int colour;
@@ -486,16 +507,22 @@ private:
 
 	void day2Ready()
 	{
+		static bool sCoursesVerified = false;
+		if (!sCoursesVerified) {
+			verifyKCoursesTable();
+			sCoursesVerified = true;
+		}
 		applyDiscKeys();
 		if (mVariant == WhistleV) pc_settings_scenario_set_whistle_pluck(1);
 		if (mVariant == HideTextV) pc_settings_scenario_set_hide_olimar_text(1);
-		const CourseOnions* course = courseFor(flowCont.mCurrentStage->mFileName);
+		mTree = assetTreeFromRequestedStage();
+		const CourseOnions* course = courseFor(flowCont.mCurrentStage->mFileName, mTree);
 		if (!course || !course->hasNextYellow) {
-			fail(0, "Day 2 on a course with a `next` yellow Onion (sandbox_onions or the disc's stage1)", "stage '%s'", flowCont.mCurrentStage->mFileName);
+			fail(0, "Day 2 on a course with a `next` yellow Onion (sandbox_onions or the disc's stage1)", "stage '%s' tree %d",
+			     flowCont.mCurrentStage->mFileName, (int)mTree);
 			return;
 		}
 		// The stand-in tree's Onion stage, or the disc's Forest of Hope (the runner's default stage).
-		mTree = std::strcmp(course->file, kStage) == 0 ? StandIn : Disc;
 		const std::vector<OnionSeen> v = onions();
 		std::printf("[scenario] %s: day %d stage '%s': container 0x%02x display 0x%02x; Onions: %s\n", mName, gameflow.mWorldClock.mCurrentDay,
 		            flowCont.mCurrentStage->mFileName, playerState->mContainerFlag, playerState->mDisplayPikiFlag, describe(v).c_str());
@@ -551,7 +578,7 @@ private:
 		std::printf("[scenario] %s: day %d stage '%s': container 0x%02x display 0x%02x; Onions: %s\n", mName, day, flowCont.mCurrentStage->mFileName,
 		            playerState->mContainerFlag, playerState->mDisplayPikiFlag, describe(v).c_str());
 		const bool owned = plucks();
-		const CourseOnions* course = courseFor(flowCont.mCurrentStage->mFileName);
+		const CourseOnions* course = courseFor(flowCont.mCurrentStage->mFileName, mTree);
 		if (!course) {
 			fail(t, "Day 3 on a course whose Onion generators are known", "stage '%s'", flowCont.mCurrentStage->mFileName);
 			return;
