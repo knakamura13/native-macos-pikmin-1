@@ -22,7 +22,9 @@ result = {
     'rng_order': 'merged upstream #224; conflict arms explicitly resolved to upstream',
     'compiler': subprocess.check_output([compiler,'--version'],text=True),
     'session_seed': 0, 'rates': [30,60],
-    'input_source_sha256': {p:hashlib.sha256((root/p).read_bytes()).hexdigest() for p in paths},
+    # Git permits platform line endings; compare canonical text, retain raw bytes too.
+    'input_source_sha256': {p:hashlib.sha256((root/p).read_bytes().replace(b'\r\n',b'\n')).hexdigest() for p in paths},
+    'input_worktree_sha256': {p:hashlib.sha256((root/p).read_bytes()).hexdigest() for p in paths},
     'limitations': 'Fork harness and deterministic-float changes remain present; this is not a pure upstream gameplay build.',
 }
 output = build/'scenario-evidence'

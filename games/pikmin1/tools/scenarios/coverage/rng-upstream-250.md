@@ -6,7 +6,7 @@ The result includes the fork scenario runner, stand-in writers, deterministic-fl
 
 `.github/workflows/disc-free-scenarios.yml` builds that same branch revision on macOS Clang, Linux GCC and Windows MinGW-w64. Existing per-tick state-hash comparisons cover every generated stand-in scenario across OSes. The new throw timing comparison requires exactly one valid calibration and a successful scenario verdict at both 30 and 60 Hz, on all three OSes with native JAudio both off and on. It fails on missing logs, unequal K, failed scenarios, or missing session-seed evidence. Timing is compared per rate; 30 Hz and 60 Hz are not required to have the same K.
 
-Each scenario-hash artifact now contains throw-release stdout and build provenance as well as hashes. `record_rng_provenance.py` records the exact revision, upstream/harness bases, compiler, input/seed implementation source hashes, CMake cache and CTest command definitions. Session seed is pinned to zero by the scenario runner; reseed lines in retained logs show the resulting day/stage seed. The scripted inputs are in the hashed `scenario_throw_release.cpp`.
+Each scenario-hash artifact now contains throw-release stdout and build provenance as well as hashes. `record_rng_provenance.py` records the exact revision, upstream/harness bases, compiler, input/seed implementation source hashes (LF-normalized for cross-OS comparison, plus raw working-tree hashes), CMake cache and CTest command definitions. Session seed is pinned to zero by the scenario runner; reseed lines in retained logs show the resulting day/stage seed. The scripted inputs are in the hashed `scenario_throw_release.cpp`.
 
 Local comparator verification:
 
