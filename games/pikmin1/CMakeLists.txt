@@ -2524,6 +2524,7 @@ if(PIKMIN_BUILD_SCENARIOS)
         WORKING_DIRECTORY "${PIKMIN_STANDIN_DATA}"
         ENVIRONMENT "${PIKMIN_STANDIN_OBJECTS_ENV}"
         TIMEOUT 1200)
+    find_package(Python3 COMPONENTS Interpreter REQUIRED)
     add_test(NAME scenario_screenshot_verify_png_self
         COMMAND ${Python3_EXECUTABLE}
             ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/test_verify_scenario_png.py)
