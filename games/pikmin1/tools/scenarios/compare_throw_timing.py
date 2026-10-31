@@ -25,6 +25,14 @@ def collect(directory):
 def compare(sources):
     if len(sources) < 2:
         raise ValueError('at least two distinct sources are required')
+    metadata = {name: json.loads((pathlib.Path(directory).parent/'scenario-evidence'/'metadata.json').read_text())
+                for name, directory in sources.items()}
+    for key in ('revision', 'upstream_revision', 'harness_base_revision', 'session_seed', 'rates', 'input_source_sha256'):
+        encoded = [json.dumps(item[key], sort_keys=True) for item in metadata.values()]
+        if len(set(encoded)) != 1:
+            raise ValueError(f'provenance differs: {key}')
+    if next(iter(metadata.values()))['session_seed'] != 0:
+        raise ValueError('unexpected session seed')
     values = {name: collect(directory) for name, directory in sources.items()}
     for rate in ('30', '60'):
         if len({v[rate] for v in values.values()}) != 1:
@@ -44,7 +52,7 @@ def main():
         sources[name] = directory
     try:
         print(json.dumps(compare(sources), indent=2))
-    except (OSError, ValueError) as error:
+    except (OSError, ValueError, KeyError) as error:
         parser.exit(1, f'FAIL: {error}\n')
 
 

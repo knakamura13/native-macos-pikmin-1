@@ -1,3 +1,4 @@
+import json
 import pathlib
 import tempfile
 import unittest
@@ -8,9 +9,13 @@ class ComparisonTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
-        self.sources = {name: pathlib.Path(self.temp.name)/name for name in ('macOS','Linux','Windows')}
+        self.sources = {name: pathlib.Path(self.temp.name)/name/'scenario-logs' for name in ('macOS','Linux','Windows')}
         for directory in self.sources.values():
-            directory.mkdir()
+            directory.mkdir(parents=True)
+            evidence = directory.parent/'scenario-evidence'
+            evidence.mkdir()
+            (evidence/'metadata.json').write_text(json.dumps({'revision':'same','upstream_revision':'upstream',
+                'harness_base_revision':'harness','session_seed':0,'rates':[30,60],'input_source_sha256':{'input':'hash'}}))
             for rate, k in ((30,15),(60,18)):
                 (directory/f'scenario_throw_release_{rate}.log').write_text(
                     f'[netplay-det] reseed day=0 stage=0 sessionSeed=0 hash=0x123 tick=0\n'
@@ -41,6 +46,14 @@ class ComparisonTests(unittest.TestCase):
                 self.path().write_text(text)
                 with self.assertRaises(ValueError):
                     compare(self.sources)
+
+    def test_wrong_revision(self):
+        path = self.sources['Windows'].parent/'scenario-evidence'/'metadata.json'
+        data = json.loads(path.read_text())
+        data['revision'] = 'different'
+        path.write_text(json.dumps(data))
+        with self.assertRaisesRegex(ValueError,'provenance differs'):
+            compare(self.sources)
 
     def test_single_source(self):
         with self.assertRaisesRegex(ValueError,'two distinct'):

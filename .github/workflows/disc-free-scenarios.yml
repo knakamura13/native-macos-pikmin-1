@@ -62,6 +62,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
       - name: Install dependencies (macOS)
         if: runner.os == 'macOS'
@@ -242,6 +244,8 @@ jobs:
       CCACHE_NOHASHDIR: "true"
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
       - name: Install dependencies (macOS)
         if: runner.os == 'macOS'
@@ -379,21 +383,21 @@ jobs:
       - name: Require equal throw-release calibration at 30 and 60 Hz
         run: |
           python3 games/pikmin1/tools/scenarios/compare_throw_timing.py \
-            macOS=hash-logs/scenario-hash-logs-macOS \
-            Linux=hash-logs/scenario-hash-logs-Linux \
-            Windows=hash-logs/scenario-hash-logs-Windows \
-            macOS-jaudio=hash-logs/scenario-hash-logs-jaudio-macOS \
-            Linux-jaudio=hash-logs/scenario-hash-logs-jaudio-Linux \
-            Windows-jaudio=hash-logs/scenario-hash-logs-jaudio-Windows
+            macOS=hash-logs/scenario-hash-logs-macOS/scenario-logs \
+            Linux=hash-logs/scenario-hash-logs-Linux/scenario-logs \
+            Windows=hash-logs/scenario-hash-logs-Windows/scenario-logs \
+            macOS-jaudio=hash-logs/scenario-hash-logs-jaudio-macOS/scenario-logs \
+            Linux-jaudio=hash-logs/scenario-hash-logs-jaudio-Linux/scenario-logs \
+            Windows-jaudio=hash-logs/scenario-hash-logs-jaudio-Windows/scenario-logs
 
       - name: Compare (native JAudio off, every stand-in scenario)
         run: |
           echo "scenarios: ${{ needs.scenarios.result }}"
           python3 games/pikmin1/tools/scenarios/compare_hash_logs.py \
             --label "state-hash logs, native JAudio off" \
-            macOS=hash-logs/scenario-hash-logs-macOS \
-            Linux=hash-logs/scenario-hash-logs-Linux \
-            Windows=hash-logs/scenario-hash-logs-Windows
+            macOS=hash-logs/scenario-hash-logs-macOS/scenario-logs \
+            Linux=hash-logs/scenario-hash-logs-Linux/scenario-logs \
+            Windows=hash-logs/scenario-hash-logs-Windows/scenario-logs
 
       - name: Compare (native JAudio on)
         if: ${{ !cancelled() }}
@@ -401,9 +405,9 @@ jobs:
           echo "jaudio-scenarios: ${{ needs.jaudio-scenarios.result }}"
           python3 games/pikmin1/tools/scenarios/compare_hash_logs.py \
             --label "state-hash logs, native JAudio on" \
-            macOS=hash-logs/scenario-hash-logs-jaudio-macOS \
-            Linux=hash-logs/scenario-hash-logs-jaudio-Linux \
-            Windows=hash-logs/scenario-hash-logs-jaudio-Windows
+            macOS=hash-logs/scenario-hash-logs-jaudio-macOS/scenario-logs \
+            Linux=hash-logs/scenario-hash-logs-jaudio-Linux/scenario-logs \
+            Windows=hash-logs/scenario-hash-logs-jaudio-Windows/scenario-logs
 
       # The native audio engine must not touch the simulation: the JAudio-on
       # scenarios (boot_smoke, throw_release, day30_clock) equal the JAudio-off
@@ -413,12 +417,12 @@ jobs:
         run: |
           python3 games/pikmin1/tools/scenarios/compare_hash_logs.py --common-only \
             --label "state-hash logs, native JAudio on against off" \
-            macOS=hash-logs/scenario-hash-logs-macOS \
-            Linux=hash-logs/scenario-hash-logs-Linux \
-            Windows=hash-logs/scenario-hash-logs-Windows \
-            macOS-jaudio=hash-logs/scenario-hash-logs-jaudio-macOS \
-            Linux-jaudio=hash-logs/scenario-hash-logs-jaudio-Linux \
-            Windows-jaudio=hash-logs/scenario-hash-logs-jaudio-Windows
+            macOS=hash-logs/scenario-hash-logs-macOS/scenario-logs \
+            Linux=hash-logs/scenario-hash-logs-Linux/scenario-logs \
+            Windows=hash-logs/scenario-hash-logs-Windows/scenario-logs \
+            macOS-jaudio=hash-logs/scenario-hash-logs-jaudio-macOS/scenario-logs \
+            Linux-jaudio=hash-logs/scenario-hash-logs-jaudio-Linux/scenario-logs \
+            Windows-jaudio=hash-logs/scenario-hash-logs-jaudio-Windows/scenario-logs
 
 
   # Reports, per OS, whether a hidden-window GL context of the kind the game
