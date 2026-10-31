@@ -80,6 +80,7 @@ void pc_settings_scenario_set_infinite_day(int on);
 void pc_settings_scenario_set_whistle_pluck(int on);
 void pc_settings_scenario_set_no_day_advance(int on); ///< the "No Day Limit" cheat
 void pc_settings_scenario_set_hide_olimar_text(int on);
+void pc_settings_scenario_set_blues_only_water(int on);
 void pc_settings_scenario_set_window_size(int width, int height);
 void pc_settings_scenario_set_quick_grab(int on);
 void pc_settings_scenario_set_throw_speed_pct(int pct);

@@ -466,6 +466,9 @@ if (PIKMIN_BUILD_SCENARIOS)
         pc_port/scenarios/scenario_tutorial_firsts.cpp
         pc_port/scenarios/scenario_tutorial_day1.cpp
         pc_port/scenarios/scenario_title_boot.cpp
+        pc_port/scenarios/scenario_piki_hazard_deaths.cpp
+        pc_port/scenarios/scenario_piki_drown.cpp
+        pc_port/scenarios/scenario_piki_throw_water.cpp
         pc_port/scenarios/scenario_settings.cpp
         pc_port/scenarios/scenario_throw_release_mods.cpp
         pc_port/gl/pc_gfx_png_write.cpp)
@@ -2096,7 +2099,7 @@ if(PIKMIN_BUILD_SCENARIOS)
     # src/jaudio/pikiseq.c is the game's BARC table for SndData/Seqs/pikiseq.arc
     # (data only), compiled with this build's PIKMIN_GAME_VERSION so the
     # stand-in .arc matches the executable's layout (standin-audio.md).
-    add_executable(nectar_standin_generator tools/scenarios/standin_generator.cpp tools/scenarios/standin_objects_stage.cpp tools/scenarios/standin_all_objects_stage.cpp tools/scenarios/standin_practice_stage.cpp src/jaudio/pikiseq.c)
+    add_executable(nectar_standin_generator tools/scenarios/standin_generator.cpp tools/scenarios/standin_objects_stage.cpp tools/scenarios/standin_all_objects_stage.cpp tools/scenarios/standin_practice_stage.cpp tools/scenarios/standin_water_stage.cpp src/jaudio/pikiseq.c)
     # Source-level include path (every target here already has include/), so
     # the generator's own empty include list stays free of the game headers.
     set_source_files_properties(src/jaudio/pikiseq.c
@@ -2267,6 +2270,7 @@ if(PIKMIN_BUILD_SCENARIOS)
             # The tutorial stand-in stage (stages/practice.ini, stage id Practice at index 0,
             # tools/scenarios/standin_practice_stage.h): the tutorial-only milestones.
             tutorial_skip:practice:30,60 tutorial_firsts:practice:30,60 tutorial_day1:practice:30,60
+            piki_hazard_deaths:sandbox_objects:30,60 piki_drown:sandbox_water:30,60 piki_throw_water:sandbox_water:30,60
             hardmode_teki_life:sandbox_all_objects:30 hardmode_teki_life_off:sandbox_all_objects:30
             hardmode_boss_life:sandbox_all_objects:30 hardmode_boss_life_off:sandbox_all_objects:30
             hardmode_cheats:sandbox:30 settings_health_pct:sandbox:30 settings_health_pct_off:sandbox:30
@@ -2355,6 +2359,30 @@ if(PIKMIN_BUILD_SCENARIOS)
         FIXTURES_REQUIRED scenario_standin_tree
         ENVIRONMENT "${PIKMIN_STANDIN_ENV}"
         TIMEOUT 600)
+
+    set(PIKMIN_OBJECTS_ENV "PIKMIN_SCENARIO_DATA_DIR=${PIKMIN_STANDIN_DATA};PIKMIN_SCENARIO_STAGE=stages/sandbox_objects.ini")
+    set(PIKMIN_WATER_ENV "PIKMIN_SCENARIO_DATA_DIR=${PIKMIN_STANDIN_DATA};PIKMIN_SCENARIO_STAGE=stages/sandbox_water.ini")
+    add_test(NAME scenario_piki_hazard_fire_red_fail
+        COMMAND ${CMAKE_COMMAND} -DGAME=$<TARGET_FILE:${NECTAR_GAME}> -DSCENARIO=piki_hazard_fire_red_fail -DEXPECT=1
+            "-DEXPECT_OUTPUT=FAIL piki_hazard_fire_red_fail"
+            "-DFORBID_OUTPUT=\\[scenario\\] PASS"
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/check_scenario_exit.cmake)
+    set_tests_properties(scenario_piki_hazard_fire_red_fail PROPERTIES
+        FIXTURES_REQUIRED scenario_standin_tree ENVIRONMENT "${PIKMIN_OBJECTS_ENV}" TIMEOUT 600)
+    add_test(NAME scenario_piki_drown_blue_fail
+        COMMAND ${CMAKE_COMMAND} -DGAME=$<TARGET_FILE:${NECTAR_GAME}> -DSCENARIO=piki_drown_blue_fail -DEXPECT=1
+            "-DEXPECT_OUTPUT=FAIL piki_drown_blue_fail"
+            "-DFORBID_OUTPUT=\\[scenario\\] PASS"
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/check_scenario_exit.cmake)
+    set_tests_properties(scenario_piki_drown_blue_fail PROPERTIES
+        FIXTURES_REQUIRED scenario_standin_tree ENVIRONMENT "${PIKMIN_WATER_ENV}" TIMEOUT 600)
+    add_test(NAME scenario_piki_throw_water_red_survive_fail
+        COMMAND ${CMAKE_COMMAND} -DGAME=$<TARGET_FILE:${NECTAR_GAME}> -DSCENARIO=piki_throw_water_red_survive_fail -DEXPECT=1
+            "-DEXPECT_OUTPUT=FAIL piki_throw_water_red_survive_fail"
+            "-DFORBID_OUTPUT=\\[scenario\\] PASS"
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/check_scenario_exit.cmake)
+    set_tests_properties(scenario_piki_throw_water_red_survive_fail PROPERTIES
+        FIXTURES_REQUIRED scenario_standin_tree ENVIRONMENT "${PIKMIN_WATER_ENV}" TIMEOUT 600)
 
     # Replay determinism (EC-60): two runs, identical per-tick state hash logs.
     file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/scenario-determinism")

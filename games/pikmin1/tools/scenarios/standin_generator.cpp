@@ -38,6 +38,7 @@
 #include "standin_all_objects_stage.h"
 #include "standin_objects_stage.h"
 #include "standin_practice_stage.h"
+#include "standin_water_stage.h"
 
 #include <cstdint>
 #include <cstdio>
@@ -207,6 +208,11 @@ bool stagesIni(Tree& tree, std::string& error)
 	onions.name    = "sandbox_onions";
 	onions.file    = standin::kOnionsStageIni;
 	entries.push_back(onions);
+	nectar::StagesEntry water;
+	water.visible = false;
+	water.name    = "sandbox_water";
+	water.file    = standin::kWaterStageIni;
+	entries.push_back(water);
 
 	std::string text;
 	if (!nectar::writeStagesIni(entries, text, error)) return fail(error, "stages.ini: " + error);
@@ -460,6 +466,7 @@ bool buildTree(Tree& tree, std::string& error)
 	tree.clear();
 	return parmFiles(tree, error) && archives(tree, error) && stagesIni(tree, error) && sandboxMap(tree, error) && siblingStandIns(tree, error)
 	    && standInCinemas(tree, error) && audioStandIns(tree, error) && standin::addObjectsStage(tree, error) && standin::addAllObjectsStage(tree, error)
+	    && standin::addWaterStage(tree, error)
 	    && standin::addPracticeStage(tree, error);
 }
 

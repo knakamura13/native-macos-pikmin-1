@@ -162,8 +162,11 @@ Next tier: sprout pluck and counts (EC-29, needs only sandbox_objects), cliff th
 - `sprout_landing`: seed flying, bounce, bury, plant on a cliff (the sprout half of EC-29).
 - `onion_skip`: Onion discovery movie, seed count, movie skip (EC-36 partial).
 - `captain_damage`: captain non-lethal damage, Flick invincibility, DF29 and the lethal hit up to Dead (EC-14, EC-15).
+- `piki_hazard_deaths`: table-driven hazard injections on `sandbox_objects` (EC-22, EC-23, EC-24 partial, EC-25, EC-26, EC-27 bubble/wind/flown, EC-30).
+- `piki_drown`, `piki_throw_water`: water pond on `sandbox_water` (EC-20, EC-21, EC-41).
 - `boot_smoke`, `objects_smoke`: boot and object spawn only.
 - `extinction`, `extinction_day30`: extinction on Day 2 and Day 30 (EC-10, EC-12 for Day 30, EC-13 in part).
 - `captain_death`: Olimar down (EC-14).
 - `day_end`, `day_end_day29`: the sunset day end and `exitDayEnd` per colour (EC-18 in part); EC-16 cannot run on the stand-in stages (not story courses).
-- Nothing covers: caps, whistle/release, plate, hazards, drown, pellets, Onion absorb, pause overlay, determinism.
+- Nothing covers: caps, whistle/release, plate, pellets, Onion absorb, pause overlay, determinism.
+- Partial / new: hazard deaths and water scenarios above; drown on-foot (`realAI` timer) is exercised indirectly via thrown landing (same `bounceCallback` path as EC-41).
