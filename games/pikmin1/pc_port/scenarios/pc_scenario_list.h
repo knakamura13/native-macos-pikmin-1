@@ -64,5 +64,18 @@ PcScenario* pc_scenario_make_piki_drown(void);
 PcScenario* pc_scenario_make_piki_drown_blue_fail(void);
 PcScenario* pc_scenario_make_piki_throw_water(void);
 PcScenario* pc_scenario_make_piki_throw_water_red_survive_fail(void);
+PcScenario* pc_scenario_make_hardmode_teki_life(void);
+PcScenario* pc_scenario_make_hardmode_teki_life_off(void);
+PcScenario* pc_scenario_make_hardmode_boss_life(void);
+PcScenario* pc_scenario_make_hardmode_boss_life_off(void);
+PcScenario* pc_scenario_make_hardmode_cheats(void);
+PcScenario* pc_scenario_make_settings_health_pct(void);
+PcScenario* pc_scenario_make_settings_health_pct_off(void);
+PcScenario* pc_scenario_make_settings_invincible(void);
+PcScenario* pc_scenario_make_settings_invincible_off(void);
+PcScenario* pc_scenario_make_speedrun_cheats(void);
+PcScenario* pc_scenario_make_unlock_zones(void);
+PcScenario* pc_scenario_make_settings_menu_pause(void);
+PcScenario* pc_scenario_make_throw_release_quick_grab(void);
 
 #endif

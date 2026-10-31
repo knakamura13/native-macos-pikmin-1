@@ -37,6 +37,9 @@
 #include "../netplay/pc_netplay_present.h"
 #include "../netplay/pc_netplay_loadguard.h"
 #include "../pc_menu_click.h"
+#if PIKI_SCENARIOS
+#include "../scenarios/pc_scenario_screenshot.h"
+#endif
 
 // Netplay keep-alive (pc_netplay_loadguard.h): strong-defined by
 // pc_netplay_session.cpp in netplay builds only, null otherwise.
@@ -4654,6 +4657,25 @@ void pc_gfx_end_swap_framebuffer(unsigned int bound) {
     if (glBindFramebuffer_ptr) glBindFramebuffer_ptr(GL_FRAMEBUFFER, GLuint(bound));
 }
 
+#if PIKI_SCENARIOS
+#include "pc_gfx_png_write.h"
+
+bool pc_gfx_write_scene_png(const char* path, unsigned int sourceFramebuffer, int width, int height, int* outW, int* outH)
+{
+    if (path == nullptr || sourceFramebuffer == 0 || width <= 0 || height <= 0 || !glBindFramebuffer_ptr) return false;
+    std::vector<unsigned char> rgba(size_t(width) * height * 4);
+    glBindFramebuffer_ptr(GL_READ_FRAMEBUFFER, sourceFramebuffer);
+    glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, rgba.data());
+    const bool ok = pc_gfx_png_write_rgba_flip_y(path, width, height, rgba.data(), width * 4);
+    if (ok) {
+        if (outW) *outW = width;
+        if (outH) *outH = height;
+        std::printf("[scenario-screenshot] wrote %dx%d PNG to %s\n", width, height, path);
+    }
+    return ok;
+}
+#endif
+
 void pc_gfx_present(void) {
     if (pc_gfx_null_skip()) return;
     if (!sNullDoomedTextures.empty()) {
@@ -4714,6 +4736,11 @@ void pc_gfx_present(void) {
             }
         }
     }
+#if PIKI_SCENARIOS
+    if (sRenderWidth > 0 && sRenderHeight > 0) {
+        pc_scenario_screenshot_present_hook(static_cast<unsigned>(sourceFramebuffer), sRenderWidth, sRenderHeight);
+    }
+#endif
     // Tile-based GPUs write every attachment back to memory at the end of a
     // render pass unless told the contents are dead. Depth is: nothing reads
     // it after the post pass (the game clears it next frame). Colour dies

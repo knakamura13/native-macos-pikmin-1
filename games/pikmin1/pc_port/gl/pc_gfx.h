@@ -297,6 +297,13 @@ void pc_gfx_get_render_size(int* width, int* height);
  */
 void pc_gfx_set_min_render_size(int width, int height);
 
+#if PIKI_SCENARIOS
+// Writes the scene colour buffer (post-process output) to path. sourceFramebuffer
+// is the same target PIKMIN_FRAME_DUMP reads (finished frame before the window blit).
+bool pc_gfx_write_scene_png(const char* path, unsigned int sourceFramebuffer, int width, int height, int* outW,
+                            int* outH);
+#endif
+
 /**
  * @brief Peak use of the two fixed draw pools since the process started.
  *

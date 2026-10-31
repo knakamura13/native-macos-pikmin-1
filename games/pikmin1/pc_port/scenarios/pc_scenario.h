@@ -36,6 +36,10 @@ public:
 	// challenge path (gameflow.mIsChallengeMode, PlayerState::setChallengeMode) instead of
 	// forcing story mode (coverage/terminals.md T17, T18).
 	virtual bool challengeMode() const { return false; }
+	// Hard mode: pending flag is set before pc_hardmode_begin_new_run (coverage T22, EC-56).
+	virtual bool hardMode() const { return false; }
+	// Speedrun mode: pc_speedrun_set_active(true) before the stage (coverage T23).
+	virtual bool speedrunMode() const { return false; }
 	// Runs once when the stage is ready, before tick 0.
 	virtual void onStageReady() { }
 	// Fills pad 0 for this tick; pads 1-3 arrive neutral. Called every tick, before the sim.
@@ -85,6 +89,9 @@ public:
 // Returns -1 to continue booting (no --scenario), else the process exit code.
 int pc_scenario_parse_argv(int argc, char** argv);
 bool pc_scenario_active(void);
+// True during normal scenario sim ticks (after intro, before a verdict).
+bool pc_scenario_screenshot_frame_active(void);
+unsigned pc_scenario_sim_tick(void);
 // Exit code for pc_main to return once the game loop ends.
 int pc_scenario_exit_code(void);
 // Called by pc_main when the window or GL context failed: records exit 4 as the
@@ -94,6 +101,7 @@ void pc_scenario_on_no_gl(void);
 // Hooks in the boot path.
 void pc_scenario_pre_stage(void);      // OnePlayerSection, before NewPikiGameSection is built
 void pc_scenario_on_stage_ready(void); // after GameCoreSection::finalSetup
+void pc_scenario_on_tick_begin(void);  // System::run, before idle on each scenario sim tick
 void pc_scenario_on_tick_end(void);    // System::run, after every tick including boot
 // OnePlayerSection, case ONEPLAYER_MapSelect: true when a crossesDays() scenario
 // chose the next course itself (gameflow.mNextOnePlayerSectionID is then NewPikiGame).
@@ -127,6 +135,8 @@ void scenarioFailf(unsigned tick, const char* expected, const char* fmt, ...);
 void scenarioHandOff(void);
 // True once a --scenario-handoff run has handed the game to the player.
 bool pc_scenario_handed_off(void);
+// Scenario tick index during the sim (after intro, before on_tick_end increments).
+unsigned pc_scenario_sim_tick(void);
 // The disc's parms/key.bin bindings (throw A, cursor B, pluck A, attack A,
 // disband X, menu Y). The stand-in tree has no key.bin, and KeyConfig's code
 // defaults put pluck on B. Read from the disc 2026-10-28 (scenario_onion_unlock.cpp).

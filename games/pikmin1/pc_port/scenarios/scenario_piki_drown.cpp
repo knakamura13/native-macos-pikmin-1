@@ -143,11 +143,20 @@ public:
 				std::printf("[scenario] piki_drown: yellow in Drown tick %u\n", t);
 			}
 			if (mRescueArmed && mRescueDrownSeen && mYellow->isAlive() && mYellow->getState() != PIKISTATE_Drown && mYellow->getState() != PIKISTATE_Dying
-			    && mYellow->getState() != PIKISTATE_Dead && mYellow->mInWaterTimer == 0
-			    && (mYellow->mMode == PikiMode::FormationMode || mYellow->getState() == PIKISTATE_Emotion)) {
-				std::printf("[scenario] piki_drown: whistle rescue out of water state %d tick %u\n", mYellow->getState(), t);
-				mPhase = DropRed;
-				mPhaseTick = t;
+			    && mYellow->getState() != PIKISTATE_Dead && mYellow->mInWaterTimer == 0) {
+				if (mYellow->getState() == PIKISTATE_Emotion && !mRescueEmotionSeen) {
+					mRescueEmotionSeen = true;
+					mRescueEmotionTick = t;
+					std::printf("[scenario] piki_drown: yellow shake-dry Emotion tick %u\n", t);
+				}
+				if (mYellow->mMode == PikiMode::FormationMode) {
+					std::printf("[scenario] piki_drown: whistle rescue formation state %d tick %u\n", mYellow->getState(), t);
+					mPhase = DropRed;
+					mPhaseTick = t;
+				} else if (mRescueEmotionSeen && t - mRescueEmotionTick > 20 * rate) {
+					scenarioFailf(t, "whistle rescue returns to FormationMode after Emotion within 20 s", "state %d mode %d", mYellow->getState(),
+					              (int)mYellow->mMode);
+				}
 			} else if (mRescueArmed && t - mRescueTick > 45 * rate) {
 				scenarioFailf(t, "whistle rescue leaves Drown within 45 s", "state %d inWaterTimer %d drown seen %d", mYellow->getState(), mYellow->mInWaterTimer,
 				              (int)mRescueDrownSeen);
@@ -187,7 +196,8 @@ private:
 	unsigned mPhaseTick = 0, mRescueTick = 0;
 	Navi* mNavi = nullptr;
 	Piki *mRed = nullptr, *mBlue = nullptr, *mYellow = nullptr;
-	bool mRescueArmed = false, mRescueDrownSeen = false;
+	bool mRescueArmed = false, mRescueDrownSeen = false, mRescueEmotionSeen = false;
+	unsigned mRescueEmotionTick = 0;
 	int mWhistleTicks = 0;
 };
 

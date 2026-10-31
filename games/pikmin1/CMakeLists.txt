@@ -434,6 +434,7 @@ endif()
 if (PIKMIN_BUILD_SCENARIOS)
     list(APPEND PC_PORT_SOURCES
         pc_port/scenarios/pc_scenario.cpp
+        pc_port/scenarios/pc_scenario_screenshot.cpp
         pc_port/scenarios/pc_scenario_list.cpp
         pc_port/scenarios/scenario_boot_smoke.cpp
         pc_port/scenarios/scenario_throw_release.cpp
@@ -466,7 +467,10 @@ if (PIKMIN_BUILD_SCENARIOS)
         pc_port/scenarios/scenario_title_boot.cpp
         pc_port/scenarios/scenario_piki_hazard_deaths.cpp
         pc_port/scenarios/scenario_piki_drown.cpp
-        pc_port/scenarios/scenario_piki_throw_water.cpp)
+        pc_port/scenarios/scenario_piki_throw_water.cpp
+        pc_port/scenarios/scenario_settings.cpp
+        pc_port/scenarios/scenario_throw_release_mods.cpp
+        pc_port/gl/pc_gfx_png_write.cpp)
 endif()
 
 include_directories(
@@ -2231,7 +2235,13 @@ if(PIKMIN_BUILD_SCENARIOS)
             # The tutorial stand-in stage (stages/practice.ini, stage id Practice at index 0,
             # tools/scenarios/standin_practice_stage.h): the tutorial-only milestones.
             tutorial_skip:practice:30,60 tutorial_firsts:practice:30,60 tutorial_day1:practice:30,60
-            piki_hazard_deaths:sandbox_objects:30,60 piki_drown:sandbox_water:30,60 piki_throw_water:sandbox_water:30,60)
+            piki_hazard_deaths:sandbox_objects:30,60 piki_drown:sandbox_water:30,60 piki_throw_water:sandbox_water:30,60
+            hardmode_teki_life:sandbox_all_objects:30 hardmode_teki_life_off:sandbox_all_objects:30
+            hardmode_boss_life:sandbox_all_objects:30 hardmode_boss_life_off:sandbox_all_objects:30
+            hardmode_cheats:sandbox:30 settings_health_pct:sandbox:30 settings_health_pct_off:sandbox:30
+            settings_invincible:sandbox:30 settings_invincible_off:sandbox:30 speedrun_cheats:sandbox:30
+            unlock_zones:sandbox:30 settings_menu_pause:sandbox:30
+            throw_release_quick_grab:sandbox:30,60)
         string(REPLACE ":" ";" parts "${entry}")
         list(GET parts 0 scenario)
         list(GET parts 1 stage)
@@ -2372,6 +2382,18 @@ if(PIKMIN_BUILD_SCENARIOS)
         ENVIRONMENT "${PIKMIN_STANDIN_ENV}"
         TIMEOUT 1200)
 
+    add_test(NAME scenario_input_replay_boot_smoke_30
+        COMMAND ${CMAKE_COMMAND}
+            -DGAME=$<TARGET_FILE:${NECTAR_GAME}>
+            -DSCENARIO=boot_smoke -DRATE=30
+            -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/scenario-input-replay
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/check_scenario_input_replay.cmake)
+    set_tests_properties(scenario_input_replay_boot_smoke_30 PROPERTIES
+        FIXTURES_REQUIRED scenario_standin_tree
+        WORKING_DIRECTORY "${PIKMIN_STANDIN_DATA}"
+        ENVIRONMENT "${PIKMIN_STANDIN_ENV}"
+        TIMEOUT 1200)
+
     # Hand-off (issue #76) and co-op scenarios (tools/scenarios/README.md).
     # first_yellow's scripted part, headless: its hand-off point is a pass.
     # coop_smoke and coop_look: two captains in split screen on the sandbox.
@@ -2431,6 +2453,27 @@ if(PIKMIN_BUILD_SCENARIOS)
         FIXTURES_REQUIRED scenario_standin_tree
         WORKING_DIRECTORY "${PIKMIN_STANDIN_DATA}"
         ENVIRONMENT "${PIKMIN_STANDIN_OBJECTS_ENV}"
+        TIMEOUT 1200)
+    add_test(NAME scenario_screenshot_boot_smoke_30
+        COMMAND ${CMAKE_COMMAND}
+            -DGAME=$<TARGET_FILE:${NECTAR_GAME}>
+            -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/scenario-screenshots/boot_smoke_30
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/check_scenario_screenshot.cmake)
+    set_tests_properties(scenario_screenshot_boot_smoke_30 PROPERTIES
+        FIXTURES_REQUIRED scenario_standin_tree
+        WORKING_DIRECTORY "${PIKMIN_STANDIN_DATA}"
+        ENVIRONMENT "${PIKMIN_STANDIN_ENV}"
+        TIMEOUT 600)
+    add_test(NAME scenario_screenshot_hash_boot_smoke_30
+        COMMAND ${CMAKE_COMMAND}
+            -DGAME=$<TARGET_FILE:${NECTAR_GAME}>
+            -DSCENARIO=boot_smoke -DRATE=30
+            -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/scenario-screenshots/hash_boot_smoke_30
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/check_scenario_screenshot_hash.cmake)
+    set_tests_properties(scenario_screenshot_hash_boot_smoke_30 PROPERTIES
+        FIXTURES_REQUIRED scenario_standin_tree
+        WORKING_DIRECTORY "${PIKMIN_STANDIN_DATA}"
+        ENVIRONMENT "${PIKMIN_STANDIN_ENV}"
         TIMEOUT 1200)
     # --scenario-handoff with a scenario that has no hand-off point exits 2.
     add_test(NAME scenario_exit_handoff_unsupported
