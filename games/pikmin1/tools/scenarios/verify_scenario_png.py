@@ -126,6 +126,74 @@ def rgb_variance(pixels: list[tuple[int, int, int]]) -> float:
     return sum((v - mean) ** 2 for v in vals) / len(vals)
 
 
+def near_black_ratio(pixels: list[tuple[int, int, int]], *, threshold: int = 15) -> float:
+    if not pixels:
+        return 1.0
+    dark = sum(1 for r, g, b in pixels if r < threshold and g < threshold and b < threshold)
+    return dark / len(pixels)
+
+
+def is_grass_pixel(r: int, g: int, b: int) -> bool:
+    return g > 70 and g > r + 8 and g > b + 8 and r < 130
+
+
+def showcase_composition_stats(
+    width: int,
+    height: int,
+    pixels: list[tuple[int, int, int]],
+    *,
+    world_y_max: int = 400,
+) -> tuple[float, int, int]:
+    """Return (world near-black ratio, center non-grass count, center distinct colours)."""
+    world: list[tuple[int, int, int]] = []
+    for y in range(min(world_y_max, height)):
+        for x in range(width):
+            world.append(pixels[y * width + x])
+    world_dark = near_black_ratio(world)
+
+    cx0, cx1 = width // 4, (3 * width) // 4
+    cy0, cy1 = height // 5, (2 * height) // 3
+    center: list[tuple[int, int, int]] = []
+    for y in range(cy0, cy1):
+        for x in range(cx0, cx1):
+            center.append(pixels[y * width + x])
+    non_grass = 0
+    for r, g, b in center:
+        if r < 15 and g < 15 and b < 15:
+            continue
+        if is_grass_pixel(r, g, b):
+            continue
+        non_grass += 1
+    return world_dark, non_grass, len(set(center))
+
+
+def verify_showcase_composition(
+    width: int,
+    height: int,
+    pixels: list[tuple[int, int, int]],
+    *,
+    max_near_black_ratio: float,
+    min_center_non_grass: int,
+    min_center_distinct: int,
+) -> tuple[bool, str]:
+    world_dark, non_grass, distinct_c = showcase_composition_stats(width, height, pixels)
+    if world_dark > max_near_black_ratio:
+        return (
+            False,
+            f"world band (y<{400}) is {world_dark * 100:.1f}% near-black (max {max_near_black_ratio * 100:.1f}%)",
+        )
+    if non_grass < min_center_non_grass:
+        return (
+            False,
+            f"center has {non_grass} non-grass pixels (need >= {min_center_non_grass})",
+        )
+    if distinct_c < min_center_distinct:
+        return (
+            False,
+            f"center has {distinct_c} distinct colours (need >= {min_center_distinct})",
+        )
+    return True, f"showcase composition ok (world dark {world_dark * 100:.1f}%, center non-grass {non_grass})"
+
 def compare_golden(
     golden: list[tuple[int, int, int]],
     actual: list[tuple[int, int, int]],
@@ -188,6 +256,24 @@ def main() -> int:
         default=0.02,
         help="max fraction of pixels that may exceed --golden-tolerance",
     )
+    p.add_argument(
+        "--max-near-black-ratio",
+        type=float,
+        default=-1.0,
+        help="standin_showcase guard: fail if more than this fraction of world-band pixels are near-black",
+    )
+    p.add_argument(
+        "--min-center-non-grass",
+        type=int,
+        default=0,
+        help="standin_showcase guard: min non-grass pixels in the central region",
+    )
+    p.add_argument(
+        "--min-center-distinct",
+        type=int,
+        default=0,
+        help="standin_showcase guard: min distinct colours in the central region",
+    )
     args = p.parse_args()
     import os
 
@@ -227,6 +313,20 @@ def main() -> int:
                 file=sys.stderr,
             )
             return 1
+    if args.max_near_black_ratio >= 0.0 or args.min_center_non_grass > 0 or args.min_center_distinct > 0:
+        ok, msg = verify_showcase_composition(
+            w,
+            h,
+            pixels,
+            max_near_black_ratio=args.max_near_black_ratio if args.max_near_black_ratio >= 0.0 else 1.0,
+            min_center_non_grass=args.min_center_non_grass,
+            min_center_distinct=args.min_center_distinct,
+        )
+        if not ok:
+            print(f"showcase composition failed: {msg}", file=sys.stderr)
+            return 1
+        if args.max_near_black_ratio >= 0.0:
+            print(msg)
     if args.golden:
         try:
             gw, gh, gpixels = read_png_rgb(args.golden)
