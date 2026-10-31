@@ -13,8 +13,12 @@ set(pos_png "${WORK_DIR}/boot_smoke_t100.png")
 set(neg_png "${WORK_DIR}/never_t99999.png")
 file(MAKE_DIRECTORY "${WORK_DIR}")
 
+# Run at 640x480 for the whole scenario. A mid-tick resize from the default 64x36
+# window enlarges the native FBO on the capture tick but headless CI (llvmpipe /
+# Apple GL) often read back a cleared 640x480 target (~12 distinct colours).
 execute_process(
-    COMMAND "${GAME}" --scenario boot_smoke --scenario-tick-rate 30
+    COMMAND ${CMAKE_COMMAND} -E env PIKMIN_SCENARIO_WINDOW=640x480
+        "${GAME}" --scenario boot_smoke --scenario-tick-rate 30
         --scenario-screenshot "100:${pos_png}"
         --scenario-screenshot "99999:${neg_png}"
     OUTPUT_VARIABLE out

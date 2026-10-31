@@ -2534,6 +2534,7 @@ if(PIKMIN_BUILD_SCENARIOS)
         FIXTURES_REQUIRED scenario_standin_tree
         WORKING_DIRECTORY "${PIKMIN_STANDIN_DATA}"
         ENVIRONMENT "${PIKMIN_STANDIN_ENV}"
+        RUN_SERIAL TRUE
         TIMEOUT 600)
     add_test(NAME scenario_screenshot_hash_boot_smoke_30
         COMMAND ${CMAKE_COMMAND}

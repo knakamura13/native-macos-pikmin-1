@@ -54,6 +54,10 @@ void applyWindowSize(int w, int h)
 	pc_settings_scenario_set_window_size(w, h);
 	pc_window_set_window_size(w, h);
 	pc_gfx_set_render_resolution(w, h);
+	// SDL may not apply the new drawable size until events are processed; without
+	// this, a capture-tick resize can leave the presentation pass drawing at the
+	// old 64x36 mapping while readback uses the enlarged (empty) FBO.
+	pc_window_poll_events(nullptr);
 }
 
 void beginCaptureWindow()
