@@ -278,6 +278,23 @@ tree. Re-measured 2026-10-28 on this tree: stand-in 15 / 18, disc 15 / 18:
 | Disc (Forest of Hope) | 15, 15, 15 | 18, 18, 18 |
 | Stand-ins, gate 36 degrees at z -197, 210-unit panel | 15, 15, 15 | 18, 18, 18 |
 
+### Re-fit for GameCube RNG draw order (#92, 2026-10-31)
+
+Pinning Metrowerks' last-argument-first draw order at the eight two-RNG sites
+(`fix/rng): draw the eight random-draw sites in the original GameCube order`)
+moves disc `throw_release` K from 15 / 18 to **13 / 22** at 30 / 60 Hz (Forest
+of Hope, particle draws on the cosmetic stream). Stand-ins were **15 / 30** with
+the old gate layout under the new order, so the sandbox gate was searched again
+(turn, position, panel width and depth). The committed layout is 42 degrees,
+z -207, x -31.5, panel half-width 111 (222 units), half-depth 8. RelWithDebInfo,
+Linux x86-64, three runs per cell: stand-in **13, 13, 13 / 22, 22, 22**; disc
+not re-run here (no ISO in CI).
+
+| Tree | 30 Hz | 60 Hz |
+|---|---|---|
+| Disc (Forest of Hope, GC draw order, issue #92) | 13 | 22 |
+| Stand-ins, gate 42° at z -207, 222-unit panel (committed) | 13, 13, 13 | 22, 22, 22 |
+
 ### Limits
 
 - The exact match depends on the chosen layout: at 30 Hz its neighbours stay

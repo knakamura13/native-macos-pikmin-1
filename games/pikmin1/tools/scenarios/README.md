@@ -223,7 +223,7 @@ code or timing the 30 Hz run does not. The disc entries keep `boot_smoke`,
 | Scenario | Rates | Why |
 |----------|-------|-----|
 | `boot_smoke` | 30, 60 | The rate is boot configuration (`fpsMode`, the tick length); each rate must boot and run. |
-| `throw_release` | 30, 60 | K and the release timings are tick arithmetic and differ per rate (15 and 18). |
+| `throw_release` | 30, 60 | K and the release timings are tick arithmetic and differ per rate (13 and 22 after #92's GameCube RNG order; 15 and 18 before). |
 | `day30_clock` | 30, 60 | The clock moves by one frame time per tick, so the hold and the sunset arithmetic differ per rate. |
 | `extinction` | 30, 60 | The captain's PikiZero countdown is 30 ticks at either rate, but a movie advances half a frame per tick at 60 Hz (the 60-frame stand-ins take 58 and 115 ticks against about 61 and 121), so the bounds in seconds and the run-once check run at both. |
 | `captain_death` | 30, 60 | Bounds are in seconds and tick counts differ (`Dead` at tick 128 and 247, the results screen about 11 s later at both); the clock and the movie advance per tick. |
@@ -519,7 +519,8 @@ expected without FMA. With the option ON the generator writes byte-identical
 trees on both (by default `sandbox_objects.mod` and `sandbox_all_objects.mod`
 differed), and the hash logs of all 18 stand-in scenario entries, the object
 stages included, are byte-identical on the two; all 19 stand-in entries pass on
-both. K is 15 at 30 Hz and 18 at 60 Hz in every build, on the stand-in tree
+both. K is 13 at 30 Hz and 22 at 60 Hz after #92 (GameCube RNG draw order and stand-in
+gate re-fit), on the stand-in tree
 and on a real install.
 
 On a real install (RelWithDebInfo, option ON), the six disc runs give the same
