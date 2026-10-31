@@ -1569,7 +1569,10 @@ if(PIKMIN_BUILD_TESTS)
         ${NECTAR_ASSETS_DIR}/src/parms.cpp
         ${NECTAR_ASSETS_DIR}/src/bundle.cpp
         ${NECTAR_ASSETS_DIR}/src/mod_writer.cpp
+        ${NECTAR_ASSETS_DIR}/src/mesh_mod.cpp
         ${NECTAR_ASSETS_DIR}/src/standin_models.cpp
+        ${NECTAR_ASSETS_DIR}/src/standin_art.cpp
+        ${NECTAR_ASSETS_DIR}/src/texture.cpp
         ${NECTAR_ASSETS_DIR}/src/mod.cpp
         ${NECTAR_ASSETS_DIR}/src/image.cpp
         ${PC_PORT_DIR}/launcher/bti_decode.cpp
@@ -1639,7 +1642,10 @@ if(PIKMIN_BUILD_TESTS)
         ${NECTAR_ASSETS_DIR}/src/parms.cpp
         ${NECTAR_ASSETS_DIR}/src/bundle.cpp
         ${NECTAR_ASSETS_DIR}/src/mod_writer.cpp
+        ${NECTAR_ASSETS_DIR}/src/mesh_mod.cpp
         ${NECTAR_ASSETS_DIR}/src/standin_models.cpp
+        ${NECTAR_ASSETS_DIR}/src/standin_art.cpp
+        ${NECTAR_ASSETS_DIR}/src/texture.cpp
         ${NECTAR_ASSETS_DIR}/src/mod.cpp
         ${NECTAR_ASSETS_DIR}/src/image.cpp
         ${PC_PORT_DIR}/launcher/bti_decode.cpp
