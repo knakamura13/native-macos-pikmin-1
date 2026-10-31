@@ -1,5 +1,5 @@
 // demo_timers: the demo flags the game sets from a timer or a stage rule rather than from a place
-// (coverage/milestones.md DF07, DF09, DF16; coverage/edge-cases.md EC-36), on the tutorial stand-in
+// (coverage/milestones.md DF07, DF09, DF16, PL3; coverage/edge-cases.md EC-36), on the tutorial stand-in
 // stage stages/practice.ini (its demo radii and timers are the disc's parms/demo.bin: seed radius
 // 25, seed wait 40 s; demoParms _30, the pluck timer, keeps its 30 s code default).
 //
@@ -22,14 +22,17 @@
 //         in turn: the captain does not move, nothing is thrown or plucked, no Pikmin joins and the
 //         movie keeps playing. A then ends it on the same tick (the port's pcSkipCutsceneOnStart,
 //         START or A). After the movie the same stick moves him within 1 s (the control).
-// Every phase adds exactly its own demo flags.
+// Every phase adds exactly its own demo flags. PL3: playerState->mTotalPluckedPikiCount (the
+// attention camera's counter, NaviNukuState::cleanup) is unchanged through DF03 and DF07, one up
+// by DF09 (after DF04's pluck) and still one up at the end (no pluck in EC-36's movie).
 //
 // Not covered: the movies of DF07, DF09 and DF16 (demo08, demo13, demo44) are not stand-ins
 // (zero-length, allowlisted), so their contents are not; DF09's other two triggers (Pellet::startPick,
 // ActAttack::init) and the reset when the flag is set some other way first (DemoFlags::update's
 // isFlag branch).
 //
-// Negative controls: the "not before" half of DF07 and DF09, and DF16's tutorial and Cave halves.
+// Negative controls: the "not before" half of DF07 and DF09, PL3's unchanged count before the
+// pluck, and DF16's tutorial and Cave halves.
 // Manual (2026-10-31, local, not committed): with DF07's bound lowered to 38 s the run fails at
 // tick 1356 ("DF07, observed flag 7 clear after 39.03 s (timer 0.97 s left)").
 #include "scenarios/pc_scenario_list.h"
@@ -87,7 +90,8 @@ public:
 				return;
 			}
 		}
-		mFlags = demoFlags();
+		mFlags   = demoFlags();
+		mPlucked = playerState->mTotalPluckedPikiCount;
 	}
 
 	void providePads(unsigned t, PcInputPad& pad) override
@@ -162,12 +166,17 @@ public:
 					     (int)mSeed->isAlive(), (int)pikiMgr->getSize());
 					return;
 				}
+				if (playerState->mTotalPluckedPikiCount != mPlucked) {
+					fail(t, "PL3: no pluck, no count", "mTotalPluckedPikiCount %d -> %d", mPlucked, playerState->mTotalPluckedPikiCount);
+					return;
+				}
 				enter(Pluck, t);
 			}
 			return;
 		case Pluck:
 			if (df.isFlag(DEMOFLAG_PluckRedPikmin)) {
 				if (!onlyNew({ DEMOFLAG_PluckRedPikmin }, t, "DF04")) return;
+
 				if (df.mCurrentDemoIndex != DEMOFLAG_Unk9 || df.mWaitTimer > kDf09Seconds || df.mWaitTimer < kDf09Seconds - 0.1f) {
 					fail(t, "DF04 arms Unk9 with 30 s", "index %d, %.3f s", (int)df.mCurrentDemoIndex, df.mWaitTimer);
 					return;
@@ -184,6 +193,13 @@ public:
 					fail(t, "DF09 from its own timer", "index %d", (int)df.mCurrentDemoIndex);
 					return;
 				}
+				// Counted when the captain's pluck state ends (NaviNukuState::cleanup),
+				// after the Pikmin's own cleanup sets DF04: checked here, 30 s on.
+				if (playerState->mTotalPluckedPikiCount != mPlucked + 1) {
+					fail(t, "PL3: the pluck adds one to mTotalPluckedPikiCount", "%d -> %d", mPlucked, playerState->mTotalPluckedPikiCount);
+					return;
+				}
+				std::printf("[scenario] demo_timers: PL3: mTotalPluckedPikiCount %d -> %d\n", mPlucked, playerState->mTotalPluckedPikiCount);
 				enter(Settle, t);
 			}
 			return;
@@ -262,6 +278,10 @@ public:
 				}
 				if (flatDistance(navi->mSRT.t, mPos) > 5.0f) {
 					std::printf("[scenario] demo_timers: the stick moves the captain %u ticks after he is back in Walk\n", t - mWalkTick);
+					if (playerState->mTotalPluckedPikiCount != mPlucked + 1) {
+						fail(t, "PL3: one pluck in the run, so the count is one up at the end", "%d -> %d", mPlucked, playerState->mTotalPluckedPikiCount);
+						return;
+					}
 					mPhase = Done;
 					scenarioPass();
 				} else if (t - mWalkTick > mRate) {
@@ -326,7 +346,7 @@ private:
 
 	Phase mPhase        = Plant;
 	unsigned mRate      = 30, mPhaseTick = 0, mMovieTicks = 0, mWalkTick = 0;
-	int mStageId        = -1, mPikis = 0, mFormed = 0;
+	int mStageId        = -1, mPikis = 0, mFormed = 0, mPlucked = 0;
 	GoalItem* mOnion    = nullptr;
 	Pellet* mEngine     = nullptr;
 	PikiHeadItem* mSeed = nullptr;
