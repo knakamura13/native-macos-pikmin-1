@@ -8,9 +8,9 @@
 //  2. ULP report: each float entry point is evaluated on a dense
 //     deterministic grid over its game domain plus edge cases, against
 //     the platform libm. The reference is loaded explicitly (msvcrt.dll
-//     on Windows, libm on POSIX) so it is never shadowed by our strong
-//     definitions. mingw float funcs are (float) of a correctly-rounded
-//     double (verified: 0 ulp vs (float)msvcrt-double on 400k grids), so
+//     on Windows, libm.so on Linux, libSystem.B.dylib on macOS) so it is never
+//     shadowed by our strong definitions. mingw float funcs are (float) of a
+//     correctly-rounded double (verified: 0 ulp vs (float)msvcrt-double on 400k grids), so
 //     the msvcrt reference is a valid proxy for "the mingw libm".
 //     Game-domain bound: max <= 1 ulp. Huge trig args
 //     (|x| > 2.8e16, i.e. past the double-double-2pi range) are checksum-only.
@@ -78,29 +78,39 @@ Ref loadRef()
 	r.ok = r.sin && r.cos && r.tan && r.asin && r.acos && r.atan && r.exp && r.log && r.log10
 	    && r.sqrt && r.atan2 && r.pow && r.fmod && r.hypot;
 #else
-	void *m = dlopen("libm.so.6", RTLD_NOW);
-	if (!m)
-		m = dlopen("libm.so", RTLD_NOW);
-	if (!m)
-		return r;
+	auto loadFrom = [&](void *m) {
+		if (!m)
+			return;
 #define LOAD1(f) r.f = reinterpret_cast<Df1>(dlsym(m, #f))
 #define LOAD2(f) r.f = reinterpret_cast<Df2>(dlsym(m, #f))
-	LOAD1(sin);
-	LOAD1(cos);
-	LOAD1(tan);
-	LOAD1(asin);
-	LOAD1(acos);
-	LOAD1(atan);
-	LOAD1(exp);
-	LOAD1(log);
-	LOAD1(log10);
-	LOAD1(sqrt);
-	LOAD2(atan2);
-	LOAD2(pow);
-	LOAD2(fmod);
-	LOAD2(hypot);
+		LOAD1(sin);
+		LOAD1(cos);
+		LOAD1(tan);
+		LOAD1(asin);
+		LOAD1(acos);
+		LOAD1(atan);
+		LOAD1(exp);
+		LOAD1(log);
+		LOAD1(log10);
+		LOAD1(sqrt);
+		LOAD2(atan2);
+		LOAD2(pow);
+		LOAD2(fmod);
+		LOAD2(hypot);
 #undef LOAD1
 #undef LOAD2
+	};
+	void *m = nullptr;
+#if defined(__APPLE__)
+	// Math lives in libSystem, not a separate libm.so.
+	m = dlopen("/usr/lib/libSystem.B.dylib", RTLD_NOW);
+	loadFrom(m);
+#else
+	m = dlopen("libm.so.6", RTLD_NOW);
+	if (!m)
+		m = dlopen("libm.so", RTLD_NOW);
+	loadFrom(m);
+#endif
 	r.ok = r.sin && r.cos && r.tan && r.asin && r.acos && r.atan && r.exp && r.log && r.log10
 	    && r.sqrt && r.atan2 && r.pow && r.fmod && r.hypot;
 #endif
