@@ -1,5 +1,5 @@
 // pikmin_cap, pikmin_cap_1, pikmin_cap_250, pikmin_cap_999: the field Pikmin limit (coverage/milestones.md ON6,
-// DF21-DF25; coverage/edge-cases.md EC-01, EC-02, EC-04, EC-38, EC-57), on the object stage
+// DF17, DF21-DF25; coverage/edge-cases.md EC-01, EC-02, EC-04, EC-38, EC-57), on the object stage
 // (stages/sandbox_objects.ini) with its blue Onion. pikmin_cap runs the default limit (no
 // override: the GameCube's 100); the others set the port's limit before the stage build
 // (PcScenario::pikiLimit, pc_settings_scenario_set_piki_limit).
@@ -24,6 +24,10 @@
 //           stage + 21 sets (DEMOFLAG_PikminLimitOffset) and TUT_Limit100 opens. The stage id is
 //           set to each story stage in turn (0..4, DF21-DF25) for the call, as ship_parts does;
 //           a second seed at the limit on stage 0 sets no flag and opens no text.
+//
+//   DF17    At the stage start (GameCoreSection::finalSetup) PostExtinctionSeed is set when an owned
+//           colour has no Pikmin: in pikmin_cap_1 only (the red Onion, no red sprout), clear in the
+//           others (the negative control).
 //
 // pikmin_cap_1 (EC-57): the sprout pool holds one, so the stage generator builds one of its three
 // sprouts and the field starts at the limit; there is no Seed phase and the stage sprout is the one
@@ -110,6 +114,24 @@ public:
 				fail(0, "a new game with flags 21-25 clear", "flag %d set", s + DEMOFLAG_PikminLimitOffset);
 				return;
 			}
+		}
+		// DF17: GameCoreSection::finalSetup sets PostExtinctionSeed when a colour the player has the Onion
+		// of has no Pikmin anywhere. A new game has the red Onion; the stage's sprouts are one of each
+		// colour, so only a sprout pool under three (limit 1: the blue one alone) leaves red at none.
+		bool extinct = false;
+		for (int c = Blue; c <= Yellow; c++) extinct = extinct || (GameStat::allPikis[c] == 0 && playerState->hasContainer(c));
+		const bool wantExtinct = mLimit < 3;
+		std::printf("[scenario] %s: DF17: Pikmin B%d R%d Y%d, Onions B%d R%d Y%d, flag 17 %d, extinction played %d\n", mName, (int)GameStat::allPikis[Blue],
+		            (int)GameStat::allPikis[Red], (int)GameStat::allPikis[Yellow], (int)playerState->hasContainer(Blue), (int)playerState->hasContainer(Red),
+		            (int)playerState->hasContainer(Yellow), (int)playerState->mDemoFlags.isFlag(DEMOFLAG_PostExtinctionSeed),
+		            (int)playerState->mHasExtinctionDemoPlayed);
+		if (extinct != wantExtinct || playerState->mDemoFlags.isFlag(DEMOFLAG_PostExtinctionSeed) != wantExtinct
+		    || playerState->mHasExtinctionDemoPlayed != wantExtinct) {
+			fail(0, wantExtinct ? "DF17: an owned colour with no Pikmin sets PostExtinctionSeed at the stage start"
+			                    : "DF17 control: every owned colour has a Pikmin, PostExtinctionSeed clear",
+			     "extinct %d, flag 17 %d, played %d", (int)extinct, (int)playerState->mDemoFlags.isFlag(DEMOFLAG_PostExtinctionSeed),
+			     (int)playerState->mHasExtinctionDemoPlayed);
+			return;
 		}
 		mTexts0 = pc_scenario_text_windows_opened(nullptr);
 		if (mLimit <= mStart) {
