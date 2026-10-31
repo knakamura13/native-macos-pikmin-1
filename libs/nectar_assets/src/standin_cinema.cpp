@@ -324,6 +324,28 @@ std::vector<Movie> movies()
 		list.push_back(m);
 	}
 
+	// The Whimsical Radar reaching the ship (DEMOID_CollectRadar, demo78): MoviePlayer::startMovie
+	// swaps DEMOID_CollectPart for it whenever the part is uf01, on every stage. Used by
+	// ship_part_carry. Same shape as demo20: a cut played once with the TextDemo TUT_GetParts key,
+	// then a 2-frame loop that the window's close ends (GameMovieInterface::parse skips the scene).
+	// With a part id and the ship text type PartCollect the key opens the part's "get" text
+	// (TUT_PartsGetOffset + the part index). The disc's demo78 was not read; lengths are invented.
+	{
+		Movie m;
+		m.cin           = "dataDir/cinemas/demo78.cin";
+		m.cinema.flags  = hideNavi;
+		m.cinema.scenes = { "cinemas/demo78/dm_78.dsk" };
+		m.sceneFrames   = { 122 };
+		CinCut once, loop;
+		once.endFrame   = 120;
+		once.keys       = { notify(kMovieCmdTextDemo, kTutGetParts, 118) };
+		loop.startFrame = 120;
+		loop.endFrame   = 122;
+		loop.flags      = kCutLoop;
+		m.cinema.cuts   = { once, loop };
+		list.push_back(m);
+	}
+
 	// The ship's first upgrade on the Impact Site (DEMOID_ShipUpgradePractice, demo17,
 	// movie17table's Impact Site entry), which PlayerState::preloadHenkaMovie queues
 	// when the Main Engine reaches the ship (PelletGoalState::init). It is what ends
