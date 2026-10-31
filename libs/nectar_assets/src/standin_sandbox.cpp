@@ -21,9 +21,9 @@ namespace {
 // wall) was chosen with the placement below: a wider panel moves where the
 // Pikmin work it away from the captain, which sets how far the first one walks
 // back to his hand (standin-k-investigation.md).
-constexpr float kPanelHalfWidth = 105.0f;
+constexpr float kPanelHalfWidth = 110.56034713495107f;
 constexpr float kPanelHeight    = 90.0f;
-constexpr float kPanelHalfDepth = 12.0f;
+constexpr float kPanelHalfDepth = 10.562116222545233f;
 constexpr float kPostWidth      = 20.0f;
 constexpr float kPostHeight     = 110.0f;
 constexpr float kPostHalfDepth  = 18.0f;
@@ -166,9 +166,9 @@ SandboxGatePlacement sandboxGatePlacement()
 	// chosen point in the calmest region found, not a plateau
 	// (standin-k-investigation.md).
 	SandboxGatePlacement p;
-	p.x    = -34.0f;
-	p.z    = -197.0f;
-	p.rotY = 36;
+	p.x    = -30.157348583041852f;
+	p.z    = -195.4417368668644f;
+	p.rotY = 44;
 	return p;
 }
 
