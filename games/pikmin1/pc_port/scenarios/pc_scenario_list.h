@@ -58,5 +58,16 @@ PcScenario* pc_scenario_make_tutorial_skip(void);
 PcScenario* pc_scenario_make_tutorial_firsts(void);
 PcScenario* pc_scenario_make_tutorial_day1(void);
 PcScenario* pc_scenario_make_title_boot(void);
+PcScenario* pc_scenario_make_hardmode_teki_life(void);
+PcScenario* pc_scenario_make_hardmode_teki_life_off(void);
+PcScenario* pc_scenario_make_hardmode_cheats(void);
+PcScenario* pc_scenario_make_settings_health_pct(void);
+PcScenario* pc_scenario_make_settings_health_pct_off(void);
+PcScenario* pc_scenario_make_settings_invincible(void);
+PcScenario* pc_scenario_make_settings_invincible_off(void);
+PcScenario* pc_scenario_make_speedrun_cheats(void);
+PcScenario* pc_scenario_make_unlock_zones(void);
+PcScenario* pc_scenario_make_settings_menu_pause(void);
+PcScenario* pc_scenario_make_throw_release_quick_grab(void);
 
 #endif

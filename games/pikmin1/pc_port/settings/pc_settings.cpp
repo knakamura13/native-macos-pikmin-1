@@ -1043,6 +1043,26 @@ void resetToDefaults() {
     sVideoConfirmActive = false;
 }
 
+void scenarioOpenMenuForTest()
+{
+    if (sMenuOpen) return;
+    pc_pikmin_models_refresh();
+    sPending             = sConfig;
+    sPending.controlMode = pc_window_get_control_mode();
+    sMenuOpen            = true;
+    pc_window_set_settings_menu_open(true);
+    sOpenGroup           = PC_SET_GROUP_DISPLAY;
+    sGroupSel            = 0;
+    sF1Scroll            = 0;
+    sF1OptFocus          = false;
+    sVideoConfirmActive  = false;
+    rebuildResolutionList();
+    const int idx = resolutionIndexFor(pc_window_get_width(), pc_window_get_height());
+    sResolutionIdx       = idx >= 0 ? idx : defaultResolutionIndex();
+}
+
+void scenarioCloseMenuForTest() { closeMenu(); }
+
 } // namespace
 
 // Defined outside the anonymous namespace and deliberately self-contained: it
@@ -1259,6 +1279,15 @@ static int sScenarioInfiniteDay = 0;
 static int sScenarioWhistlePluck = 0;
 static int sScenarioNoDayAdvance = 0; // "No Day Limit"
 static int sScenarioHideOlimarText = 0; // the setting's default (sConfig.hideOlimarText)
+static int sScenarioQuickGrab = -1;
+static int sScenarioThrowSpeedPct = -1;
+static int sScenarioChainActions = -1;
+static int sScenarioPikiInvincible = -1;
+static int sScenarioNaviHealthPct = -1;
+static int sScenarioTekiHealthPct = -1;
+static int sScenarioPikiLimit = -1;
+static int sScenarioUnlockZones = -1;
+static int sScenarioAllOnions = -1;
 // The scenario window (PIKMIN_SCENARIO_WINDOW, see pc_scenario.cpp). Every tick
 // draws a frame, which under software GL costs per pixel, and no scenario reads
 // the picture.
@@ -9148,6 +9177,9 @@ int pc_settings_get_fps_mode(void) { if (pc_speedrun_active()) return 0;
 }
 
 int pc_settings_get_chain_actions(void) { if (pc_speedrun_active()) return 0;
+#if PIKI_SCENARIOS
+    if (sScenarioSettings && sScenarioChainActions >= 0) return sScenarioChainActions;
+#endif
     return sConfig.chainActions;
 }
 
@@ -9164,13 +9196,21 @@ int pc_settings_get_idle_counter(void) { if (pc_speedrun_active()) return 0;
 }
 
 int pc_settings_get_navi_health_pct(void) { if (pc_speedrun_active()) return 100;
-    return pc_hardmode_active() ? 100 : sConfig.naviHealthPct;
+    if (pc_hardmode_active()) return 100;
+#if PIKI_SCENARIOS
+    if (sScenarioSettings && sScenarioNaviHealthPct >= 0) return sScenarioNaviHealthPct;
+#endif
+    return sConfig.naviHealthPct;
 }
 
 int pc_settings_get_teki_health_pct(void) { if (pc_speedrun_active()) return 100;
     // Misiones y campañas: el modificador elegido al empezar.
     if (pc_mission_active()) return pc_mission_mods().tekiHealth;
-    return pc_hardmode_active() ? 100 : sConfig.tekiHealthPct;
+    if (pc_hardmode_active()) return 100;
+#if PIKI_SCENARIOS
+    if (sScenarioSettings && sScenarioTekiHealthPct >= 0) return sScenarioTekiHealthPct;
+#endif
+    return sConfig.tekiHealthPct;
 }
 
 int pc_settings_get_infinite_day(void) { if (pc_speedrun_active()) return 0;
@@ -9197,6 +9237,19 @@ void pc_settings_scenario_set_window_size(int width, int height)
     sScenarioWindowWidth  = width;
     sScenarioWindowHeight = height;
 }
+void pc_settings_scenario_set_quick_grab(int on) { sScenarioQuickGrab = on ? 1 : 0; }
+void pc_settings_scenario_set_throw_speed_pct(int pct) { sScenarioThrowSpeedPct = pct; }
+void pc_settings_scenario_set_chain_actions(int on) { sScenarioChainActions = on ? 1 : 0; }
+void pc_settings_scenario_set_piki_invincible(int on) { sScenarioPikiInvincible = on ? 1 : 0; }
+void pc_settings_scenario_set_navi_health_pct(int pct) { sScenarioNaviHealthPct = pct; }
+void pc_settings_scenario_set_teki_health_pct(int pct) { sScenarioTekiHealthPct = pct; }
+void pc_settings_scenario_set_piki_limit(int limit) { sScenarioPikiLimit = limit; }
+void pc_settings_scenario_set_unlock_zones(int on) { sScenarioUnlockZones = on ? 1 : 0; }
+void pc_settings_scenario_set_all_onions(int on) { sScenarioAllOnions = on ? 1 : 0; }
+
+void pc_settings_scenario_open_menu(void) { scenarioOpenMenuForTest(); }
+
+void pc_settings_scenario_close_menu(void) { scenarioCloseMenuForTest(); }
 #endif
 
 int pc_settings_get_face_cursor(void) { return sConfig.faceCursor; }
@@ -9209,6 +9262,9 @@ int pc_settings_get_whistle_radius_pct(void) { if (pc_speedrun_active()) return 
 }
 
 float pc_settings_get_throw_speed_scale(void) { if (pc_speedrun_active()) return 1.0f;
+#if PIKI_SCENARIOS
+    if (sScenarioSettings && sScenarioThrowSpeedPct > 0) return sScenarioThrowSpeedPct / 100.0f;
+#endif
     return sConfig.throwSpeedPct / 100.0f;
 }
 
@@ -9217,6 +9273,9 @@ int pc_settings_get_throw_cancel_b(void) { if (pc_speedrun_active()) return 0;
 }
 
 int pc_settings_get_quick_grab(void) { if (pc_speedrun_active()) return 0;
+#if PIKI_SCENARIOS
+    if (sScenarioSettings && sScenarioQuickGrab >= 0) return sScenarioQuickGrab;
+#endif
     return sConfig.quickGrab;
 }
 
@@ -9256,20 +9315,38 @@ int pc_settings_get_onion_step10(void) { if (pc_speedrun_active()) return 0;
     return sConfig.onionStep10;
 }
 
-int pc_settings_get_piki_invincible(void) { if (pc_speedrun_active()) return 0; return pc_hardmode_active() ? 0 : sConfig.pikiInvincible; }
+int pc_settings_get_piki_invincible(void) { if (pc_speedrun_active()) return 0;
+    if (pc_hardmode_active()) return 0;
+#if PIKI_SCENARIOS
+    if (sScenarioSettings && sScenarioPikiInvincible >= 0) return sScenarioPikiInvincible;
+#endif
+    return sConfig.pikiInvincible;
+}
 int pc_settings_get_all_flowers(void) { if (pc_speedrun_active()) return 0; return pc_hardmode_active() ? 0 : sConfig.allFlowers; }
 float pc_settings_get_carry_speed_scale(void) { if (pc_speedrun_active()) return 1.0f;
     if (pc_mission_active()) return pc_mission_mods().carry / 100.0f;
     return pc_hardmode_active() ? 1.0f : sConfig.carrySpeedPct / 100.0f; }
 float pc_settings_get_navi_speed_scale(void) { if (pc_speedrun_active()) return 1.0f; return pc_hardmode_active() ? 1.0f : sConfig.naviSpeedPct / 100.0f; }
-int pc_settings_get_unlock_zones(void) { if (pc_speedrun_active()) return 0; return pc_hardmode_active() ? 0 : sConfig.unlockZones; }
+int pc_settings_get_unlock_zones(void) { if (pc_speedrun_active()) return 0;
+    if (pc_hardmode_active()) return 0;
+#if PIKI_SCENARIOS
+    if (sScenarioSettings && sScenarioUnlockZones >= 0) return sScenarioUnlockZones;
+#endif
+    return sConfig.unlockZones;
+}
 int pc_settings_get_no_day_advance(void) { if (pc_speedrun_active()) return 0;
     if (pc_hardmode_active()) return 0;
 #if PIKI_SCENARIOS
     if (sScenarioSettings) return sScenarioNoDayAdvance;
 #endif
     return sConfig.noDayAdvance; }
-int pc_settings_get_all_onions(void) { if (pc_speedrun_active()) return 0; return pc_hardmode_active() ? 0 : sConfig.allOnions; }
+int pc_settings_get_all_onions(void) { if (pc_speedrun_active()) return 0;
+    if (pc_hardmode_active()) return 0;
+#if PIKI_SCENARIOS
+    if (sScenarioSettings && sScenarioAllOnions >= 0) return sScenarioAllOnions;
+#endif
+    return sConfig.allOnions;
+}
 
 int pc_settings_get_instant_whistle(void) { if (pc_speedrun_active()) return 0;
     return sConfig.instantWhistle;
@@ -9356,6 +9433,13 @@ int pc_settings_get_mouse_wheel_action(void) { if (pc_speedrun_active()) return 
 }
 
 int pc_settings_get_piki_limit(void) { if (pc_speedrun_active()) return 100;
+#if PIKI_SCENARIOS
+    if (sScenarioSettings && sScenarioPikiLimit > 0) {
+        const int lim = sScenarioPikiLimit;
+        if (pc_hardmode_active() && lim > PC_HARDMODE_PIKI_LIMIT) return PC_HARDMODE_PIKI_LIMIT;
+        return lim;
+    }
+#endif
     if (pc_hardmode_active() && sConfig.pikiLimit > PC_HARDMODE_PIKI_LIMIT)
         return PC_HARDMODE_PIKI_LIMIT;
     return sConfig.pikiLimit;
