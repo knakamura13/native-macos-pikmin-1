@@ -1922,6 +1922,13 @@ if(PIKMIN_NETPLAY_BUILD AND PIKMIN_BUILD_TESTS AND NOT ANDROID)
         $<TARGET_OBJECTS:pc_netplay_libm_obj>)
     target_compile_options(pc_netplay_libm_test PRIVATE ${NATIVE_COMPILE_OPTIONS}
         ${PC_NETPLAY_LIBM_NO_BUILTIN_FLAGS} -ffp-contract=off)
+    if(APPLE)
+        if(NOT TARGET pc_scenario_sincos_obj)
+            add_library(pc_scenario_sincos_obj OBJECT pc_port/scenarios/pc_scenario_sincos_apple.c)
+            target_compile_options(pc_scenario_sincos_obj PRIVATE -fno-builtin -fno-lto -ffp-contract=off)
+        endif()
+        target_sources(pc_netplay_libm_test PRIVATE $<TARGET_OBJECTS:pc_scenario_sincos_obj>)
+    endif()
     add_test(NAME pc_netplay_libm_test COMMAND pc_netplay_libm_test)
 
     find_package(Python3 COMPONENTS Interpreter)

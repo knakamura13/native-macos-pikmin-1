@@ -41,7 +41,7 @@ public:
 	void setOn(int);
 	void setSeen(int);
 	int getDayDocument(int, int&);
-	int getDocument(int& pageCount);
+	int getDocument(int& pageCount, int diaryDay = -1);
 	void dump();
 #if defined(PIKI_PC_PORT)
 	// Skip-tutorial day end. `clockDay` is the clock after it has moved to day 2.
