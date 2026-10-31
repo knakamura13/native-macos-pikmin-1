@@ -88,6 +88,8 @@ public:
 	// Whether the runner's GameStat invariant check runs after this tick. A scenario
 	// turns it off only where the original game's own counting breaks it (say why).
 	virtual bool checksGameStat() const { return true; }
+	// When non-null, the runner loads this stages.ini entry unless PIKMIN_SCENARIO_STAGE is set.
+	virtual const char* stageFile() const { return nullptr; }
 };
 
 // Returns -1 to continue booting (no --scenario), else the process exit code.
@@ -96,6 +98,17 @@ bool pc_scenario_active(void);
 // True during normal scenario sim ticks (after intro, before a verdict).
 bool pc_scenario_screenshot_frame_active(void);
 unsigned pc_scenario_sim_tick(void);
+bool pc_scenario_uses_disc_free_assets(void);
+struct PcScenarioDebugCamera {
+	bool active = false;
+	float eyeX = 0.0f, eyeY = 0.0f, eyeZ = 0.0f;
+	float focusX = 0.0f, focusY = 0.0f, focusZ = 0.0f;
+	float fov = 30.0f;
+};
+void pc_scenario_set_debug_camera(const PcScenarioDebugCamera& cam);
+void pc_scenario_clear_debug_camera(void);
+class Camera;
+bool pc_scenario_apply_debug_camera(Camera* cam);
 // Exit code for pc_main to return once the game loop ends.
 int pc_scenario_exit_code(void);
 // Called by pc_main when the window or GL context failed: records exit 4 as the

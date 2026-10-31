@@ -22,6 +22,11 @@ dataDir/stages/sandbox_objects/0.gen
 dataDir/stages/sandbox_objects/1.gen
 dataDir/stages/sandbox_objects/init.gen
 dataDir/stages/sandbox_objects/plants.gen
+# Flat art showcase stage (standin_showcase_stage.h): default.gen only.
+dataDir/stages/sandbox_showcase/0.gen
+dataDir/stages/sandbox_showcase/1.gen
+dataDir/stages/sandbox_showcase/init.gen
+dataDir/stages/sandbox_showcase/plants.gen
 # The every-object stage (standin_all_objects_stage.h) writes only default.gen too.
 dataDir/stages/sandbox_all_objects/0.gen
 dataDir/stages/sandbox_all_objects/1.gen

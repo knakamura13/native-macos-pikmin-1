@@ -52,6 +52,7 @@
 #include "pc_window.h"
 #include "randomizer/pc_randomizer.h"
 #include "settings/pc_settings.h"
+#include "Camera.h"
 
 #if defined(_WIN32)
 #include <direct.h>
@@ -730,6 +731,8 @@ int pc_scenario_parse_argv(int argc, char** argv)
 	}
 	if (const char* stage = std::getenv("PIKMIN_SCENARIO_STAGE")) {
 		if (*stage != '\0') sStageFile = stage;
+	} else if (const char* scenarioStage = sScenario->stageFile()) {
+		sStageFile = scenarioStage;
 	}
 	// The window size, WxH (default in pc_settings.cpp). The sim does not read it.
 	int windowWidth = 0, windowHeight = 0;
@@ -797,6 +800,29 @@ int pc_scenario_parse_argv(int argc, char** argv)
 }
 
 bool pc_scenario_active(void) { return sActive; }
+
+static PcScenarioDebugCamera sDebugCamera {};
+
+bool pc_scenario_uses_disc_free_assets(void)
+{
+	const char* data = std::getenv("PIKMIN_SCENARIO_DATA_DIR");
+	return data != nullptr && *data != '\0';
+}
+
+void pc_scenario_set_debug_camera(const PcScenarioDebugCamera& cam) { sDebugCamera = cam; }
+
+void pc_scenario_clear_debug_camera(void) { sDebugCamera = {}; }
+
+bool pc_scenario_apply_debug_camera(Camera* cam)
+{
+	if (!cam) return false;
+	if (!sActive || !sDebugCamera.active) return false;
+	Vector3f eye(sDebugCamera.eyeX, sDebugCamera.eyeY, sDebugCamera.eyeZ);
+	Vector3f focus(sDebugCamera.focusX, sDebugCamera.focusY, sDebugCamera.focusZ);
+	cam->mFov = sDebugCamera.fov;
+	cam->calcVectors(eye, focus);
+	return true;
+}
 
 bool pc_scenario_screenshot_frame_active(void) { return sActive && !sVerdict && sStageReady && sIntroDone; }
 

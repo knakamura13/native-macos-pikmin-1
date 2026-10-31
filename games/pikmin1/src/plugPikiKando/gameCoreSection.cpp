@@ -4150,6 +4150,9 @@ void GameCoreSection::beginView(Graphics& gfx, int view, f32 farClip)
 	pc_gfx_set_proj_offset(horizontal ? 0.0f : -shift, horizontal ? shift : 0.0f);
 	gfx.setCamera(cam);
 	cam->update(pc_gfx_get_window_aspect_ratio(), cam->mFov, pc_first_person_active_for(view) ? 3.0f : 100.0f, farClip);
+#if PIKI_SCENARIOS && defined(PIKI_PC_PORT)
+	pc_scenario_apply_debug_camera(cam);
+#endif
 	gfx.setViewport(AREA_FULL_SCREEN(gfx));
 	gfx.setScissor(currentViewRect(gfx));
 	// initRender() vacía luces y shapes cacheadas una vez por frame; cada
