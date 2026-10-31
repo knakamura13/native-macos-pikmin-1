@@ -4705,6 +4705,11 @@ bool pc_gfx_write_scene_png(const char* path, unsigned int sourceFramebuffer, in
     std::vector<unsigned char> rgba(size_t(width) * height * 4);
     glBindFramebuffer_ptr(GL_READ_FRAMEBUFFER, sourceFramebuffer);
     glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, rgba.data());
+    // Scenario PNGs are viewed on white backgrounds; premultiplied or partial alpha
+    // from the GL readback washes the image out. Store opaque RGB.
+    for (size_t i = 3; i < rgba.size(); i += 4) {
+        rgba[i] = 255;
+    }
     const bool ok = pc_gfx_png_write_rgba_flip_y(path, width, height, rgba.data(), width * 4);
     if (ok) {
         if (outW) *outW = width;
