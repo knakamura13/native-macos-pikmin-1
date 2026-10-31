@@ -2524,15 +2524,37 @@ if(PIKMIN_BUILD_SCENARIOS)
         WORKING_DIRECTORY "${PIKMIN_STANDIN_DATA}"
         ENVIRONMENT "${PIKMIN_STANDIN_OBJECTS_ENV}"
         TIMEOUT 1200)
+    find_package(Python3 COMPONENTS Interpreter REQUIRED)
+    add_test(NAME scenario_screenshot_verify_png_self
+        COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/test_verify_scenario_png.py)
+    set_tests_properties(scenario_screenshot_verify_png_self PROPERTIES
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios
+        TIMEOUT 60)
     add_test(NAME scenario_screenshot_boot_smoke_30
         COMMAND ${CMAKE_COMMAND}
             -DGAME=$<TARGET_FILE:${NECTAR_GAME}>
             -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/scenario-screenshots/boot_smoke_30
+            -DUSE_FULL_WINDOW=1
+            $<$<STREQUAL:${CMAKE_SYSTEM_NAME},Linux>:-DGOLDEN_COMPARE=1>
             -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/check_scenario_screenshot.cmake)
     set_tests_properties(scenario_screenshot_boot_smoke_30 PROPERTIES
         FIXTURES_REQUIRED scenario_standin_tree
         WORKING_DIRECTORY "${PIKMIN_STANDIN_DATA}"
         ENVIRONMENT "${PIKMIN_STANDIN_ENV}"
+        RUN_SERIAL TRUE
+        TIMEOUT 600)
+    add_test(NAME scenario_screenshot_boot_smoke_30_resize
+        COMMAND ${CMAKE_COMMAND}
+            -DGAME=$<TARGET_FILE:${NECTAR_GAME}>
+            -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/scenario-screenshots/boot_smoke_30_resize
+            $<$<STREQUAL:${CMAKE_SYSTEM_NAME},Linux>:-DGOLDEN_COMPARE=1>
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/check_scenario_screenshot.cmake)
+    set_tests_properties(scenario_screenshot_boot_smoke_30_resize PROPERTIES
+        FIXTURES_REQUIRED scenario_standin_tree
+        WORKING_DIRECTORY "${PIKMIN_STANDIN_DATA}"
+        ENVIRONMENT "${PIKMIN_STANDIN_ENV}"
+        RUN_SERIAL TRUE
         TIMEOUT 600)
     add_test(NAME scenario_screenshot_hash_boot_smoke_30
         COMMAND ${CMAKE_COMMAND}
