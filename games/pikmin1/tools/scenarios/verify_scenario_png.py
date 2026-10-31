@@ -7,13 +7,56 @@ import struct
 import sys
 import zlib
 
+PNG_SIG = b"\x89PNG\r\n\x1a\n"
+
+
+def _paeth(a: int, b: int, c: int) -> int:
+    p = a + b - c
+    pa = abs(p - a)
+    pb = abs(p - b)
+    pc = abs(p - c)
+    if pa <= pb and pa <= pc:
+        return a
+    if pb <= pc:
+        return b
+    return c
+
+
+def _unfilter_scanline(filter_type: int, row: bytes, prev: bytes | None, bpp: int) -> bytes:
+    out = bytearray(len(row))
+    for i, x in enumerate(row):
+        if filter_type == 0:
+            raw = x
+        elif filter_type == 1:
+            left = out[i - bpp] if i >= bpp else 0
+            raw = (x + left) & 0xFF
+        elif filter_type == 2:
+            up = prev[i] if prev is not None else 0
+            raw = (x + up) & 0xFF
+        elif filter_type == 3:
+            left = out[i - bpp] if i >= bpp else 0
+            up = prev[i] if prev is not None else 0
+            raw = (x + ((left + up) // 2)) & 0xFF
+        elif filter_type == 4:
+            left = out[i - bpp] if i >= bpp else 0
+            up = prev[i] if prev is not None else 0
+            upper_left = prev[i - bpp] if prev is not None and i >= bpp else 0
+            raw = (x + _paeth(left, up, upper_left)) & 0xFF
+        else:
+            raise ValueError(f"unknown PNG filter type {filter_type}")
+        out[i] = raw
+    return bytes(out)
+
 
 def read_png_rgb(path: str) -> tuple[int, int, list[tuple[int, int, int]]]:
+    """Decode an 8-bit RGB or RGBA PNG into RGB pixels (alpha dropped)."""
     with open(path, "rb") as f:
-        sig = f.read(8)
-        if sig != b"\x89PNG\r\n\x1a\n":
+        if f.read(8) != PNG_SIG:
             raise ValueError("not a PNG (bad signature)")
         width = height = 0
+        bit_depth = 0
+        color_type = 0
+        interlace = 0
         idat = bytearray()
         while True:
             chunk = f.read(8)
@@ -23,22 +66,43 @@ def read_png_rgb(path: str) -> tuple[int, int, list[tuple[int, int, int]]]:
             data = f.read(length)
             f.read(4)  # crc
             if ctype == b"IHDR":
-                width, height = struct.unpack(">II", data[:8])
+                if length < 13:
+                    raise ValueError("truncated IHDR")
+                width, height, bit_depth, color_type, _, _, interlace = struct.unpack(
+                    ">IIBBBBB", data[:13]
+                )
             elif ctype == b"IDAT":
                 idat.extend(data)
             elif ctype == b"IEND":
                 break
         if width <= 0 or height <= 0:
             raise ValueError("missing IHDR")
+        if bit_depth != 8:
+            raise ValueError(f"unsupported bit depth {bit_depth} (need 8)")
+        if color_type not in (2, 6):
+            raise ValueError(f"unsupported colour type {color_type} (need RGB or RGBA)")
+        if interlace != 0:
+            raise ValueError("interlaced PNG not supported")
+        bpp = 3 if color_type == 2 else 4
+        stride = 1 + width * bpp
         raw = zlib.decompress(bytes(idat))
-        stride = 1 + width * 3
-        if len(raw) < height * stride:
-            raise ValueError("truncated image data")
+        expected = height * stride
+        if len(raw) != expected:
+            raise ValueError(f"decompressed length {len(raw)} != {expected}")
+
         pixels: list[tuple[int, int, int]] = []
+        prev: bytes | None = None
         for y in range(height):
-            row = raw[y * stride + 1 : y * stride + 1 + width * 3]
-            for i in range(0, len(row), 3):
-                pixels.append((row[i], row[i + 1], row[i + 2]))
+            row_off = y * stride
+            filter_type = raw[row_off]
+            if filter_type > 4:
+                raise ValueError(f"invalid filter type {filter_type} on row {y}")
+            filtered = raw[row_off + 1 : row_off + stride]
+            recon = _unfilter_scanline(filter_type, filtered, prev, bpp)
+            prev = recon
+            for x in range(width):
+                i = x * bpp
+                pixels.append((recon[i], recon[i + 1], recon[i + 2]))
         return width, height, pixels
 
 
