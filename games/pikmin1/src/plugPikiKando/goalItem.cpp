@@ -5,6 +5,9 @@
 #include "mods/pc_mission.h"
 #include "netplay/pc_netplay_policy.h"
 #include "netplay/pc_netplay_present.h"
+#if PIKI_SCENARIOS
+#include "scenarios/pc_scenario.h"
+#endif
 #endif
 #include "BaseInf.h"
 #include "CreatureCollPart.h"
@@ -867,7 +870,13 @@ void GoalItem::refresh(Graphics& gfx)
 	mAnimatedMaterials.animate(&rate);
 	mItemShapeObject->mShape->updateAnim(gfx, mtx1, nullptr, this);
 	if (aiCullable()) {
+#if PIKI_SCENARIOS && defined(PIKI_PC_PORT)
+		pc_scenario_push_creature_unlit_draw(); // disc-free stand-ins: flat material colours (#115)
+#endif
 		mItemShapeObject->mShape->drawshape(gfx, *gfx.mCamera, &mAnimatedMaterials);
+#if PIKI_SCENARIOS && defined(PIKI_PC_PORT)
+		pc_scenario_pop_creature_unlit_draw();
+#endif
 	}
 	mCollInfo->updateInfo(gfx, false);
 

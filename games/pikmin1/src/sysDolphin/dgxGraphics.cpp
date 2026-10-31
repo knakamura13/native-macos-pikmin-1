@@ -9,6 +9,9 @@
 #include "pc_window.h"
 #include "pc_gfx.h"
 #include "netplay/pc_netplay_present.h"
+#if PIKI_SCENARIOS
+#include "scenarios/pc_scenario.h"
+#endif
 #endif
 
 /**
@@ -1165,6 +1168,19 @@ void DGXGraphics::setMaterial(Material* mat, bool p2)
 		color.set(mat->mColourInfo.mColour.r, mat->mColourInfo.mColour.g, mat->mColourInfo.mColour.b,
 		          mLightIntensity * mat->mColourInfo.mColour.a);
 		GXSetChanMatColor(GX_COLOR0A0, reinterpret_cast<GXColor&>(color));
+
+#if defined(PIKI_PC_PORT) && PIKI_SCENARIOS
+		// Stand-in .mod files are flat vertex-lit greys on PC; draw their material RGB
+		// directly so Pikmin/onion colours read on captures (#115).
+		if (pc_scenario_creature_unlit_draw() && mat->mTexture == nullptr && mat->mEnvMapTexture == nullptr) {
+			GXSetNumTexGens(0);
+			GXSetNumTevStages(1);
+			GXSetTevOrder(GX_TEVSTAGE0, GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR0A0);
+			GXSetTevOp(GX_TEVSTAGE0, GX_PASSCLR);
+			GXSetChanCtrl(GX_COLOR0A0, GX_FALSE, GX_SRC_REG, GX_SRC_REG, 0, GX_DF_NONE, GX_AF_NONE);
+			return;
+		}
+#endif
 
 		if (mLightCam) {
 			return;

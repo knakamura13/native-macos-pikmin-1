@@ -216,6 +216,7 @@ include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/include/Dolphin/GX
     ${PC_PORT_DIR}
     ${PC_PORT_DIR}/gl
+    ${NECTAR_LIBS_DIR}/nectar_assets/include
 )
 
 ###############################################################################
@@ -438,6 +439,8 @@ if (PIKMIN_BUILD_SCENARIOS)
         pc_port/scenarios/pc_scenario_screenshot.cpp
         pc_port/scenarios/pc_scenario_list.cpp
         pc_port/scenarios/scenario_boot_smoke.cpp
+        pc_port/scenarios/scenario_hud_layout.cpp
+        pc_port/scenarios/scenario_standin_showcase.cpp
         pc_port/scenarios/scenario_throw_release.cpp
         pc_port/scenarios/scenario_day30_clock.cpp
         pc_port/scenarios/scenario_sprout_landing.cpp
@@ -1480,7 +1483,10 @@ if(PIKMIN_BUILD_TESTS)
         ${NECTAR_ASSETS_DIR}/tests/mod_writer_test.cpp
         ${NECTAR_ASSETS_DIR}/tests/game_loader_stubs.cpp
         ${NECTAR_ASSETS_DIR}/src/mod_writer.cpp
+        ${NECTAR_ASSETS_DIR}/src/mesh_mod.cpp
         ${NECTAR_ASSETS_DIR}/src/standin_models.cpp
+        ${NECTAR_ASSETS_DIR}/src/standin_art.cpp
+        ${NECTAR_ASSETS_DIR}/src/texture.cpp
         ${NECTAR_ASSETS_DIR}/src/mod.cpp
         ${NECTAR_ASSETS_DIR}/src/image.cpp
         ${PC_PORT_DIR}/launcher/bti_decode.cpp
@@ -1498,6 +1504,7 @@ if(PIKMIN_BUILD_TESTS)
         ${NECTAR_ASSETS_DIR}/src/texture.cpp
         ${NECTAR_ASSETS_DIR}/src/bundle.cpp
         ${NECTAR_ASSETS_DIR}/src/standin_textures.cpp
+        ${NECTAR_ASSETS_DIR}/src/standin_art.cpp
         ${NECTAR_ASSETS_DIR}/src/mesh_mod.cpp
         ${NECTAR_ASSETS_DIR}/src/mod.cpp
         ${NECTAR_ASSETS_DIR}/src/image.cpp
@@ -1564,7 +1571,10 @@ if(PIKMIN_BUILD_TESTS)
         ${NECTAR_ASSETS_DIR}/src/parms.cpp
         ${NECTAR_ASSETS_DIR}/src/bundle.cpp
         ${NECTAR_ASSETS_DIR}/src/mod_writer.cpp
+        ${NECTAR_ASSETS_DIR}/src/mesh_mod.cpp
         ${NECTAR_ASSETS_DIR}/src/standin_models.cpp
+        ${NECTAR_ASSETS_DIR}/src/standin_art.cpp
+        ${NECTAR_ASSETS_DIR}/src/texture.cpp
         ${NECTAR_ASSETS_DIR}/src/mod.cpp
         ${NECTAR_ASSETS_DIR}/src/image.cpp
         ${PC_PORT_DIR}/launcher/bti_decode.cpp
@@ -1634,7 +1644,10 @@ if(PIKMIN_BUILD_TESTS)
         ${NECTAR_ASSETS_DIR}/src/parms.cpp
         ${NECTAR_ASSETS_DIR}/src/bundle.cpp
         ${NECTAR_ASSETS_DIR}/src/mod_writer.cpp
+        ${NECTAR_ASSETS_DIR}/src/mesh_mod.cpp
         ${NECTAR_ASSETS_DIR}/src/standin_models.cpp
+        ${NECTAR_ASSETS_DIR}/src/standin_art.cpp
+        ${NECTAR_ASSETS_DIR}/src/texture.cpp
         ${NECTAR_ASSETS_DIR}/src/mod.cpp
         ${NECTAR_ASSETS_DIR}/src/image.cpp
         ${PC_PORT_DIR}/launcher/bti_decode.cpp
@@ -2106,7 +2119,7 @@ if(PIKMIN_BUILD_SCENARIOS)
     # src/jaudio/pikiseq.c is the game's BARC table for SndData/Seqs/pikiseq.arc
     # (data only), compiled with this build's PIKMIN_GAME_VERSION so the
     # stand-in .arc matches the executable's layout (standin-audio.md).
-    add_executable(nectar_standin_generator tools/scenarios/standin_generator.cpp tools/scenarios/standin_objects_stage.cpp tools/scenarios/standin_all_objects_stage.cpp tools/scenarios/standin_practice_stage.cpp tools/scenarios/standin_water_stage.cpp src/jaudio/pikiseq.c)
+    add_executable(nectar_standin_generator tools/scenarios/standin_generator.cpp tools/scenarios/standin_objects_stage.cpp tools/scenarios/standin_all_objects_stage.cpp tools/scenarios/standin_practice_stage.cpp tools/scenarios/standin_water_stage.cpp tools/scenarios/standin_showcase_stage.cpp src/jaudio/pikiseq.c)
     # Source-level include path (every target here already has include/), so
     # the generator's own empty include list stays free of the game headers.
     set_source_files_properties(src/jaudio/pikiseq.c
@@ -2135,7 +2148,7 @@ if(PIKMIN_BUILD_SCENARIOS)
         FIXTURES_SETUP scenario_standin_tree
         TIMEOUT 120)
     file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/scenario-logs")
-    foreach(scenario boot_smoke throw_release day30_clock extinction captain_death ship_parts captain_damage extinction_day30)
+    foreach(scenario boot_smoke hud_layout throw_release day30_clock extinction captain_death ship_parts captain_damage extinction_day30)
         foreach(rate 30 60)
             add_test(NAME scenario_${scenario}_${rate}
                 COMMAND ${CMAKE_COMMAND}
@@ -2556,6 +2569,34 @@ if(PIKMIN_BUILD_SCENARIOS)
         ENVIRONMENT "${PIKMIN_STANDIN_ENV}"
         RUN_SERIAL TRUE
         TIMEOUT 600)
+    add_test(NAME scenario_screenshot_standin_showcase_30
+        COMMAND ${CMAKE_COMMAND}
+            -DGAME=$<TARGET_FILE:${NECTAR_GAME}>
+            -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/scenario-screenshots/standin_showcase_30
+            -DPIKMIN_STANDIN_DATA=${PIKMIN_STANDIN_DATA}
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/check_scenario_showcase_screenshot.cmake)
+    set_tests_properties(scenario_screenshot_standin_showcase_30 PROPERTIES
+        FIXTURES_REQUIRED scenario_standin_tree
+        WORKING_DIRECTORY "${PIKMIN_STANDIN_DATA}"
+        ENVIRONMENT "PIKMIN_SCENARIO_DATA_DIR=${PIKMIN_STANDIN_DATA}"
+        RUN_SERIAL TRUE
+        TIMEOUT 600)
+    foreach(scenario standin_showcase)
+        foreach(rate 30)
+            add_test(NAME scenario_${scenario}_${rate}
+                COMMAND ${CMAKE_COMMAND}
+                    -DGAME=$<TARGET_FILE:${NECTAR_GAME}>
+                    -DSCENARIO=${scenario} -DRATE=${rate}
+                    -DALLOWLIST=${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/standin-open-allowlist.txt
+                    -DLOG_DIR=${CMAKE_CURRENT_BINARY_DIR}/scenario-logs
+                    -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/run_standin_scenario.cmake)
+            set_tests_properties(scenario_${scenario}_${rate} PROPERTIES
+                FIXTURES_REQUIRED scenario_standin_tree
+                WORKING_DIRECTORY "${PIKMIN_STANDIN_DATA}"
+                ENVIRONMENT "PIKMIN_SCENARIO_DATA_DIR=${PIKMIN_STANDIN_DATA}"
+                TIMEOUT 600)
+        endforeach()
+    endforeach()
     add_test(NAME scenario_screenshot_hash_boot_smoke_30
         COMMAND ${CMAKE_COMMAND}
             -DGAME=$<TARGET_FILE:${NECTAR_GAME}>

@@ -2,6 +2,7 @@
 
 #include "nectar_assets/bundle.h"
 #include "nectar_assets/mesh_mod.h"
+#include "nectar_assets/standin_art.h"
 #include "nectar_assets/texture.h"
 
 #include <cstdlib>
@@ -27,20 +28,7 @@ std::vector<std::uint8_t> mustBti(const BtiInput& in)
 
 std::vector<std::uint8_t> standInBti()
 {
-	Image img;
-	img.resize(8, 8);
-	for (std::size_t i = 0; i < img.rgba.size(); i += 4) {
-		img.rgba[i]     = GREY;
-		img.rgba[i + 1] = GREY;
-		img.rgba[i + 2] = GREY;
-		img.rgba[i + 3] = 0xFF;
-	}
-	BtiInput in;
-	in.format = BTI_RGB5A3;
-	in.width  = 8;
-	in.height = 8;
-	in.data   = encodeRgb5a3(img);
-	return mustBti(in);
+	return artBtiRgb5a3(8, 8, artFlatGreyImage(8, 8));
 }
 
 std::vector<std::uint8_t> standInConsFontBti()
@@ -55,12 +43,7 @@ std::vector<std::uint8_t> standInConsFontBti()
 
 std::vector<std::uint8_t> standInShadowTxe()
 {
-	Image img;
-	img.resize(8, 8);
-	for (std::size_t i = 0; i < img.rgba.size(); i += 4) {
-		img.rgba[i] = img.rgba[i + 1] = img.rgba[i + 2] = GREY;
-		img.rgba[i + 3]                                 = 0xFF;
-	}
+	Image img = artFlatGreyImage(8, 8);
 	TxeInput in;
 	in.format = MOD_TEX_RGB5A3;
 	in.width  = 8;
@@ -117,7 +100,7 @@ bool standInTextureFiles(std::vector<StandInFile>& out, std::string& error)
 	// Texturas sueltas de screen/eng_tex que abre el arranque (manifiesto de #64).
 	// Las que citan los .blo de #72 y viven en screen.bun se añaden cuando #72 las enumere.
 	static const char* const hud[] = { "a_btn", "b_btn", "dot_24", "dot_32", "w08_160", "ws08_160", "ws08_yel", "x_btn", "y_btn", "z_btn" };
-	for (const char* h : hud) out.push_back({ std::string("screen/eng_tex/") + h + ".bti", bti, false });
+	for (const char* h : hud) out.push_back({ std::string("screen/eng_tex/") + h + ".bti", artHudTexture(h), false });
 
 	StandInFile fx { "effects/tex/effects.bun", {}, false };
 	if (!standInEffectTexBundle(fx.bytes, error)) return false;
@@ -129,7 +112,11 @@ bool standInTextureFiles(std::vector<StandInFile>& out, std::string& error)
 	// disco esas texturas solo viven dentro del bundle (el arranque no las abre
 	// sueltas), y un null en loadTexExp aborta (NumberTex, drawCommon.cpp).
 	std::vector<BundleEntry> screen;
-	for (const std::string& name : screenTextureNames()) screen.push_back({ BUNDLE_BTI, name, bti });
+	for (const std::string& name : screenTextureNames()) {
+		const std::string base = name.substr(name.rfind('/') + 1);
+		const std::string stem = base.substr(0, base.size() - 4);
+		screen.push_back({ BUNDLE_BTI, name, artHudTexture(stem) });
+	}
 	StandInFile lang { "screen/eng_tex/screen.bun", {}, false };
 	if (!writeBundle(screen, lang.bytes, error)) return false;
 	out.push_back(std::move(lang));
