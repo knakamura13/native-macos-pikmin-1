@@ -13,6 +13,10 @@
 
 #include "netplay/pc_input_log.h"
 
+namespace zen {
+struct DrawGameInfo;
+}
+
 enum {
 	PC_SCENARIO_EXIT_PASS  = 0,
 	PC_SCENARIO_EXIT_FAIL  = 1,
@@ -112,6 +116,11 @@ void pc_scenario_request_map_course(const char* stageFile);
 const char* pc_scenario_consume_map_course(void);
 // True while the first stage is still booting and the scenario wants title/card skipped.
 bool pc_scenario_skip_boot_menus(void);
+
+#if PIKI_SCENARIOS
+void pc_scenario_register_draw_game_info(zen::DrawGameInfo* hud);
+bool pc_scenario_check_hud_layout(const char** why);
+#endif
 
 // For scenarios.
 int pc_scenario_stage_number(void); // 1 for the first stage, 2 after the first soft reset, ...

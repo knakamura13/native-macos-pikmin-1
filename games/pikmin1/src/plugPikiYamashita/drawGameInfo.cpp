@@ -861,6 +861,36 @@ void zen::DrawGameInfo::update()
 /**
  * @todo: Documentation
  */
+#if PIKI_SCENARIOS && defined(PIKI_PC_PORT)
+bool zen::DrawGameInfo::checkStandInHudLayout(const char** why) const
+{
+	if (!mLowerScreenMgr || !mUpperScreenMgr || !mModeScreenMgr) {
+		if (why) *why = "screen mgr missing";
+		return false;
+	}
+	P2DPane* life = mLowerScreenMgr->search('life', true);
+	P2DPane* navi = mLowerScreenMgr->search('navi', true);
+	if (!life || !navi) {
+		if (why) *why = "life or navi pane missing";
+		return false;
+	}
+	if (life->getPosH() < 440 || life->getPosV() < 360) {
+		if (why) *why = "life pane not bottom-right";
+		return false;
+	}
+	if (navi->getPosH() < 440 || navi->getPosV() < 360) {
+		if (why) *why = "navi pane not bottom-right";
+		return false;
+	}
+	P2DPane* suni = mUpperScreenMgr->search('suni', true);
+	if (!suni || suni->getPosV() > 120) {
+		if (why) *why = "sun track not in top band";
+		return false;
+	}
+	return true;
+}
+#endif
+
 #if defined(PIKI_PC_PORT)
 // play_day.blo es plano: el día (y≈63) y los contadores (y≥390) son hijos
 // directos de ROOT sin agrupar. Se separan por posición vertical, que

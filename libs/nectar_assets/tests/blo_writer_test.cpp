@@ -16,6 +16,7 @@
 // is also read to its terminator and the same tag table is checked against the
 // disc layouts (a check of the table, not of the stand-ins). Not registered with it.
 #include "nectar_assets/blo.h"
+#include "nectar_assets/standin_layout.h"
 #include "nectar_assets/standin_ui.h"
 
 #include "P2D/Stream.h"
@@ -611,6 +612,34 @@ bool kindOk(const BloPane& p, char kind)
 	}
 }
 
+// Rough HUD placement checks for issue #115 (640x480 stand-in layouts).
+int checkHudLayout(const std::string& file, const std::vector<BloPane>& tree)
+{
+	using nectar::findBloPane;
+	using nectar::standin_layout::kBottomRightMinX;
+	using nectar::standin_layout::kBottomRightMinY;
+	using nectar::standin_layout::kTopBandMaxY;
+	const auto inRect = [&](const BloPane* p, int x0, int y0, int x1, int y1) {
+		return p && p->x >= x0 && p->y >= y0 && p->x <= x1 && p->y <= y1;
+	};
+	int bad = 0;
+	if (file == "play10.blo") {
+		const BloPane* life = findBloPane(tree, "life");
+		const BloPane* navi = findBloPane(tree, "navi");
+		if (!inRect(life, kBottomRightMinX, kBottomRightMinY, 639, 479)) bad++;
+		if (!inRect(navi, kBottomRightMinX, kBottomRightMinY, 639, 479)) bad++;
+		if (life && life->w >= 64 && life->h >= 64) { } else bad++;
+	}
+	if (file == "play09.blo") {
+		if (!inRect(findBloPane(tree, "suni"), 0, 0, 639, kTopBandMaxY)) bad++;
+	}
+	if (file == "play_day.blo") {
+		if (!inRect(findBloPane(tree, "piki"), 0, 300, 200, 479)) bad++;
+		if (!inRect(findBloPane(tree, "c_mr"), kBottomRightMinX - 80, kBottomRightMinY, 639, 479)) bad++;
+	}
+	return bad;
+}
+
 // Check a layout (stand-in or disc) against its requirement list. `strict` also
 // applies the stand-in rules. Returns the number of problems it logged.
 int checkReqs(const std::string& file, const std::vector<BloPane>& tree, const LayoutReq& l, const char* who)
@@ -688,7 +717,8 @@ void walkTextAndTags(const std::vector<BloPane>& v, const std::string& file)
 			          p.otherCorners[2] == "p2b_64.bti",
 			      file + ": '" + p.tag + "' corners are not all p2b_64.bti");
 		}
-		check(p.type != BloType::Picture || p.texture.empty(), file + ": picture '" + p.tag + "' carries a texture name");
+		const bool hudPic = (file == "play09.blo" || file == "play10.blo" || file == "play_day.blo" || file == "sund.blo");
+		check(p.type != BloType::Picture || p.texture.empty() || hudPic, file + ": picture '" + p.tag + "' carries a texture name");
 		check(p.type != BloType::TextBox || !p.font.empty(), file + ": text box '" + p.tag + "' has no font name");
 		walkTextAndTags(p.children, file);
 	}
@@ -890,6 +920,9 @@ int main()
 			if (it != reqs.end()) {
 				int bad = checkReqs(l.file, back, it->second, "stand-in");
 				check(bad == 0, l.file + ": meets the tag and type table");
+			}
+			if (l.file == "play10.blo" || l.file == "play09.blo" || l.file == "play_day.blo") {
+				check(checkHudLayout(l.file, back) == 0, l.file + ": HUD panes sit in expected regions");
 			}
 			if (l.file == "f_result.blo") {
 				// DrawTotalScore::DrawTotalScore strcpy's each record row into a char[0x80] buffer.

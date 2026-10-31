@@ -26,6 +26,7 @@ add_library(nectar_assets STATIC
     src/stages_ini.cpp
     src/mod_writer.cpp
     src/standin_models.cpp
+    src/standin_art.cpp
     src/blo.cpp
     src/pcr.cpp
     src/standin_ui.cpp

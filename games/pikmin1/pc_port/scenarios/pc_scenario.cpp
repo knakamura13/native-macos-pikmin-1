@@ -4,6 +4,7 @@
 
 #include "scenarios/pc_scenario_list.h"
 #include "scenarios/pc_scenario_screenshot.h"
+#include "zen/DrawGameInfo.h"
 
 #include <SDL.h>
 
@@ -1145,6 +1146,22 @@ bool scenarioCheckThrowWaitPreconditions(unsigned tick, Navi* navi)
 	}
 	scenarioFailf(tick, "info 63 has a type-2 info key", "%d info keys, none of type 2", iKeys);
 	return false;
+}
+
+static zen::DrawGameInfo* sRegisteredHud = nullptr;
+
+void pc_scenario_register_draw_game_info(zen::DrawGameInfo* hud)
+{
+	sRegisteredHud = hud;
+}
+
+bool pc_scenario_check_hud_layout(const char** why)
+{
+	if (!sRegisteredHud) {
+		if (why) *why = "DrawGameInfo not registered";
+		return false;
+	}
+	return sRegisteredHud->checkStandInHudLayout(why);
 }
 
 #endif

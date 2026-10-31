@@ -2,6 +2,7 @@
 
 #include "nectar_assets/mod_writer.h"
 #include "nectar_assets/piki_rig.h"
+#include "nectar_assets/standin_art.h"
 
 #include <algorithm>
 #include <cmath>
@@ -246,82 +247,7 @@ const StandInModelSpec* findStandInModel(const std::string& path)
 
 Model buildStandInModel(const StandInModelSpec& spec)
 {
-	Model m;
-	// Normales de las 6 caras y una UV (0, 0): los .mod que escribe writeMeshMod
-	// llevan la UV 0 aunque no haya textura, y el formato de vértice lo pide.
-	const Vec3 faceNormal[6] = { { 1, 0, 0 }, { -1, 0, 0 }, { 0, 1, 0 }, { 0, -1, 0 }, { 0, 0, 1 }, { 0, 0, -1 } };
-	m.normals.assign(faceNormal, faceNormal + 6);
-	m.uvs[0].push_back(Vec2 {});
-
-	const int joints = spec.jointCount();
-	for (int j = 0; j < joints; j++) {
-		const float h = j == 0 ? spec.halfSize : spec.halfSize * 0.5f;
-		const int base = int(m.positions.size());
-		for (int c = 0; c < 8; c++) { // bit 0 = x, 1 = y, 2 = z
-			m.positions.push_back({ (c & 1) ? h : -h, (c & 2) ? h : -h, (c & 4) ? h : -h });
-		}
-
-		// Cada cara son 4 esquinas en un orden cualquiera; el orden de los
-		// triángulos se corrige para que la cara de delante quede en sentido
-		// horario (n = (c - a) x (b - a), como el juego y writeMeshMod).
-		const int faces[6][4] = { { 1, 3, 7, 5 }, { 0, 4, 6, 2 }, { 2, 6, 7, 3 }, { 0, 1, 5, 4 }, { 4, 5, 7, 6 }, { 0, 2, 3, 1 } };
-		ModMtxGroup group;
-		group.deps = { j };
-		for (int f = 0; f < 6; f++) {
-			const int* q = faces[f];
-			const int tri[2][3] = { { q[0], q[1], q[2] }, { q[0], q[2], q[3] } };
-			for (const auto& t : tri) {
-				const Vec3 &a = m.positions[std::size_t(base + t[0])], &b = m.positions[std::size_t(base + t[1])], &c = m.positions[std::size_t(base + t[2])];
-				const Vec3 u { c.x - a.x, c.y - a.y, c.z - a.z }, v { b.x - a.x, b.y - a.y, b.z - a.z };
-				const Vec3 n { u.y * v.z - u.z * v.y, u.z * v.x - u.x * v.z, u.x * v.y - u.y * v.x };
-				const Vec3& want = faceNormal[f];
-				const bool flip  = n.x * want.x + n.y * want.y + n.z * want.z < 0.0f;
-				ModTriangle tr;
-				const int order[3] = { 0, flip ? 2 : 1, flip ? 1 : 2 };
-				for (int k = 0; k < 3; k++) {
-					ModVertex& vx = tr.v[k];
-					vx.mtxSlot    = 0;
-					vx.pos        = base + t[order[k]];
-					vx.nrm        = f;
-					vx.uv[0]      = 0;
-				}
-				group.tris.push_back(tr);
-			}
-		}
-
-		ModMesh mesh;
-		mesh.parentJoint = j;
-		mesh.flags       = 1u | (1u << 3); // matriz de posición y UV 0, como writeMeshMod
-		mesh.groups.push_back(std::move(group));
-		m.meshes.push_back(std::move(mesh));
-
-		ModMaterial mat;
-		mat.colour = spec.colour; // opaco, sin textura
-		m.materials.push_back(mat);
-
-		m.vtxMatrices.push_back({ true, j });
-
-		ModJoint joint;
-		joint.parent    = spec.parents[std::size_t(j)];
-		joint.boundsMin = { -h, -h, -h };
-		joint.boundsMax = { h, h, h };
-		joint.scale     = { 1, 1, 1 };
-		joint.matPolys.push_back({ j, j });
-		m.joints.push_back(std::move(joint));
-	}
-	if (spec.platform && !m.meshes.empty()) {
-		// The root box's triangles, as rock (the code standin_world.cpp's platform models use).
-		for (const ModMtxGroup& g : m.meshes[0].groups) {
-			for (const ModTriangle& t : g.tris) {
-				ModCollTri c;
-				c.code = 0x20000000u;
-				for (int k = 0; k < 3; k++) c.v[k] = t.v[k].pos;
-				m.collision.push_back(c);
-			}
-		}
-	}
-	m.trailingIni = spec.collInfo;
-	return m;
+	return buildArtStandInModel(spec);
 }
 
 bool writeStandInModels(std::vector<StandInModelFile>& out, std::string& error)

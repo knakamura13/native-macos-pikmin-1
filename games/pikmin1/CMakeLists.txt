@@ -438,6 +438,7 @@ if (PIKMIN_BUILD_SCENARIOS)
         pc_port/scenarios/pc_scenario_screenshot.cpp
         pc_port/scenarios/pc_scenario_list.cpp
         pc_port/scenarios/scenario_boot_smoke.cpp
+        pc_port/scenarios/scenario_hud_layout.cpp
         pc_port/scenarios/scenario_throw_release.cpp
         pc_port/scenarios/scenario_day30_clock.cpp
         pc_port/scenarios/scenario_sprout_landing.cpp
@@ -1480,7 +1481,10 @@ if(PIKMIN_BUILD_TESTS)
         ${NECTAR_ASSETS_DIR}/tests/mod_writer_test.cpp
         ${NECTAR_ASSETS_DIR}/tests/game_loader_stubs.cpp
         ${NECTAR_ASSETS_DIR}/src/mod_writer.cpp
+        ${NECTAR_ASSETS_DIR}/src/mesh_mod.cpp
         ${NECTAR_ASSETS_DIR}/src/standin_models.cpp
+        ${NECTAR_ASSETS_DIR}/src/standin_art.cpp
+        ${NECTAR_ASSETS_DIR}/src/texture.cpp
         ${NECTAR_ASSETS_DIR}/src/mod.cpp
         ${NECTAR_ASSETS_DIR}/src/image.cpp
         ${PC_PORT_DIR}/launcher/bti_decode.cpp
@@ -1498,6 +1502,7 @@ if(PIKMIN_BUILD_TESTS)
         ${NECTAR_ASSETS_DIR}/src/texture.cpp
         ${NECTAR_ASSETS_DIR}/src/bundle.cpp
         ${NECTAR_ASSETS_DIR}/src/standin_textures.cpp
+        ${NECTAR_ASSETS_DIR}/src/standin_art.cpp
         ${NECTAR_ASSETS_DIR}/src/mesh_mod.cpp
         ${NECTAR_ASSETS_DIR}/src/mod.cpp
         ${NECTAR_ASSETS_DIR}/src/image.cpp
@@ -2135,7 +2140,7 @@ if(PIKMIN_BUILD_SCENARIOS)
         FIXTURES_SETUP scenario_standin_tree
         TIMEOUT 120)
     file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/scenario-logs")
-    foreach(scenario boot_smoke throw_release day30_clock extinction captain_death ship_parts captain_damage extinction_day30)
+    foreach(scenario boot_smoke hud_layout throw_release day30_clock extinction captain_death ship_parts captain_damage extinction_day30)
         foreach(rate 30 60)
             add_test(NAME scenario_${scenario}_${rate}
                 COMMAND ${CMAKE_COMMAND}

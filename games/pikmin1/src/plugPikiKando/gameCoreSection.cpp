@@ -1,4 +1,7 @@
 #include "GameCoreSection.h"
+#if PIKI_SCENARIOS
+#include "scenarios/pc_scenario.h"
+#endif
 #if defined(PIKI_PC_PORT)
 #include <SDL.h>
 #include <cstdlib>
@@ -3012,6 +3015,9 @@ GameCoreSection::GameCoreSection(Controller* controller, MapMgr* mgr, Camera& ca
 	memStat->end("gamecore");
 
 	mDrawGameInfo = new zen::DrawGameInfo(!gameflow.mIsChallengeMode ? zen::DrawGameInfo::MODE_Story : zen::DrawGameInfo::MODE_Challenge);
+#if PIKI_SCENARIOS
+	pc_scenario_register_draw_game_info(mDrawGameInfo);
+#endif
 #if defined(PIKI_PC_PORT)
 	if (mNavi2) {
 		containerWindow2 = new zen::DrawContainer(2);
