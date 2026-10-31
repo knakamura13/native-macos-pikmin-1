@@ -85,6 +85,7 @@ void pc_settings_scenario_set_window_size(int width, int height);
 void pc_settings_scenario_set_quick_grab(int on);
 void pc_settings_scenario_set_throw_speed_pct(int pct);
 void pc_settings_scenario_set_chain_actions(int on);
+void pc_settings_scenario_set_whistle_radius_pct(int pct);
 void pc_settings_scenario_set_piki_invincible(int on);
 void pc_settings_scenario_set_navi_health_pct(int pct);
 void pc_settings_scenario_set_teki_health_pct(int pct);
