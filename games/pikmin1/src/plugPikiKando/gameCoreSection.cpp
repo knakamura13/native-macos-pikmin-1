@@ -927,6 +927,9 @@ void GameCoreSection::prepareBadEnd()
  */
 void GameCoreSection::exitStage()
 {
+#if PIKI_SCENARIOS
+	pc_scenario_unregister_draw_game_info();
+#endif
 #if defined(PIKI_PC_PORT)
 	pc_window_set_gameplay_active(false);
 	// Stale focus would keep depth of field running on the file-select and

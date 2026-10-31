@@ -29,7 +29,12 @@ ModMtxGroup& jointGroup(Model& m, int joint)
 	return m.meshes[std::size_t(joint)].groups[0];
 }
 
-void bindJointMaterial(Model& m, int joint, int material)
+bool jointInRange(const StandInModelSpec& spec, int joint)
+{
+	return joint >= 0 && joint < spec.jointCount();
+}
+
+void setJointMaterial(Model& m, int joint, int material)
 {
 	m.joints[std::size_t(joint)].matPolys.clear();
 	m.joints[std::size_t(joint)].matPolys.push_back({ material, joint });
@@ -96,12 +101,13 @@ void pushClockwiseTri(Model& m, ModMtxGroup& group, int ia, int ib, int ic, int 
 	group.tris.push_back(tr);
 }
 
-void addBoxMesh(Model& m, int joint, int material, float hx, float hy, float hz, bool replaceJoint = false)
+void addBoxMesh(Model& m, const StandInModelSpec& spec, int joint, int material, float hx, float hy, float hz, Vec3 center, bool replaceJoint = true)
 {
+	if (!jointInRange(spec, joint)) return;
 	if (replaceJoint) clearJointMesh(m, joint);
 	const int base = int(m.positions.size());
 	for (int c = 0; c < 8; c++) {
-		m.positions.push_back({ (c & 1) ? hx : -hx, (c & 2) ? hy : -hy, (c & 4) ? hz : -hz });
+		m.positions.push_back({ center.x + ((c & 1) ? hx : -hx), center.y + ((c & 2) ? hy : -hy), center.z + ((c & 4) ? hz : -hz) });
 	}
 	if (m.normals.empty()) m.normals.assign(kFaceNormal, kFaceNormal + 6);
 	if (m.uvs[0].empty()) m.uvs[0].push_back(Vec2 {});
@@ -114,11 +120,12 @@ void addBoxMesh(Model& m, int joint, int material, float hx, float hy, float hz,
 			pushClockwiseTri(m, group, base + t[0], base + t[1], base + t[2], f);
 		}
 	}
-	bindJointMaterial(m, joint, material);
+	setJointMaterial(m, joint, material);
 }
 
-void addSphereMesh(Model& m, int joint, int material, float radius, int stacks, int slices, bool replaceJoint = false)
+void addSphereMesh(Model& m, const StandInModelSpec& spec, int joint, int material, float radius, int stacks, int slices, Vec3 center, bool replaceJoint = true)
 {
+	if (!jointInRange(spec, joint)) return;
 	if (replaceJoint) clearJointMesh(m, joint);
 	if (m.normals.empty()) m.normals.assign(kFaceNormal, kFaceNormal + 6);
 	if (m.uvs[0].empty()) m.uvs[0].push_back(Vec2 {});
@@ -126,18 +133,19 @@ void addSphereMesh(Model& m, int joint, int material, float radius, int stacks, 
 	ModMtxGroup& group = jointGroup(m, joint);
 	const int base       = int(m.positions.size());
 	const int north      = base;
-	m.positions.push_back({ 0.0f, radius, 0.0f });
+	m.positions.push_back({ center.x, center.y + radius, center.z });
 	for (int si = 1; si < stacks; si++) {
 		const float v     = float(si) / float(stacks);
 		const float phi   = v * 3.14159265f;
 		for (int ti = 0; ti < slices; ti++) {
 			const float u     = float(ti) / float(slices);
 			const float theta = u * 2.0f * 3.14159265f;
-			m.positions.push_back({ radius * std::sin(phi) * std::cos(theta), radius * std::cos(phi), radius * std::sin(phi) * std::sin(theta) });
+			m.positions.push_back({ center.x + radius * std::sin(phi) * std::cos(theta), center.y + radius * std::cos(phi),
+			                        center.z + radius * std::sin(phi) * std::sin(theta) });
 		}
 	}
 	const int south = int(m.positions.size());
-	m.positions.push_back({ 0.0f, -radius, 0.0f });
+	m.positions.push_back({ center.x, center.y - radius, center.z });
 
 	auto ring = [&](int si, int ti) { return base + 1 + (si - 1) * slices + (ti % slices); };
 	for (int ti = 0; ti < slices; ti++) {
@@ -153,29 +161,7 @@ void addSphereMesh(Model& m, int joint, int material, float radius, int stacks, 
 	for (int ti = 0; ti < slices; ti++) {
 		pushClockwiseTri(m, group, south, ring(stacks - 1, ti), ring(stacks - 1, ti + 1), -1);
 	}
-	bindJointMaterial(m, joint, material);
-}
-
-void addRigidCubeJoint(Model& m, int joint, int /*material*/, float h)
-{
-	const int base = int(m.positions.size());
-	for (int c = 0; c < 8; c++) {
-		m.positions.push_back({ (c & 1) ? h : -h, (c & 2) ? h : -h, (c & 4) ? h : -h });
-	}
-	ModMtxGroup group;
-	group.deps = { joint };
-	for (int f = 0; f < 6; f++) {
-		const int* q = kFaces[f];
-		const int tri[2][3] = { { q[0], q[1], q[2] }, { q[0], q[2], q[3] } };
-		for (const auto& t : tri) {
-			pushClockwiseTri(m, group, base + t[0], base + t[1], base + t[2], f);
-		}
-	}
-	ModMesh mesh;
-	mesh.parentJoint = joint;
-	mesh.flags       = 1u | (1u << 3);
-	mesh.groups.push_back(std::move(group));
-	m.meshes.push_back(std::move(mesh));
+	setJointMaterial(m, joint, material);
 }
 
 Model skeletonModel(const StandInModelSpec& spec)
@@ -187,18 +173,31 @@ Model skeletonModel(const StandInModelSpec& spec)
 	const int defaultMat = addMaterial(m, spec.colour);
 	for (int j = 0; j < joints; j++) {
 		const float h = j == 0 ? spec.halfSize : spec.halfSize * 0.5f;
-		addRigidCubeJoint(m, j, defaultMat, h);
+		ModMesh mesh;
+		mesh.parentJoint = j;
+		mesh.flags       = 1u | (1u << 3);
+		mesh.groups.resize(1);
+		mesh.groups[0].deps = { j };
+		m.meshes.push_back(std::move(mesh));
 		ModJoint joint;
 		joint.parent    = spec.parents[std::size_t(j)];
 		joint.boundsMin = { -h, -h, -h };
 		joint.boundsMax = { h, h, h };
 		joint.scale     = { 1, 1, 1 };
-		joint.matPolys.push_back({ defaultMat, j });
 		m.joints.push_back(std::move(joint));
 		m.vtxMatrices.push_back({ true, j });
+		(void)defaultMat;
 	}
 	m.trailingIni = spec.collInfo;
 	return m;
+}
+
+void fillEmptyJointMeshes(Model& m, const StandInModelSpec& spec)
+{
+	const int placeholderMat = addMaterial(m, { 8, 8, 8, 255 });
+	for (int j = 0; j < spec.jointCount(); j++) {
+		if (jointGroup(m, j).tris.empty()) addBoxMesh(m, spec, j, placeholderMat, 0.01f, 0.01f, 0.01f, {}, true);
+	}
 }
 
 void addPlatformCollision(Model& m, const StandInModelSpec& spec)
@@ -252,22 +251,19 @@ void buildPikiBody(Model& m, const StandInModelSpec& spec, bool red, bool yellow
 	const int leafMat = addMaterial(m, { 50, 190, 60, 255 });
 	const int noseMat  = addMaterial(m, { 220, 40, 40, 255 });
 
-	addBoxMesh(m, 0, skinMat, 2.2f, 1.2f, 2.0f, true);
-	addBoxMesh(m, 1, skinMat, 1.6f, 2.0f, 1.6f, true);
-	addSphereMesh(m, 2, skinMat, 2.4f, 6, 8, true);
-	if (red) addBoxMesh(m, 2, noseMat, 0.6f, 0.5f, 1.2f, false);
-	if (yellow) {
-		addBoxMesh(m, 2, skinMat, 0.4f, 1.0f, 2.2f, false);
-		addBoxMesh(m, 2, skinMat, -0.4f, 1.0f, 2.2f, false);
-	}
-	addBoxMesh(m, kPikiRigLeafTipJoint - 3, leafMat, 0.3f, 1.8f, 0.15f, true);
-	addBoxMesh(m, kPikiRigLeafTipJoint - 2, leafMat, 0.25f, 1.5f, 0.12f, true);
-	addBoxMesh(m, kPikiRigLeafTipJoint, leafMat, 0.8f, 0.5f, 0.8f, true);
-	addBoxMesh(m, kPikiRigRightHandJoint, skinMat, 0.8f, 0.6f, 0.8f, true);
-	addBoxMesh(m, kPikiRigLeftHandJoint, skinMat, 0.8f, 0.6f, 0.8f, true);
-	addBoxMesh(m, 9, skinMat, 1.2f, 0.6f, 1.0f, true);
-	addBoxMesh(m, 10, skinMat, 0.7f, 1.4f, 0.7f, true);
-	addBoxMesh(m, 11, skinMat, 0.7f, 1.4f, 0.7f, true);
+	addBoxMesh(m, spec, 0, skinMat, 2.2f, 1.0f, 2.0f, { 0.0f, -2.5f, 0.0f });
+	addBoxMesh(m, spec, 1, skinMat, 1.4f, 1.8f, 1.2f, { 0.0f, 0.5f, 0.0f });
+	addSphereMesh(m, spec, kPikiRigHeadJoint, skinMat, 2.2f, 6, 8, { 0.0f, 1.5f, 1.0f });
+	if (red) addBoxMesh(m, spec, 3, noseMat, 0.5f, 0.4f, 1.0f, { 0.0f, 1.0f, 2.5f });
+	if (yellow) addBoxMesh(m, spec, 3, skinMat, 1.1f, 0.35f, 0.5f, { 0.0f, 1.2f, 1.4f });
+	addBoxMesh(m, spec, 4, leafMat, 0.25f, 1.6f, 0.12f, { 0.0f, 0.8f, 0.0f });
+	addBoxMesh(m, spec, 5, leafMat, 0.2f, 1.2f, 0.1f, { 0.0f, 1.6f, 0.0f });
+	addBoxMesh(m, spec, kPikiRigLeafTipJoint, leafMat, 0.9f, 0.35f, 0.9f, { 0.0f, 2.4f, 0.0f });
+	addBoxMesh(m, spec, kPikiRigRightHandJoint, skinMat, 0.7f, 0.5f, 0.7f, { 1.8f, 0.0f, 0.0f });
+	addBoxMesh(m, spec, kPikiRigLeftHandJoint, skinMat, 0.7f, 0.5f, 0.7f, { -1.8f, 0.0f, 0.0f });
+	addBoxMesh(m, spec, 9, skinMat, 1.0f, 0.5f, 0.9f, { 0.0f, -3.5f, 0.0f });
+	addBoxMesh(m, spec, 10, skinMat, 0.6f, 1.2f, 0.6f, { 0.8f, -5.0f, 0.0f });
+	addBoxMesh(m, spec, 11, skinMat, 0.6f, 1.2f, 0.6f, { -0.8f, -5.0f, 0.0f });
 	(void)blue;
 }
 
@@ -275,19 +271,19 @@ void buildCaptain(Model& m, const StandInModelSpec& spec)
 {
 	const int suit = addMaterial(m, { 240, 240, 250, 255 });
 	const int pack = addMaterial(m, { 180, 60, 60, 255 });
-	const int helm = addMaterial(m, { 200, 220, 255, 200 });
+	const int helm = addMaterial(m, { 200, 220, 255, 255 });
 	const int dark = addMaterial(m, { 60, 60, 70, 255 });
-	addBoxMesh(m, 0, dark, 2.5f, 1.0f, 2.5f, true);
-	addBoxMesh(m, 1, suit, 2.0f, 2.5f, 1.8f, true);
-	addSphereMesh(m, 2, helm, 3.0f, 6, 8, true);
-	addBoxMesh(m, 4, pack, 1.0f, 1.5f, 0.8f, true);
-	addBoxMesh(m, 5, dark, 0.2f, 2.5f, 0.2f, true);
-	addBoxMesh(m, 6, dark, 0.35f, 0.35f, 0.35f, true);
-	addBoxMesh(m, kPikiRigRightHandJoint, suit, 0.9f, 0.7f, 0.9f, true);
-	addBoxMesh(m, kPikiRigLeftHandJoint, suit, 0.9f, 0.7f, 0.9f, true);
-	addBoxMesh(m, 9, dark, 1.4f, 0.7f, 1.2f, true);
-	addBoxMesh(m, 10, dark, 0.8f, 1.6f, 0.8f, true);
-	addBoxMesh(m, 11, dark, 0.8f, 1.6f, 0.8f, true);
+	addBoxMesh(m, spec, 0, dark, 2.8f, 0.8f, 2.8f, { 0.0f, -2.0f, 0.0f });
+	addBoxMesh(m, spec, 1, suit, 1.8f, 2.2f, 1.5f, { 0.0f, 1.0f, 0.0f });
+	addSphereMesh(m, spec, kPikiRigHeadJoint, helm, 2.8f, 6, 8, { 0.0f, 3.5f, 0.5f });
+	addBoxMesh(m, spec, 4, pack, 1.2f, 1.6f, 0.7f, { 0.0f, 1.5f, -1.8f });
+	addBoxMesh(m, spec, 5, dark, 0.15f, 2.8f, 0.15f, { 0.0f, 5.5f, 0.0f });
+	addBoxMesh(m, spec, 6, dark, 0.3f, 0.3f, 0.3f, { 0.0f, 6.8f, 0.0f });
+	addBoxMesh(m, spec, kPikiRigRightHandJoint, suit, 0.8f, 0.6f, 0.8f, { 2.0f, 0.5f, 0.0f });
+	addBoxMesh(m, spec, kPikiRigLeftHandJoint, suit, 0.8f, 0.6f, 0.8f, { -2.0f, 0.5f, 0.0f });
+	addBoxMesh(m, spec, 9, dark, 1.2f, 0.6f, 1.0f, { 0.0f, -3.5f, 0.0f });
+	addBoxMesh(m, spec, 10, dark, 0.7f, 1.4f, 0.7f, { 0.7f, -5.0f, 0.0f });
+	addBoxMesh(m, spec, 11, dark, 0.7f, 1.4f, 0.7f, { -0.7f, -5.0f, 0.0f });
 	(void)spec;
 }
 
@@ -296,23 +292,23 @@ void buildOnion(Model& m, const StandInModelSpec& spec)
 	const int bodyMat = addMaterial(m, spec.colour);
 	const int stemMat = addMaterial(m, { 80, 160, 70, 255 });
 	const int legMat  = addMaterial(m, { 100, 70, 40, 255 });
-	addSphereMesh(m, 0, bodyMat, spec.halfSize * 0.9f, 7, 10, true);
+	const float r = spec.halfSize;
+	addSphereMesh(m, spec, 0, bodyMat, r * 0.85f, 7, 10, { 0.0f, r * 0.6f, 0.0f });
 	for (int leg : { 3, 6, 9 }) {
-		addBoxMesh(m, leg, legMat, 1.5f, 4.0f, 1.5f, true);
+		addBoxMesh(m, spec, leg, legMat, 1.2f, 3.5f, 1.2f, { 0.0f, -2.0f, 0.0f });
 	}
-	addBoxMesh(m, 1, stemMat, 2.0f, 3.0f, 2.0f, true);
-	addSphereMesh(m, 12, bodyMat, 3.0f, 5, 7, true);
-	(void)spec;
+	addBoxMesh(m, spec, 1, stemMat, 1.5f, 2.5f, 1.5f, { 0.0f, r * 1.2f, 0.0f });
+	addSphereMesh(m, spec, 12, bodyMat, r * 0.55f, 5, 7, { 0.0f, r * 1.8f, 0.0f });
 }
 
 void buildShip(Model& m, const StandInModelSpec& spec)
 {
 	const int hull = addMaterial(m, spec.colour);
-	const int glass = addMaterial(m, { 120, 200, 255, 180 });
+	const int glass = addMaterial(m, { 120, 200, 255, 255 });
 	const int leg = addMaterial(m, { 90, 90, 100, 255 });
-	addSphereMesh(m, 0, hull, 18.0f, 6, 12, true);
-	addBoxMesh(m, 3, glass, 12.0f, 6.0f, 12.0f, true);
-	for (int j : { 16, 19, 20 }) addBoxMesh(m, j, leg, 2.0f, 8.0f, 2.0f, true);
+	addSphereMesh(m, spec, 0, hull, 16.0f, 6, 12, { 0.0f, 10.0f, 0.0f });
+	addBoxMesh(m, spec, 3, glass, 10.0f, 5.0f, 10.0f, { 0.0f, 14.0f, 12.0f });
+	for (int j : { 16, 19, 20 }) addBoxMesh(m, spec, j, leg, 1.5f, 7.0f, 1.5f, { 0.0f, -4.0f, 0.0f });
 	(void)spec;
 }
 
@@ -321,9 +317,9 @@ void buildPellet(Model& m, const StandInModelSpec& spec)
 	const int mat = addMaterial(m, spec.colour);
 	const int rim = addMaterial(m, { 40, 40, 40, 255 });
 	const float r = spec.halfSize;
-	addSphereMesh(m, 0, mat, r * 0.85f, 5, 10, true);
-	addBoxMesh(m, 0, rim, r, 0.4f, r, false);
-	if (spec.jointCount() > 1) addBoxMesh(m, 1, rim, 0.8f, 0.3f, 0.8f, true);
+	addSphereMesh(m, spec, 0, mat, r * 0.85f, 5, 10, { 0.0f, r * 0.2f, 0.0f });
+	addBoxMesh(m, spec, 1, rim, r * 0.95f, 0.35f, r * 0.95f, { 0.0f, -r * 0.5f, 0.0f });
+	if (spec.jointCount() > 2) addBoxMesh(m, spec, 2, rim, 0.6f, 0.25f, 0.6f, { 0.0f, r * 0.5f, 0.0f });
 }
 
 void buildChappy(Model& m, const StandInModelSpec& spec)
@@ -331,11 +327,11 @@ void buildChappy(Model& m, const StandInModelSpec& spec)
 	const int body = addMaterial(m, spec.colour);
 	const int belly = addMaterial(m, { 240, 210, 170, 255 });
 	const int spot = addMaterial(m, { 120, 40, 30, 255 });
-	addSphereMesh(m, 0, body, 10.0f, 6, 10, true);
-	addSphereMesh(m, 1, belly, 8.0f, 5, 8, true);
-	addSphereMesh(m, 4, body, 7.0f, 5, 7, true);
-	addBoxMesh(m, 4, spot, 2.0f, 0.6f, 1.0f, false);
-	for (int j : { 8, 11 }) addBoxMesh(m, j, body, 2.0f, 3.0f, 2.0f, true);
+	addSphereMesh(m, spec, 0, body, 10.0f, 6, 10, { 0.0f, 0.0f, 0.0f });
+	addSphereMesh(m, spec, 1, belly, 7.5f, 5, 8, { 0.0f, -1.0f, 2.0f });
+	addSphereMesh(m, spec, 4, body, 6.5f, 5, 7, { 0.0f, 2.0f, 6.0f });
+	addBoxMesh(m, spec, 5, spot, 1.8f, 0.5f, 0.9f, { 0.0f, 2.5f, 8.5f });
+	for (int j : { 8, 11 }) addBoxMesh(m, spec, j, body, 1.8f, 2.8f, 1.8f, { 0.0f, -2.0f, 0.0f });
 	(void)spec;
 }
 
@@ -461,6 +457,9 @@ std::vector<std::uint8_t> artHudTexture(const std::string& baseName)
 		}
 		artFillCircle(img, 32, 34, 18, r, g, b);
 		artFillCircle(img, 32, 16, 8, 60, 180, 60);
+	} else if (baseName.find("_sha64") != std::string::npos) {
+		const int digit = baseName[0] >= '0' && baseName[0] <= '9' ? baseName[0] - '0' : -1;
+		if (digit >= 0) artFillCircle(img, 34, 38, 12, 0, 0, 0, 70);
 	} else if (baseName.find("_64") != std::string::npos || (baseName.size() == 5 && baseName[1] == '_')) {
 		const int digit = baseName[0] >= '0' && baseName[0] <= '9' ? baseName[0] - '0' : -1;
 		artFillRect(img, 4, 4, 60, 60, 20, 20, 30, 200);
@@ -493,38 +492,35 @@ Model buildArtStandInModel(const StandInModelSpec& spec)
 		buildPikiBody(m, spec, spec.path.find("red") != std::string::npos, spec.path.find("yel") != std::string::npos, spec.path.find("blu") != std::string::npos);
 		break;
 	case Kind::Cursor:
-		addBoxMesh(m, 0, addMaterial(m, { 255, 255, 80, 255 }), 0.3f, 0.3f, 2.5f, true);
-		addBoxMesh(m, 0, addMaterial(m, { 255, 255, 255, 255 }), 1.2f, 0.2f, 0.2f, false);
+		addBoxMesh(m, spec, 0, addMaterial(m, { 255, 255, 255, 255 }), 1.4f, 0.18f, 0.18f, { 0.0f, 0.0f, 0.0f });
 		break;
 	case Kind::Marker:
-		addSphereMesh(m, 0, addMaterial(m, { 255, 255, 100, 120 }), spec.halfSize, 5, 8, true);
+		addSphereMesh(m, spec, 0, addMaterial(m, { 255, 255, 100, 120 }), spec.halfSize, 5, 8, {});
 		break;
 	case Kind::Happa:
-		if (spec.path.find("leaf") != std::string::npos) addBoxMesh(m, 0, addMaterial(m, spec.colour), 0.2f, 2.0f, 1.0f, true);
-		else if (spec.path.find("bud") != std::string::npos) addSphereMesh(m, 0, addMaterial(m, spec.colour), 1.5f, 4, 6, true);
-		else addBoxMesh(m, 0, addMaterial(m, spec.colour), 1.2f, 0.3f, 1.2f, true);
+		if (spec.path.find("leaf") != std::string::npos) addBoxMesh(m, spec, 0, addMaterial(m, spec.colour), 0.2f, 2.0f, 1.0f, { 0.0f, 1.0f, 0.0f });
+		else if (spec.path.find("bud") != std::string::npos) addSphereMesh(m, spec, 0, addMaterial(m, spec.colour), 1.5f, 4, 6, { 0.0f, 0.8f, 0.0f });
+		else addBoxMesh(m, spec, 0, addMaterial(m, spec.colour), 1.2f, 0.3f, 1.2f, { 0.0f, 0.5f, 0.0f });
 		break;
 	case Kind::Pellet: buildPellet(m, spec); break;
 	case Kind::Onion: buildOnion(m, spec); break;
 	case Kind::Ship: buildShip(m, spec); break;
-	case Kind::Bomb:
-		addSphereMesh(m, 0, addMaterial(m, spec.colour), spec.halfSize, 5, 7, true);
-		addBoxMesh(m, 0, addMaterial(m, { 40, 40, 40, 255 }), 0.3f, 1.5f, 0.3f, false);
-		break;
+	case Kind::Bomb: addSphereMesh(m, spec, 0, addMaterial(m, spec.colour), spec.halfSize, 5, 7, {}); break;
 	case Kind::PikiHead:
-		addSphereMesh(m, 0, addMaterial(m, spec.colour), 2.5f, 5, 6, true);
-		addBoxMesh(m, 3, addMaterial(m, { 50, 180, 50, 255 }), 0.2f, 1.2f, 0.2f, true);
+		addSphereMesh(m, spec, 0, addMaterial(m, spec.colour), 2.5f, 5, 6, { 0.0f, 1.0f, 0.0f });
+		addBoxMesh(m, spec, 3, addMaterial(m, { 50, 180, 50, 255 }), 0.2f, 1.2f, 0.2f, { 0.0f, 2.5f, 0.0f });
 		break;
 	case Kind::Chappy: buildChappy(m, spec); break;
 	default: {
 		const int mat = addMaterial(m, spec.colour);
 		for (int j = 0; j < spec.jointCount(); j++) {
 			const float h = j == 0 ? spec.halfSize : spec.halfSize * 0.5f;
-			addBoxMesh(m, j, mat, h, h, h, true);
+			addBoxMesh(m, spec, j, mat, h, h, h, {});
 		}
 		break;
 	}
 	}
+	fillEmptyJointMeshes(m, spec);
 	addPlatformCollision(m, spec);
 	return m;
 }

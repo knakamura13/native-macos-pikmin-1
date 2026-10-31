@@ -216,6 +216,7 @@ include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/include/Dolphin/GX
     ${PC_PORT_DIR}
     ${PC_PORT_DIR}/gl
+    ${NECTAR_LIBS_DIR}/nectar_assets/include
 )
 
 ###############################################################################
@@ -439,6 +440,7 @@ if (PIKMIN_BUILD_SCENARIOS)
         pc_port/scenarios/pc_scenario_list.cpp
         pc_port/scenarios/scenario_boot_smoke.cpp
         pc_port/scenarios/scenario_hud_layout.cpp
+        pc_port/scenarios/scenario_standin_showcase.cpp
         pc_port/scenarios/scenario_throw_release.cpp
         pc_port/scenarios/scenario_day30_clock.cpp
         pc_port/scenarios/scenario_sprout_landing.cpp

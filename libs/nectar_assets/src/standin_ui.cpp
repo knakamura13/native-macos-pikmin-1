@@ -251,8 +251,8 @@ std::vector<StandinLayout> standinBloLayouts()
 		k.add(placed(pane("na_i"), standin_layout::kPlay10NaI));
 		k.add(texPic("navi", "rp_l64.bti", standin_layout::kPlay10Navi));
 		k.add(placed(pane("life"), standin_layout::kPlay10Life));
-		k.add(texPic("pin1", "dot_24.bti", { 536, 388, 20, 20 }));
-		k.add(texPic("pin2", "dot_24.bti", { 556, 408, 20, 20 }));
+		k.add(texPic("pin1", "dot_24.bti", { standin_layout::kPlay10Life.x + 8, standin_layout::kPlay10Life.y + 4, 20, 20 }));
+		k.add(texPic("pin2", "dot_24.bti", { standin_layout::kPlay10Life.x + 28, standin_layout::kPlay10Life.y + 24, 20, 20 }));
 		out.push_back(layout("play10.blo", k));
 	}
 	{ // drawGameInfo.cpp:725-745, 832-840.
@@ -261,23 +261,30 @@ std::vector<StandinLayout> standinBloLayouts()
 		k.add(placed(pane("w_00"), { 60, 404, 32, 32 }));
 		k.add(placed(pane("x_00"), { 96, 404, 32, 32 }));
 		k.add(texPic("w_01", "dot_32.bti", { 132, 404, 32, 32 }));
-		const standin_layout::Rect row0 { 480, 416, 24, 24 };
-		k.add(texPic("c_ml", "0_64.bti", { row0.x, row0.y, 24, 24 }));
-		k.add(texPic("c_mc", "1_64.bti", { row0.x + 26, row0.y, 24, 24 }));
-		k.add(texPic("c_mr", "2_64.bti", { row0.x + 52, row0.y, 24, 24 }));
-		k.add(texPic("c_ll", "3_64.bti", { row0.x, row0.y + 28, 24, 24 }));
-		k.add(texPic("c_lc", "4_64.bti", { row0.x + 26, row0.y + 28, 24, 24 }));
-		k.add(texPic("c_lr", "5_64.bti", { row0.x + 52, row0.y + 28, 24, 24 }));
-		k.add(texPic("c_sl", "6_64.bti", { row0.x + 80, row0.y, 24, 24 }));
-		k.add(texPic("c_sc", "7_64.bti", { row0.x + 106, row0.y, 24, 24 }));
-		k.add(texPic("c_sr", "8_64.bti", { row0.x + 132, row0.y, 24, 24 }));
-		k.add(texPic("c_s1", "9_64.bti", { row0.x + 158, row0.y, 24, 24 }));
-		k.add(texPic("dc_c", "1_64.bti", { standin_layout::kPlayDayDate.x + 40, standin_layout::kPlayDayDate.y, 24, 24 }));
-		k.add(texPic("dc_l", "0_64.bti", { standin_layout::kPlayDayDate.x, standin_layout::kPlayDayDate.y, 24, 24 }));
-		k.add(texPic("dc_r", "2_64.bti", { standin_layout::kPlayDayDate.x + 80, standin_layout::kPlayDayDate.y, 24, 24 }));
-		k.add(texPic("dcsc", "1_sha64.bti", { standin_layout::kPlayDayDate.x + 40, standin_layout::kPlayDayDate.y + 2, 24, 24 }));
-		k.add(texPic("dcsl", "0_sha64.bti", { standin_layout::kPlayDayDate.x, standin_layout::kPlayDayDate.y + 2, 24, 24 }));
-		k.add(texPic("dcsr", "2_sha64.bti", { standin_layout::kPlayDayDate.x + 80, standin_layout::kPlayDayDate.y + 2, 24, 24 }));
+		const int cx = standin_layout::kCounterStartX;
+		const int y0 = standin_layout::kCounterRow0Y;
+		const int y1 = standin_layout::kCounterRow1Y;
+		const int step = standin_layout::kCounterStep;
+		const int cell = standin_layout::kCounterCell;
+		auto counter = [&](const char* tag, const char* tex, int col, int row) {
+			k.add(texPic(tag, tex, { cx + col * step, row == 0 ? y0 : y1, cell, cell }));
+		};
+		counter("c_ml", "0_64.bti", 0, 0);
+		counter("c_mc", "1_64.bti", 1, 0);
+		counter("c_mr", "2_64.bti", 2, 0);
+		counter("c_ll", "3_64.bti", 0, 1);
+		counter("c_lc", "4_64.bti", 1, 1);
+		counter("c_lr", "5_64.bti", 2, 1);
+		counter("c_sl", "6_64.bti", 3, 0);
+		counter("c_sc", "7_64.bti", 4, 0);
+		counter("c_sr", "8_64.bti", 5, 0);
+		counter("c_s1", "9_64.bti", 6, 0);
+		k.add(texPic("dc_c", "1_64.bti", { standin_layout::kPlayDayDate.x + 40, standin_layout::kPlayDayDate.y, cell, cell }));
+		k.add(texPic("dc_l", "0_64.bti", { standin_layout::kPlayDayDate.x, standin_layout::kPlayDayDate.y, cell, cell }));
+		k.add(texPic("dc_r", "2_64.bti", { standin_layout::kPlayDayDate.x + 80, standin_layout::kPlayDayDate.y, cell, cell }));
+		k.add(texPic("dcsc", "1_sha64.bti", { standin_layout::kPlayDayDate.x + 40, standin_layout::kPlayDayDate.y + 2, cell, cell }));
+		k.add(texPic("dcsl", "0_sha64.bti", { standin_layout::kPlayDayDate.x, standin_layout::kPlayDayDate.y + 2, cell, cell }));
+		k.add(texPic("dcsr", "2_sha64.bti", { standin_layout::kPlayDayDate.x + 80, standin_layout::kPlayDayDate.y + 2, cell, cell }));
 		out.push_back(layout("play_day.blo", k));
 	}
 

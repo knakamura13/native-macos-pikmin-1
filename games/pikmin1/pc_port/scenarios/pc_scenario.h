@@ -119,6 +119,7 @@ bool pc_scenario_skip_boot_menus(void);
 
 #if PIKI_SCENARIOS
 void pc_scenario_register_draw_game_info(zen::DrawGameInfo* hud);
+void pc_scenario_unregister_draw_game_info(void);
 bool pc_scenario_check_hud_layout(const char** why);
 #endif
 

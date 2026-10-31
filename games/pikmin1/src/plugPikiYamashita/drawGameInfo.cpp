@@ -11,6 +11,7 @@
 #include "zen/Graphics.h"
 #if defined(PIKI_PC_PORT)
 #include "Geometry.h"
+#include "nectar_assets/standin_layout.h"
 #include "pc_gfx.h"
 #include "pc_art.h"
 #include "pc_coop.h"
@@ -864,6 +865,19 @@ void zen::DrawGameInfo::update()
 #if PIKI_SCENARIOS && defined(PIKI_PC_PORT)
 bool zen::DrawGameInfo::checkStandInHudLayout(const char** why) const
 {
+	using nectar::standin_layout::Rect;
+	using nectar::standin_layout::kPlay10Life;
+	using nectar::standin_layout::kPlay10Navi;
+	using nectar::standin_layout::kPlay09Suni;
+	using nectar::standin_layout::kPlayDayCounters;
+	using nectar::standin_layout::kCounterCell;
+	using nectar::standin_layout::kCounterStartX;
+	using nectar::standin_layout::kCounterRow0Y;
+	using nectar::standin_layout::kCounterStep;
+	using nectar::standin_layout::kTopBandMaxY;
+	using nectar::standin_layout::rectInsideScreen;
+	using nectar::standin_layout::rectsOverlap;
+
 	if (!mLowerScreenMgr || !mUpperScreenMgr || !mModeScreenMgr) {
 		if (why) *why = "screen mgr missing";
 		return false;
@@ -874,19 +888,40 @@ bool zen::DrawGameInfo::checkStandInHudLayout(const char** why) const
 		if (why) *why = "life or navi pane missing";
 		return false;
 	}
-	if (life->getPosH() < 440 || life->getPosV() < 360) {
-		if (why) *why = "life pane not bottom-right";
+	const Rect lifeR { life->getPosH(), life->getPosV(), life->getWidth(), life->getHeight() };
+	const Rect naviR { navi->getPosH(), navi->getPosV(), navi->getWidth(), navi->getHeight() };
+	if (!rectInsideScreen(lifeR)) {
+		if (why) *why = "life pane off screen";
 		return false;
 	}
-	if (navi->getPosH() < 440 || navi->getPosV() < 360) {
-		if (why) *why = "navi pane not bottom-right";
+	if (!rectInsideScreen(naviR)) {
+		if (why) *why = "navi pane off screen";
 		return false;
 	}
 	P2DPane* suni = mUpperScreenMgr->search('suni', true);
-	if (!suni || suni->getPosV() > 120) {
+	if (!suni || suni->getPosV() > kTopBandMaxY) {
 		if (why) *why = "sun track not in top band";
 		return false;
 	}
+	const Rect counterBand = kPlayDayCounters;
+	if (rectsOverlap(lifeR, counterBand)) {
+		if (why) *why = "life overlaps counter band";
+		return false;
+	}
+	const Rect lastDigit { kCounterStartX + 6 * kCounterStep, kCounterRow0Y, kCounterCell, kCounterCell };
+	if (!rectInsideScreen(lastDigit)) {
+		if (why) *why = "last counter digit off screen";
+		return false;
+	}
+	P2DPane* cS1 = mModeScreenMgr->search('c_s1', true);
+	if (cS1) {
+		const Rect d { cS1->getPosH(), cS1->getPosV(), cS1->getWidth(), cS1->getHeight() };
+		if (!rectInsideScreen(d)) {
+			if (why) *why = "c_s1 counter off screen";
+			return false;
+		}
+	}
+	(void)kPlay09Suni;
 	return true;
 }
 #endif

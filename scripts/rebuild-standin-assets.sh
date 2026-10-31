@@ -10,5 +10,31 @@ cmake -S "$ROOT/games/pikmin1" -B "$BUILD" \
   -DPIKMIN_NATIVE_JAUDIO=OFF \
   -DPIKMIN_BUILD_SCENARIOS=ON
 cmake --build "$BUILD" --target nectar_standin_generator
-"$BUILD/nectar_standin_generator" "$OUT"
-echo "Stand-in assets written to $OUT"
+
+find_generator() {
+  local base="$BUILD/nectar_standin_generator"
+  if [[ -x "$base" ]]; then echo "$base"; return; fi
+  for sub in Debug Release RelWithDebInfo MinSizeRel; do
+    if [[ -x "$BUILD/$sub/nectar_standin_generator" ]]; then
+      echo "$BUILD/$sub/nectar_standin_generator"
+      return
+    fi
+  done
+  echo "nectar_standin_generator not found under $BUILD" >&2
+  exit 1
+}
+
+GEN="$(find_generator)"
+TMP="$(mktemp -d)"
+trap 'rm -rf "$TMP"' EXIT
+
+"$GEN" "$TMP/first"
+"$GEN" "$TMP/second"
+if ! diff -qr "$TMP/first/assets" "$TMP/second/assets" >/dev/null; then
+  echo "rebuild-standin-assets: two generator runs differ" >&2
+  diff -qr "$TMP/first/assets" "$TMP/second/assets" >&2 || true
+  exit 1
+fi
+
+"$GEN" "$OUT"
+echo "Stand-in assets written to $OUT (verified identical double-run)"

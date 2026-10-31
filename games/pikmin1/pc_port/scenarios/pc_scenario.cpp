@@ -1155,6 +1155,11 @@ void pc_scenario_register_draw_game_info(zen::DrawGameInfo* hud)
 	sRegisteredHud = hud;
 }
 
+void pc_scenario_unregister_draw_game_info(void)
+{
+	sRegisteredHud = nullptr;
+}
+
 bool pc_scenario_check_hud_layout(const char** why)
 {
 	if (!sRegisteredHud) {
