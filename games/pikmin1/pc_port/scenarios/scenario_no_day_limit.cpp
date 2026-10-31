@@ -18,10 +18,9 @@
 // still 29. So the next day is Day 29 again and the Day 30 sunset that picks an ending never
 // comes. The setting also blocks achievements (pc_achievements_blocked_reason), checked.
 //
-// Printed, not asserted (see the T12 row): cleanupDayEnd still sets RESFLAG_FinalDay on
-// Day 29, so the diary announces a last day that does not come, and getDocument stores the
-// entry at mDaysSeen[getCurrDay()] with the day not advanced, which is Day 28's slot of the
-// voyage log, not Day 29's.
+// Printed for debugging (T12): with the fixes below, the Day 29 diary lands in slot 29,
+// RESFLAG_FinalDay is not set while No Day Limit is on, and the entry is not the
+// "final day" page (re_g_00).
 #include "scenarios/pc_scenario_list.h"
 
 #if PIKI_SCENARIOS
@@ -126,6 +125,14 @@ public:
 				int pages28 = 0, pages29 = 0;
 				const int doc28 = playerState->mResultFlags.getDayDocument(kDay - 1, pages28);
 				const int doc29 = playerState->mResultFlags.getDayDocument(kDay, pages29);
+				if (doc29 == -1 || pages29 == 0) {
+					scenarioFailf(t, "the Day 29 diary entry is recorded in slot 29", "slot 29 entry %d, %d pages", doc29, pages29);
+					return;
+				}
+				if (doc29 == zen::RESFLAG_FinalDay) {
+					scenarioFailf(t, "No Day Limit must not write the final-day diary page on Day 29", "entry %d (re_g_00)", doc29);
+					return;
+				}
 				std::printf("[scenario] day_end_no_day_limit: phase two at t=%u, day %d (not advanced); diary slot 28 entry %d, slot 29 entry %d "
 				            "(RESFLAG_FinalDay is %d)\n",
 				            t, day, doc28, doc29, (int)zen::RESFLAG_FinalDay);

@@ -205,6 +205,19 @@ int main()
 		check(dayDocument(flags, 2).id == zen::RESFLAG_EndFirstDay, "the later day keeps the entry it showed");
 	}
 
+	// No Day Limit: the day that ended is still on the clock, so the log slot is
+	// that day (29), not getCurrDay() (28).
+	{
+		ResultFlags flags;
+		flags.setOn(zen::RESFLAG_Misc1);
+		gCurrDay = 28;
+		int pages = 0;
+		const int id = flags.getDocument(pages, 29);
+		check(id == zen::RESFLAG_Misc1 && pages > 0, "No Day Limit records the ended day in slot 29");
+		check(dayDocument(flags, 29).id == zen::RESFLAG_Misc1, "slot 29 holds the misc entry");
+		check(dayDocument(flags, 28).length == 0, "slot 28 is not overwritten");
+	}
+
 	// No day-1 flag was ever set. Do not invent a page.
 	{
 		ResultFlags flags;
