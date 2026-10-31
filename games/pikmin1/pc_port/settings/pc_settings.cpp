@@ -1259,6 +1259,7 @@ static int sScenarioInfiniteDay = 0;
 static int sScenarioWhistlePluck = 0;
 static int sScenarioNoDayAdvance = 0; // "No Day Limit"
 static int sScenarioHideOlimarText = 0; // the setting's default (sConfig.hideOlimarText)
+static int sScenarioBluesOnlyWater = 0;
 // The scenario window (PIKMIN_SCENARIO_WINDOW, see pc_scenario.cpp). Every tick
 // draws a frame, which under software GL costs per pixel, and no scenario reads
 // the picture.
@@ -9155,8 +9156,13 @@ int pc_settings_get_better_pathfinding(void) { if (pc_speedrun_active()) return 
     return sConfig.betterPathfinding;
 }
 
-int pc_settings_get_blues_only_water(void) { if (pc_speedrun_active()) return 0;
-    return sConfig.bluesOnlyWater;
+int pc_settings_get_blues_only_water(void)
+{
+	if (pc_speedrun_active()) return 0;
+#if PIKI_SCENARIOS
+	if (sScenarioSettings) return sScenarioBluesOnlyWater;
+#endif
+	return sConfig.bluesOnlyWater;
 }
 
 int pc_settings_get_idle_counter(void) { if (pc_speedrun_active()) return 0;
@@ -9192,6 +9198,7 @@ void pc_settings_scenario_set_infinite_day(int on) { sScenarioInfiniteDay = on; 
 void pc_settings_scenario_set_whistle_pluck(int on) { sScenarioWhistlePluck = on; }
 void pc_settings_scenario_set_no_day_advance(int on) { sScenarioNoDayAdvance = on; }
 void pc_settings_scenario_set_hide_olimar_text(int on) { sScenarioHideOlimarText = on; }
+void pc_settings_scenario_set_blues_only_water(int on) { sScenarioBluesOnlyWater = on; }
 void pc_settings_scenario_set_window_size(int width, int height)
 {
     sScenarioWindowWidth  = width;

@@ -58,5 +58,11 @@ PcScenario* pc_scenario_make_tutorial_skip(void);
 PcScenario* pc_scenario_make_tutorial_firsts(void);
 PcScenario* pc_scenario_make_tutorial_day1(void);
 PcScenario* pc_scenario_make_title_boot(void);
+PcScenario* pc_scenario_make_piki_hazard_deaths(void);
+PcScenario* pc_scenario_make_piki_hazard_fire_red_fail(void);
+PcScenario* pc_scenario_make_piki_drown(void);
+PcScenario* pc_scenario_make_piki_drown_blue_fail(void);
+PcScenario* pc_scenario_make_piki_throw_water(void);
+PcScenario* pc_scenario_make_piki_throw_water_red_survive_fail(void);
 
 #endif

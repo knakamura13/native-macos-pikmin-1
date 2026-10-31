@@ -69,7 +69,7 @@ PIKMIN_SCENARIO_STAGE=stages/sandbox.ini \
 
 | Argument | Meaning |
 |----------|---------|
-| `--scenario <name>` | Scenario to run: `boot_smoke`, `title_boot`, `throw_release`, `day30_clock`, `extinction`, `captain_death`, `day_end`, `day_end_day29`, `extinction_day30`, `onion_unlock`, `onion_unlock_whistle`, `captain_damage`, `ship_parts`, `sprout_landing`, `onion_skip`, `container_menu` or `objects_smoke`, or a save scenario: `save_load`, `save_load_flags`, `results_nosave_map`, `results_nosave_cardselect`, `card_errors`, `card_errors_saved`, `pause_continue`, `permadeath_erase`, `permadeath_unsaved`, `permadeath_bad_slot`, `permadeath_off`. Object-stage scenarios need `PIKMIN_SCENARIO_STAGE` (see the table below). `tutorial_skip`, `tutorial_firsts` and `tutorial_day1` need `stages/practice.ini`. |
+| `--scenario <name>` | Scenario to run: `boot_smoke`, `title_boot`, `throw_release`, `day30_clock`, `extinction`, `captain_death`, `day_end`, `day_end_day29`, `extinction_day30`, `onion_unlock`, `onion_unlock_whistle`, `captain_damage`, `ship_parts`, `sprout_landing`, `onion_skip`, `container_menu`, `piki_hazard_deaths`, `piki_drown`, `piki_throw_water`, or `objects_smoke`, or a save scenario: `save_load`, `save_load_flags`, `results_nosave_map`, `results_nosave_cardselect`, `card_errors`, `card_errors_saved`, `pause_continue`, `permadeath_erase`, `permadeath_unsaved`, `permadeath_bad_slot`, `permadeath_off`. Object-stage scenarios need `PIKMIN_SCENARIO_STAGE` (see the table below). `tutorial_skip`, `tutorial_firsts` and `tutorial_day1` need `stages/practice.ini`. |
 | `--scenario-tick-rate 30\|60` | Ticks per second. Default `30`. Any other value (or a missing one) exits 2. |
 | `--scenario-visible` | Show the window. Default is hidden. A visible window is also positioned and may move the real mouse pointer (see [Mouse pointer](#mouse-pointer)). |
 | `--scenario-realtime` | Pace the ticks in real time at the tick rate (the fixed-step scheduler) instead of unthrottled. Deterministic mode stays on, so the per-tick state is the same (`scenario_realtime_determinism_first_yellow_30`). With `--scenario-visible` the window defaults to 1280x720. |
@@ -78,7 +78,7 @@ PIKMIN_SCENARIO_STAGE=stages/sandbox.ini \
 | Environment variable | Meaning |
 |----------------------|---------|
 | `PIKMIN_SCENARIO_DATA_DIR` | Folder that holds `assets/`. The process changes into it. Unset or empty, the run exits 77. Set to a folder that cannot be entered, it exits 2. |
-| `PIKMIN_SCENARIO_STAGE` | Stage `.ini` to boot, as written in `stages.ini`. Default `stages/stage1.ini` (Forest of Hope on disc). The stand-in tree uses `stages/sandbox.ini`, `stages/sandbox_objects.ini`, `stages/sandbox_all_objects.ini` or `stages/practice.ini` (the tutorial stage). On the stand-in tree without it the run names `stage1.ini`, which has no files there, and hangs until the watchdog fails it (exit 1). An unknown stage name fails with exit 1 and `no stage with file ...`. |
+| `PIKMIN_SCENARIO_STAGE` | Stage `.ini` to boot, as written in `stages.ini`. Default `stages/stage1.ini` (Forest of Hope on disc). The stand-in tree uses `stages/sandbox.ini`, `stages/sandbox_objects.ini`, `stages/sandbox_all_objects.ini`, `stages/sandbox_water.ini` or `stages/practice.ini` (the tutorial stage). On the stand-in tree without it the run names `stage1.ini`, which has no files there, and hangs until the watchdog fails it (exit 1). An unknown stage name fails with exit 1 and `no stage with file ...`. |
 | `PIKMIN_SCENARIO_TRACE` | Number of ticks, from tick 0, for which the runner logs captain state, movie and overlay flags, day and time (`[scenario-trace]` lines). |
 | `PIKMIN_SCENARIO_WATCHDOG_SECONDS` | Wall-clock limit in seconds, default 540. A value that is not a positive integer is ignored. |
 | `PIKMIN_SCENARIO_STATE_STATS` | Any value. With the verdict, prints per state id of the captain and of the Pikmin the longest uninterrupted stay in ticks and the entry count (`[scenario-states]` lines). A state stuck on an animation key the stand-ins lack shows as a long stay. |
@@ -251,6 +251,7 @@ code or timing the 30 Hz run does not. The disc entries keep `boot_smoke`,
 | `captain_death_day30`, `challenge_captain_death`, `challenge_extinction` | 30, 60 | As `captain_death` and `extinction`: MessageModeState's timers (0.5, 2, 3 s) and the game-over window's 2 s are sums of the frame time, the movies advance per tick. |
 | `day_end_no_day_limit`, `challenge_day_end` | 30, 60 | As `day_end`: the clock jump is in clock ticks and the results windows run on frame-time timers. |
 | `onion_day3`, `onion_day3_whistle`, `onion_day3_hidetext`, `onion_day3_reload`, `onion_day3_unplucked`, `onion_day3_skip` | 30, 60 (stand-in and disc) | Same reason as `onion_unlock` (the walk to the sprout and the pluck), and the discovery movie and the Onion's boot motion advance half a frame per tick at 60 Hz, so the seed, the skip at 1.5 s and the day end land on different ticks. Read from code, not shown to fail at either rate. |
+| `piki_hazard_deaths`, `piki_drown`, `piki_throw_water` | 30, 60 | Hazard injections and drown timers use frame-time sums (`gsys->getFrameTime()`); whistle rescue and flick get-up bounds are in seconds. |
 
 Wall time of every stand-in entry, one run at a time on an M3 Max, `/usr/bin/time -p`
 (2026-10-28, base `ee769374`; the last three rows on base `a1065fef`, CTest's own per-test time, `-j 1`). "GPU" is the Mac's own GL, "software" is Apple's
@@ -321,6 +322,8 @@ Which stage each stand-in entry boots:
 | `ending_bad_day30`, `ending_neutral_day30`, `ending_happy`, `ending_happy_skip`, `captain_death_day30`, `challenge_captain_death`, `challenge_extinction` | `stages/sandbox.ini` |
 | `day_end_no_day_limit`, `challenge_day_end` | `stages/sandbox_objects.ini` (in challenge mode the stage has no Onion: see `challenge_day_end` below) |
 | `onion_day3` and its variants | `stages/sandbox_onions.ini`, the Onion stage: the object stage's map with Onion generators placed as on the disc's courses (red, yellow and blue not named `next`, a `next` yellow elsewhere). See `standin-objects.md`. |
+| `piki_hazard_deaths` | `stages/sandbox_objects.ini` (Dwarf Bulborb for swallow). |
+| `piki_drown`, `piki_throw_water` | `stages/sandbox_water.ini`, flat map with one pond (`standin_water_stage.h`). |
 
 `sprout_landing`, `onion_skip`, `container_menu`, `onion_unlock`, `onion_unlock_whistle`, `first_yellow` and `objects_smoke` have no `_disc` entry: their
 stages do not exist on a real install. `coop_smoke` and `coop_look` have none either: they were not run on a real install.
