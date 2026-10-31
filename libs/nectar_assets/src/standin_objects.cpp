@@ -298,21 +298,27 @@ bool writeStandInPelletTables(std::vector<StandInAnimFile>& out, std::string& er
 		int number;
 		const char* digits;
 		const char* shape;
+		int matchingSeeds;
+		int otherSeeds;
 	};
-	const Size sizes[] = { { 1, "01", "pe01" }, { 5, "05", "pe05" }, { 10, "10", "pe10" }, { 20, "20", "pe20" } };
+	const Size sizes[] = { { 1, "01", "pe01", 1, 1 }, { 5, "05", "pe05", 3, 1 }, { 10, "10", "pe10", 5, 2 }, { 20, "20", "pe20", 8, 3 } };
 
 	BeWriter cfg;
-	cfg.s32(int(std::size(kinds) * std::size(sizes)) + 1); // + the Main Engine, below
+	cfg.s32(int(std::size(kinds) * std::size(sizes)) + 2); // + the Main Engine and the Whimsical Radar, below
 	for (const Kind& k : kinds) {
 		for (const Size& z : sizes) {
 			const std::string name = std::string(k.name) + " pellet " + std::to_string(z.number);
 			const int carryMax     = z.number == 1 ? 2 : z.number * 2;
-			if (!putParams(cfg,
-			               { parmString("x99", name), parmInt("p00", k.colour), parmInt("p09", k.colour), parmInt("p01", z.number),
-			                 parmInt("p02", carryMax) },
-			               error)) {
-				return false;
+			// Onion seeds (p06 same colour, p07 another colour): the 1-pellets keep the code default 1 and 1 (the tutorial
+			// scenarios count one seed); the larger ones differ so a scenario can tell the two rules apart (pellet_carry).
+			// This file's own numbers, not the disc's.
+			std::vector<ParmEntry> params = { parmString("x99", name), parmInt("p00", k.colour), parmInt("p09", k.colour), parmInt("p01", z.number),
+				                              parmInt("p02", carryMax) };
+			if (z.number > 1) {
+				params.push_back(parmInt("p06", z.matchingSeeds));
+				params.push_back(parmInt("p07", z.otherSeeds));
 			}
+			if (!putParams(cfg, params, error)) return false;
 			const std::string model = std::string("p") + k.letter + z.digits;
 			char id[5]              = { model[0], model[1], model[2], model[3], 0 };
 			putReversedId(cfg, id);
@@ -341,6 +347,20 @@ bool writeStandInPelletTables(std::vector<StandInAnimFile>& out, std::string& er
 	putReversedId(cfg, "ust5");
 	putReversedId(cfg, "none");
 	cfg.s32(3);
+	// The Whimsical Radar ('uf01', shape fuzoku1), a second ship part for the carry-to-ship
+	// scenario (ship_part_carry) and the shape the part-discovery scenario borrows for the
+	// other parts. This file's own numbers: 10 to 20 carriers, no dynamics, no repair joint
+	// (-1: PlayerState::renderParts skips it, so the stand-in ship model needs no joint for it).
+	if (!putParams(cfg,
+	               { parmString("x99", "ufo : fuzoku1"), parmInt("p00", 3), parmInt("p09", -1), parmInt("p01", 10), parmInt("p02", 20),
+	                 parmInt("p12", 1), parmInt("p13", 1) },
+	               error)) {
+		return false;
+	}
+	putReversedId(cfg, "uf01");
+	putReversedId(cfg, "uf01");
+	putReversedId(cfg, "none");
+	cfg.s32(-1);
 	out.push_back({ "dataDir/parms/pelMgr.bin", cfg.b });
 
 	// objects/pelAnim.bin: int count, then per info (PelletAnimInfo::read) the

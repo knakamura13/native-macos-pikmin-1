@@ -80,7 +80,19 @@ void pc_settings_scenario_set_infinite_day(int on);
 void pc_settings_scenario_set_whistle_pluck(int on);
 void pc_settings_scenario_set_no_day_advance(int on); ///< the "No Day Limit" cheat
 void pc_settings_scenario_set_hide_olimar_text(int on);
+void pc_settings_scenario_set_blues_only_water(int on);
 void pc_settings_scenario_set_window_size(int width, int height);
+void pc_settings_scenario_set_quick_grab(int on);
+void pc_settings_scenario_set_throw_speed_pct(int pct);
+void pc_settings_scenario_set_chain_actions(int on);
+void pc_settings_scenario_set_piki_invincible(int on);
+void pc_settings_scenario_set_navi_health_pct(int pct);
+void pc_settings_scenario_set_teki_health_pct(int pct);
+void pc_settings_scenario_set_piki_limit(int limit);
+void pc_settings_scenario_set_unlock_zones(int on);
+void pc_settings_scenario_set_all_onions(int on);
+void pc_settings_scenario_open_menu(void);
+void pc_settings_scenario_close_menu(void);
 #endif
 int pc_settings_get_eternal_night(void);
 int pc_settings_get_fireflies(void);

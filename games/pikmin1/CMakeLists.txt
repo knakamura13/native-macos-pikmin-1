@@ -314,6 +314,7 @@ set(PC_PORT_SOURCES
     pc_port/pc_window.cpp
     pc_port/pc_keycaps.cpp
     pc_port/pc_gyro.cpp
+    pc_port/pc_xinput_usb.cpp
     pc_port/pc_pad_axis.cpp
     pc_port/pc_menu_pad.cpp
     pc_port/pc_menu_mode.cpp
@@ -464,7 +465,19 @@ if (PIKMIN_BUILD_SCENARIOS)
         pc_port/scenarios/scenario_tutorial_skip.cpp
         pc_port/scenarios/scenario_tutorial_firsts.cpp
         pc_port/scenarios/scenario_tutorial_day1.cpp
+        pc_port/scenarios/scenario_carry_blocked.cpp
+        pc_port/scenarios/scenario_bomb_firsts.cpp
+        pc_port/scenarios/scenario_nectar_growth.cpp
+        pc_port/scenarios/scenario_ship_part_carry.cpp
+        pc_port/scenarios/scenario_ufo_part_discovery.cpp
+        pc_port/scenarios/scenario_pellet_table.cpp
+        pc_port/scenarios/scenario_pellet_carry.cpp
         pc_port/scenarios/scenario_title_boot.cpp
+        pc_port/scenarios/scenario_piki_hazard_deaths.cpp
+        pc_port/scenarios/scenario_piki_drown.cpp
+        pc_port/scenarios/scenario_piki_throw_water.cpp
+        pc_port/scenarios/scenario_settings.cpp
+        pc_port/scenarios/scenario_throw_release_mods.cpp
         pc_port/gl/pc_gfx_png_write.cpp)
 endif()
 
@@ -692,6 +705,24 @@ if (WIN32)
 endif()
 target_compile_options(${NECTAR_GAME} PRIVATE ${NATIVE_COMPILE_OPTIONS})
 target_link_libraries(${NECTAR_GAME} PRIVATE ${NECTAR_LEGACY} nectar_paths)
+
+# Mandos Xbox 360 (XInput) por USB en macOS, que no trae driver para ellos: se
+# leen con libusb y se presentan a SDL como mando virtual. Apagado por defecto
+# (la dylib de Homebrew no viaja en las releases); scripts/build-macos.sh lo
+# enciende.
+option(PIKMIN_XINPUT_USB "Read USB Xbox 360-protocol controllers with libusb (macOS)" OFF)
+if(PIKMIN_XINPUT_USB)
+    find_path(LIBUSB_INCLUDE_DIR libusb.h HINTS /opt/homebrew /usr/local PATH_SUFFIXES include/libusb-1.0 libusb-1.0)
+    find_library(LIBUSB_LIBRARY NAMES usb-1.0 HINTS /opt/homebrew/lib /usr/local/lib)
+    if(LIBUSB_INCLUDE_DIR AND LIBUSB_LIBRARY)
+        target_include_directories(${NECTAR_GAME} PRIVATE ${LIBUSB_INCLUDE_DIR})
+        target_link_libraries(${NECTAR_GAME} PRIVATE ${LIBUSB_LIBRARY})
+        target_compile_definitions(${NECTAR_GAME} PRIVATE PIKI_XINPUT_USB=1)
+        message(STATUS "USB XInput controllers: libusb ${LIBUSB_LIBRARY}")
+    else()
+        message(WARNING "PIKMIN_XINPUT_USB=ON but libusb was not found (brew install libusb)")
+    endif()
+endif()
 if(NECTAR_ONLINE)
     if(NOT TARGET nectar_net)
         add_subdirectory("${NECTAR_LIBS_DIR}/nectar_net" "${CMAKE_BINARY_DIR}/nectar_net")
@@ -1265,6 +1296,11 @@ if(PIKMIN_BUILD_TESTS AND PIKMIN_BUILD_LAUNCHER)
     target_compile_options(asset_finalize_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
     add_test(NAME asset_finalize_test COMMAND asset_finalize_test)
 
+    # La comprobacion de instalacion del launcher: paquetes obligatorios por region.
+    add_executable(asset_check_test pc_port/launcher/asset_check_test.cpp)
+    target_compile_options(asset_check_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
+    add_test(NAME asset_check_test COMMAND asset_check_test)
+
     add_executable(prepared_image_test pc_port/launcher/prepared_image_test.cpp ${LAUNCHER_PLATFORM_SOURCE})
     target_compile_options(prepared_image_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
     if (WIN32)
@@ -1345,6 +1381,17 @@ if(PIKMIN_BUILD_TESTS)
     target_include_directories(pc_bundle_compat_test PRIVATE pc_port)
     target_compile_options(pc_bundle_compat_test PRIVATE ${NATIVE_COMPILE_OPTIONS})
     add_test(NAME pc_bundle_compat_test COMMAND pc_bundle_compat_test)
+
+    if(APPLE AND PIKMIN_XINPUT_USB AND LIBUSB_INCLUDE_DIR)
+        # Real SDL virtual controllers with a simulated USB transport: no pad/assets needed.
+        add_executable(pc_xinput_usb_test
+            ../../tests/pc_xinput_usb_test.cpp pc_port/pc_xinput_usb.cpp)
+        target_compile_definitions(pc_xinput_usb_test PRIVATE
+                PIKI_XINPUT_USB=1 SDL_CreateThread=pc_xinput_test_create_thread)
+        target_include_directories(pc_xinput_usb_test PRIVATE pc_port ${SDL2_INCLUDE_DIRS} ${LIBUSB_INCLUDE_DIR})
+        target_link_libraries(pc_xinput_usb_test PRIVATE ${SDL2_LIBRARIES} Threads::Threads)
+        add_test(NAME pc_xinput_usb_test COMMAND pc_xinput_usb_test)
+    endif()
 
     add_executable(pc_generator_cache_validation_test
         pc_port/save/pc_generator_cache_validation_test.cpp)
@@ -2021,7 +2068,7 @@ endif()
 if(PIKMIN_BUILD_SCENARIOS)
     set(PIKMIN_SCENARIO_SCRATCH "${CMAKE_CURRENT_BINARY_DIR}/scenario-scratch")
     file(MAKE_DIRECTORY "${PIKMIN_SCENARIO_SCRATCH}")
-    foreach(scenario boot_smoke throw_release day30_clock)
+    foreach(scenario boot_smoke throw_release day30_clock pellet_table)
         foreach(rate 30 60)
             add_test(NAME scenario_${scenario}_${rate}_disc
                 COMMAND ${NECTAR_GAME} --scenario ${scenario} --scenario-tick-rate ${rate})
@@ -2059,7 +2106,7 @@ if(PIKMIN_BUILD_SCENARIOS)
     # src/jaudio/pikiseq.c is the game's BARC table for SndData/Seqs/pikiseq.arc
     # (data only), compiled with this build's PIKMIN_GAME_VERSION so the
     # stand-in .arc matches the executable's layout (standin-audio.md).
-    add_executable(nectar_standin_generator tools/scenarios/standin_generator.cpp tools/scenarios/standin_objects_stage.cpp tools/scenarios/standin_all_objects_stage.cpp tools/scenarios/standin_practice_stage.cpp src/jaudio/pikiseq.c)
+    add_executable(nectar_standin_generator tools/scenarios/standin_generator.cpp tools/scenarios/standin_objects_stage.cpp tools/scenarios/standin_all_objects_stage.cpp tools/scenarios/standin_practice_stage.cpp tools/scenarios/standin_water_stage.cpp src/jaudio/pikiseq.c)
     # Source-level include path (every target here already has include/), so
     # the generator's own empty include list stays free of the game headers.
     set_source_files_properties(src/jaudio/pikiseq.c
@@ -2229,7 +2276,42 @@ if(PIKMIN_BUILD_SCENARIOS)
             day_end_no_day_limit:sandbox_objects:30,60 challenge_day_end:sandbox_objects:30,60
             # The tutorial stand-in stage (stages/practice.ini, stage id Practice at index 0,
             # tools/scenarios/standin_practice_stage.h): the tutorial-only milestones.
-            tutorial_skip:practice:30,60 tutorial_firsts:practice:30,60 tutorial_day1:practice:30,60)
+            tutorial_skip:practice:30,60 tutorial_firsts:practice:30,60 tutorial_day1:practice:30,60
+            piki_hazard_deaths:sandbox_objects:30,60 piki_drown:sandbox_water:30,60 piki_throw_water:sandbox_water:30,60
+            hardmode_teki_life:sandbox_all_objects:30 hardmode_teki_life_off:sandbox_all_objects:30
+            hardmode_boss_life:sandbox_all_objects:30 hardmode_boss_life_off:sandbox_all_objects:30
+            hardmode_cheats:sandbox:30 settings_health_pct:sandbox:30 settings_health_pct_off:sandbox:30
+            settings_invincible:sandbox:30 settings_invincible_off:sandbox:30 speedrun_cheats:sandbox:30
+            unlock_zones:sandbox:30 settings_menu_pause:sandbox:30
+            throw_release_quick_grab:sandbox:30,60)
+        string(REPLACE ":" ";" parts "${entry}")
+        list(GET parts 0 scenario)
+        list(GET parts 1 stage)
+        list(GET parts 2 rates)
+        string(REPLACE "," ";" rates "${rates}")
+        foreach(rate IN LISTS rates)
+            add_test(NAME scenario_${scenario}_${rate}
+                COMMAND ${CMAKE_COMMAND}
+                    -DGAME=$<TARGET_FILE:${NECTAR_GAME}>
+                    -DSCENARIO=${scenario} -DRATE=${rate}
+                    -DALLOWLIST=${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/standin-open-allowlist.txt
+                    -DLOG_DIR=${CMAKE_CURRENT_BINARY_DIR}/scenario-logs
+                    -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/run_standin_scenario.cmake)
+            set_tests_properties(scenario_${scenario}_${rate} PROPERTIES
+                FIXTURES_REQUIRED scenario_standin_tree
+                WORKING_DIRECTORY "${PIKMIN_STANDIN_DATA}"
+                ENVIRONMENT "PIKMIN_SCENARIO_DATA_DIR=${PIKMIN_STANDIN_DATA};PIKMIN_SCENARIO_STAGE=stages/${stage}.ini"
+                TIMEOUT 600)
+        endforeach()
+    endforeach()
+
+    # Disc-free W2 scenarios (coverage/milestones.md, issue #94), name:stage:rates.
+    foreach(entry pellet_table:sandbox:30,60 ufo_part_discovery:sandbox:30,60
+        pellet_carry:sandbox_objects:30,60
+        ship_part_carry:practice:30,60
+        nectar_growth:sandbox:30,60
+        bomb_firsts:sandbox:30,60
+        carry_blocked:sandbox_objects:30,60)
         string(REPLACE ":" ";" parts "${entry}")
         list(GET parts 0 scenario)
         list(GET parts 1 stage)
@@ -2313,6 +2395,30 @@ if(PIKMIN_BUILD_SCENARIOS)
         ENVIRONMENT "${PIKMIN_STANDIN_ENV}"
         TIMEOUT 600)
 
+    set(PIKMIN_OBJECTS_ENV "PIKMIN_SCENARIO_DATA_DIR=${PIKMIN_STANDIN_DATA};PIKMIN_SCENARIO_STAGE=stages/sandbox_objects.ini")
+    set(PIKMIN_WATER_ENV "PIKMIN_SCENARIO_DATA_DIR=${PIKMIN_STANDIN_DATA};PIKMIN_SCENARIO_STAGE=stages/sandbox_water.ini")
+    add_test(NAME scenario_piki_hazard_fire_red_fail
+        COMMAND ${CMAKE_COMMAND} -DGAME=$<TARGET_FILE:${NECTAR_GAME}> -DSCENARIO=piki_hazard_fire_red_fail -DEXPECT=1
+            "-DEXPECT_OUTPUT=FAIL piki_hazard_fire_red_fail"
+            "-DFORBID_OUTPUT=\\[scenario\\] PASS"
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/check_scenario_exit.cmake)
+    set_tests_properties(scenario_piki_hazard_fire_red_fail PROPERTIES
+        FIXTURES_REQUIRED scenario_standin_tree ENVIRONMENT "${PIKMIN_OBJECTS_ENV}" TIMEOUT 600)
+    add_test(NAME scenario_piki_drown_blue_fail
+        COMMAND ${CMAKE_COMMAND} -DGAME=$<TARGET_FILE:${NECTAR_GAME}> -DSCENARIO=piki_drown_blue_fail -DEXPECT=1
+            "-DEXPECT_OUTPUT=FAIL piki_drown_blue_fail"
+            "-DFORBID_OUTPUT=\\[scenario\\] PASS"
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/check_scenario_exit.cmake)
+    set_tests_properties(scenario_piki_drown_blue_fail PROPERTIES
+        FIXTURES_REQUIRED scenario_standin_tree ENVIRONMENT "${PIKMIN_WATER_ENV}" TIMEOUT 600)
+    add_test(NAME scenario_piki_throw_water_red_survive_fail
+        COMMAND ${CMAKE_COMMAND} -DGAME=$<TARGET_FILE:${NECTAR_GAME}> -DSCENARIO=piki_throw_water_red_survive_fail -DEXPECT=1
+            "-DEXPECT_OUTPUT=FAIL piki_throw_water_red_survive_fail"
+            "-DFORBID_OUTPUT=\\[scenario\\] PASS"
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/check_scenario_exit.cmake)
+    set_tests_properties(scenario_piki_throw_water_red_survive_fail PROPERTIES
+        FIXTURES_REQUIRED scenario_standin_tree ENVIRONMENT "${PIKMIN_WATER_ENV}" TIMEOUT 600)
+
     # Replay determinism (EC-60): two runs, identical per-tick state hash logs.
     file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/scenario-determinism")
     foreach(scenario boot_smoke throw_release day30_clock)
@@ -2341,6 +2447,18 @@ if(PIKMIN_BUILD_SCENARIOS)
             -DSECOND_ENV=PIKMIN_SCENARIO_STAGE=stages/sandbox_objects.ini -DEXPECT_DIFFER=1
             -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/check_scenario_determinism.cmake)
     set_tests_properties(scenario_determinism_negative_boot_smoke_30 PROPERTIES
+        FIXTURES_REQUIRED scenario_standin_tree
+        WORKING_DIRECTORY "${PIKMIN_STANDIN_DATA}"
+        ENVIRONMENT "${PIKMIN_STANDIN_ENV}"
+        TIMEOUT 1200)
+
+    add_test(NAME scenario_input_replay_boot_smoke_30
+        COMMAND ${CMAKE_COMMAND}
+            -DGAME=$<TARGET_FILE:${NECTAR_GAME}>
+            -DSCENARIO=boot_smoke -DRATE=30
+            -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/scenario-input-replay
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/check_scenario_input_replay.cmake)
+    set_tests_properties(scenario_input_replay_boot_smoke_30 PROPERTIES
         FIXTURES_REQUIRED scenario_standin_tree
         WORKING_DIRECTORY "${PIKMIN_STANDIN_DATA}"
         ENVIRONMENT "${PIKMIN_STANDIN_ENV}"

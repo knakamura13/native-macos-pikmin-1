@@ -474,9 +474,9 @@ int main(int argc, char** argv)
 			// until exitDayEnd drops it, as the disc's does. Every other stand-in ends on its own.
 			// demo73 (the bad ending's escape) and demo77 (the neutral and happy endings' space flight)
 			// do the same for the final results window, and demo20 (the Main Engine reaching the ship)
-			// until its own TextDemo key skips the scene, as the disc's does.
+			// until its own TextDemo key skips the scene, as the disc's does; demo78 (the Whimsical Radar) likewise.
 			if ((f.path == "dataDir/cinemas/demo36.cin" || f.path == "dataDir/cinemas/demo73.cin" || f.path == "dataDir/cinemas/demo77.cin"
-			     || f.path == "dataDir/cinemas/demo20.cin")
+			     || f.path == "dataDir/cinemas/demo20.cin" || f.path == "dataDir/cinemas/demo78.cin")
 			    && &c == &r.cuts.back())
 				check(c.flags == nectar::kCutLoop, f.path + ": the last cut loops until the results window closes it");
 			else
@@ -584,6 +584,7 @@ int main(int argc, char** argv)
 				}
 		}
 		check(henka >= 0 && henka < dayEnd && dayEnd < text, "demo17: the ship's Henka, ForceDayEnd, then TUT_GetEngine (9)");
+		check(has(keysOf("dataDir/cinemas/demo78.cin"), nectar::kCinEventNotify, nectar::kMovieCmdTextDemo, 17), "demo78 (the Whimsical Radar) opens TUT_GetParts (17)");
 	}
 	std::vector<nectar::StandInCinemaFile> again;
 	check(nectar::writeStandInCinemas(again, err) && again.size() == files.size(), "second build");
