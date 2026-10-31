@@ -169,7 +169,7 @@ def center_near_black_ratio(
     threshold: int = 15,
 ) -> float:
     cx0, cx1 = width // 4, (3 * width) // 4
-    cy0, cy1 = height // 5, (2 * height) // 3
+    cy0, cy1 = height // 5, (4 * height) // 5
     total = 0
     dark = 0
     for y in range(cy0, cy1):
@@ -196,7 +196,7 @@ def showcase_composition_stats(
     world_dark = near_black_ratio(world)
 
     cx0, cx1 = width // 4, (3 * width) // 4
-    cy0, cy1 = height // 5, (2 * height) // 3
+    cy0, cy1 = height // 5, (4 * height) // 5
     center: list[tuple[int, int, int]] = []
     for y in range(cy0, cy1):
         for x in range(cx0, cx1):

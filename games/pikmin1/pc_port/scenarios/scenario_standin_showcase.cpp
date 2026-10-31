@@ -7,21 +7,36 @@
 #include "GoalItem.h"
 #include "ItemMgr.h"
 #include "NaviMgr.h"
+#include "UfoItem.h"
+#include "MapMgr.h"
 #include "Camera.h"
 #include "scenarios/scenario_progress.h"
 #include "scenarios/pc_scenario.h"
 
 namespace {
 
+// Keep in sync with standin_showcase_stage.h spawn coordinates.
+constexpr float kShowcaseShipX = 26.0f;
+constexpr float kShowcaseShipZ = 36.0f;
+
+void snapShowcaseShip()
+{
+	if (!itemMgr) return;
+	UfoItem* ufo = itemMgr->getUfo();
+	if (!ufo) return;
+	Vector3f p(kShowcaseShipX, 0.0f, kShowcaseShipZ);
+	if (mapMgr) p.y = mapMgr->getMinY(p.x, p.z, true);
+	ufo->mSRT.t = p;
+}
+
 void updateShowcaseCamera(Navi* navi)
 {
 	if (!navi) return;
 	Vector3f focus = navi->mSRT.t;
-	focus.x += 4.0f;
-	focus.z += 18.0f;
+	focus.x += 2.0f;
+	focus.z += 14.0f;
 	focus.y += 12.0f;
-	// Pull back and widen so onion (behind-left), pellet (right), and ship (aft) stay in frame.
-	Vector3f eye(focus.x - 22.0f, focus.y + 34.0f, focus.z - 62.0f);
+	Vector3f eye(focus.x - 24.0f, focus.y + 32.0f, focus.z - 58.0f);
 	PcScenarioDebugCamera cam {};
 	cam.active  = true;
 	cam.eyeX    = eye.x;
@@ -30,7 +45,7 @@ void updateShowcaseCamera(Navi* navi)
 	cam.focusX  = focus.x;
 	cam.focusY  = focus.y;
 	cam.focusZ  = focus.z;
-	cam.fov     = 38.0f;
+	cam.fov     = 36.0f;
 	pc_scenario_set_debug_camera(cam);
 }
 
@@ -66,6 +81,7 @@ public:
 	{
 		Navi* navi = naviMgr->getNavi(0);
 		if (GoalItem* onion = itemMgr->getContainer(scenario_progress::kRed)) onion->pcSnapLanded();
+		snapShowcaseShip();
 
 		spawnShowcasePiki(navi, scenario_progress::kRed, Leaf, 0);
 		spawnShowcasePiki(navi, scenario_progress::kYellow, Bud, 1);

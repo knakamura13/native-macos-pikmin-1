@@ -253,22 +253,19 @@ void buildPikiBody(Model& m, const StandInModelSpec& spec, bool red, bool yellow
 	else if (yellow) skin = { 255, 215, 35, 255 };
 	else if (blue) skin = { 55, 95, 255, 255 };
 	const int skinMat   = addMaterial(m, skin);
-	const int eyeWhite  = addMaterial(m, { 245, 245, 250, 255 });
 	const int eyeDark   = addMaterial(m, { 15, 15, 20, 255 });
 	const int leafMat   = addMaterial(m, { 45, 190, 55, 255 });
 	const int budMat    = addMaterial(m, { 140, 220, 75, 255 });
 	const int flowerMat = addMaterial(m, { 255, 180, 210, 255 });
 	const int noseMat   = addMaterial(m, { 220, 40, 40, 255 });
 
-	// Elongated torso + head (all skinMat / slot 0).
+	// Elongated torso; small head box on its own joint (no giant head sphere).
 	addBoxMesh(m, spec, 0, skinMat, 2.2f, 3.8f, 2.0f, { 0.0f, -1.5f, 0.0f });
-	addBoxMesh(m, spec, 1, skinMat, 1.6f, 1.8f, 1.3f, { 0.0f, 2.2f, 0.2f });
-	addSphereMesh(m, spec, kPikiRigHeadJoint, skinMat, 1.85f, 6, 9, { 0.0f, 1.2f, 1.0f });
-	addBoxMesh(m, spec, kPikiRigHeadJoint, eyeWhite, 0.45f, 0.35f, 0.2f, { -0.75f, 1.35f, 2.35f }, false);
-	addBoxMesh(m, spec, kPikiRigHeadJoint, eyeWhite, 0.45f, 0.35f, 0.2f, { 0.75f, 1.35f, 2.35f }, false);
-	addBoxMesh(m, spec, kPikiRigHeadJoint, eyeDark, 0.18f, 0.18f, 0.1f, { -0.75f, 1.3f, 2.5f }, false);
-	addBoxMesh(m, spec, kPikiRigHeadJoint, eyeDark, 0.18f, 0.18f, 0.1f, { 0.75f, 1.3f, 2.5f }, false);
-	if (red) addBoxMesh(m, spec, 3, noseMat, 0.55f, 0.45f, 1.0f, { 0.0f, 0.9f, 2.55f });
+	addBoxMesh(m, spec, 1, skinMat, 1.4f, 1.2f, 1.1f, { 0.0f, 2.0f, 0.15f });
+	addBoxMesh(m, spec, kPikiRigHeadJoint, skinMat, 1.15f, 1.05f, 1.05f, { 0.0f, 0.55f, 0.35f });
+	addBoxMesh(m, spec, kPikiRigHeadJoint, eyeDark, 0.14f, 0.14f, 0.08f, { -0.42f, 0.65f, 0.92f }, false);
+	addBoxMesh(m, spec, kPikiRigHeadJoint, eyeDark, 0.14f, 0.14f, 0.08f, { 0.42f, 0.65f, 0.92f }, false);
+	if (red) addBoxMesh(m, spec, 3, noseMat, 0.45f, 0.35f, 0.75f, { 0.0f, 0.45f, 1.05f });
 	// Stem
 	addBoxMesh(m, spec, 4, skinMat, 0.22f, 2.2f, 0.18f, { 0.0f, 3.6f, 0.0f });
 	// Happa toppers (also drawn via happa .mod at runtime; keep mesh hints for captures).
@@ -308,34 +305,35 @@ void buildCaptain(Model& m, const StandInModelSpec& spec)
 
 void buildOnion(Model& m, const StandInModelSpec& spec)
 {
-	const int bodyMat  = addMaterial(m, { 255, 120, 35, 255 });
-	const int stripeMat = addMaterial(m, { 255, 200, 60, 255 });
-	const int stemMat  = addMaterial(m, { 70, 150, 60, 255 });
-	const int legMat   = addMaterial(m, { 90, 60, 35, 255 });
-	const float r = spec.halfSize * 1.05f;
-	addSphereMesh(m, spec, 0, bodyMat, r * 0.95f, 8, 12, { 0.0f, r * 0.7f, 0.0f });
-	addBoxMesh(m, spec, 0, stripeMat, r * 0.55f, 0.35f, r * 0.55f, { 0.0f, r * 1.35f, 0.0f }, false);
-	for (int leg : { 3, 6, 9 }) {
-		addBoxMesh(m, spec, leg, legMat, 1.2f, 3.2f, 1.2f, { 0.0f, -1.8f, 0.0f });
+	// Red onion: single red bulb, pale cap, three thin legs (no two-tone checker).
+	const int bodyMat = addMaterial(m, { 225, 42, 48, 255 });
+	const int capMat  = addMaterial(m, { 255, 120, 125, 255 });
+	const int legMat  = addMaterial(m, { 130, 32, 38, 255 });
+	const float r     = spec.halfSize * 0.82f;
+	addSphereMesh(m, spec, 0, bodyMat, r, 8, 12, { 0.0f, r * 0.55f, 0.0f });
+	addBoxMesh(m, spec, 12, capMat, r * 0.52f, r * 0.22f, r * 0.52f, { 0.0f, r * 1.02f, 0.0f });
+	struct Leg { int joint; float ox, oz; };
+	for (Leg leg : { Leg { 3, 1.15f, 0.85f }, Leg { 6, -1.05f, -0.95f }, Leg { 9, 0.55f, -1.15f } }) {
+		addBoxMesh(m, spec, leg.joint, legMat, 0.34f, 2.8f, 0.34f, { leg.ox, -1.9f, leg.oz });
 	}
-	addBoxMesh(m, spec, 1, stemMat, 1.4f, 2.2f, 1.4f, { 0.0f, r * 1.15f, 0.0f });
-	addSphereMesh(m, spec, 12, stripeMat, r * 0.45f, 6, 8, { 0.0f, r * 1.75f, 0.0f });
 }
 
 void buildShip(Model& m, const StandInModelSpec& spec)
 {
-	const int hull  = addMaterial(m, { 150, 165, 185, 255 });
-	const int glass = addMaterial(m, { 100, 180, 230, 255 });
-	const int leg   = addMaterial(m, { 70, 70, 85, 255 });
-	const int nose  = addMaterial(m, { 190, 200, 220, 255 });
-	addSphereMesh(m, spec, 0, hull, 14.0f, 7, 12, { 0.0f, 10.0f, 0.0f });
-	addBoxMesh(m, spec, 0, nose, 6.0f, 4.0f, 10.0f, { 0.0f, 10.0f, 16.0f }, false);
-	addBoxMesh(m, spec, 3, glass, 9.0f, 4.5f, 9.0f, { 0.0f, 13.0f, 10.0f });
-	for (int fin : { 6, 9 }) {
-		addBoxMesh(m, spec, fin, hull, 2.5f, 6.0f, 0.6f, { 0.0f, 6.0f, -12.0f });
-	}
-	for (int i : { 16, 18, 20 }) {
-		addBoxMesh(m, spec, i, leg, 1.8f, 5.0f, 1.8f, { 0.0f, -1.5f, 0.0f });
+	// Compact Dolphin: silver hull, blue cockpit, nose + side fins (~onion scale).
+	const float s   = spec.halfSize * 0.88f;
+	const int hull  = addMaterial(m, { 178, 188, 208, 255 });
+	const int glass = addMaterial(m, { 55, 135, 220, 255 });
+	const int dark  = addMaterial(m, { 45, 50, 65, 255 });
+	const int nose  = addMaterial(m, { 195, 205, 220, 255 });
+	addBoxMesh(m, spec, 0, hull, s * 1.15f, s * 0.72f, s * 1.35f, { 0.0f, s * 0.45f, 0.0f });
+	addBoxMesh(m, spec, 0, nose, s * 0.48f, s * 0.42f, s * 0.65f, { 0.0f, s * 0.5f, s * 1.05f }, false);
+	addBoxMesh(m, spec, 3, glass, s * 0.58f, s * 0.32f, s * 0.52f, { 0.0f, s * 0.78f, s * 0.08f });
+	addBoxMesh(m, spec, 3, dark, s * 0.35f, s * 0.08f, s * 0.12f, { 0.0f, s * 0.82f, s * 0.38f }, false);
+	addBoxMesh(m, spec, 6, hull, s * 0.14f, s * 0.48f, s * 0.32f, { s * 0.92f, s * 0.35f, -s * 0.45f });
+	addBoxMesh(m, spec, 9, hull, s * 0.14f, s * 0.48f, s * 0.32f, { -s * 0.92f, s * 0.35f, -s * 0.45f });
+	for (int j : { 16, 18, 20 }) {
+		addBoxMesh(m, spec, j, dark, s * 0.12f, s * 0.55f, s * 0.12f, { 0.0f, -s * 0.15f, 0.0f });
 	}
 }
 
@@ -343,8 +341,9 @@ void buildPellet(Model& m, const StandInModelSpec& spec)
 {
 	const int shell = addMaterial(m, { 255, 220, 40, 255 });
 	const int spot  = addMaterial(m, { 255, 140, 30, 255 });
-	addSphereMesh(m, spec, 0, shell, spec.halfSize * 1.1f, 7, 10, { 0.0f, spec.halfSize * 0.9f, 0.0f });
-	addBoxMesh(m, spec, 0, spot, spec.halfSize * 0.35f, 0.25f, spec.halfSize * 0.35f, { 0.0f, spec.halfSize * 1.35f, spec.halfSize * 0.5f }, false);
+	const float r   = spec.halfSize * 0.72f;
+	addSphereMesh(m, spec, 0, shell, r, 7, 10, { 0.0f, r * 0.85f, 0.0f });
+	addBoxMesh(m, spec, 0, spot, r * 0.28f, 0.2f, r * 0.28f, { 0.0f, r * 1.15f, r * 0.35f }, false);
 }
 
 void buildChappy(Model& m, const StandInModelSpec& spec)
