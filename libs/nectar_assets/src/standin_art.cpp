@@ -8,6 +8,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <vector>
 
 namespace nectar {
 
@@ -34,15 +35,35 @@ bool jointInRange(const StandInModelSpec& spec, int joint)
 	return joint >= 0 && joint < spec.jointCount();
 }
 
-void setJointMaterial(Model& m, int joint, int material)
-{
-	m.joints[std::size_t(joint)].matPolys.clear();
-	m.joints[std::size_t(joint)].matPolys.push_back({ material, joint });
-}
-
 void clearJointMesh(Model& m, int joint)
 {
 	jointGroup(m, joint).tris.clear();
+}
+
+// A .mod mesh has one material (ModJoint::matPolys pairs a material with a mesh),
+// so a second colour on the same joint needs its own mesh. replaceJoint clears the
+// joint back to its first mesh; otherwise the part goes in the joint's mesh for
+// that material, made on first use.
+ModMtxGroup& groupFor(Model& m, int joint, int material, bool replaceJoint)
+{
+	ModJoint& j = m.joints[std::size_t(joint)];
+	if (replaceJoint || j.matPolys.empty()) {
+		clearJointMesh(m, joint);
+		j.matPolys.clear();
+		j.matPolys.push_back({ material, joint });
+		return jointGroup(m, joint);
+	}
+	for (const auto& mp : j.matPolys) {
+		if (mp.first == material) return m.meshes[std::size_t(mp.second)].groups[0];
+	}
+	ModMesh mesh;
+	mesh.parentJoint = joint;
+	mesh.flags       = m.meshes[std::size_t(joint)].flags;
+	mesh.groups.resize(1);
+	mesh.groups[0].deps = { joint };
+	m.meshes.push_back(std::move(mesh));
+	j.matPolys.push_back({ material, int(m.meshes.size()) - 1 });
+	return m.meshes.back().groups[0];
 }
 
 int addUnitNormal(Model& m, Vec3 n)
@@ -57,7 +78,10 @@ int addUnitNormal(Model& m, Vec3 n)
 	return int(m.normals.size()) - 1;
 }
 
-void pushClockwiseTri(Model& m, ModMtxGroup& group, int ia, int ib, int ic, int normalHint)
+// normalHint < 0 orients the triangle away from `centre` (the centre of the
+// sphere it belongs to), not from the joint origin: for a sphere off the origin
+// the origin test flips some faces inward, which lit them as a dark checker.
+void pushClockwiseTri(Model& m, ModMtxGroup& group, int ia, int ib, int ic, int normalHint, Vec3 centre = {})
 {
 	auto crossN = [&](int a, int b, int c) {
 		const Vec3 &pa = m.positions[std::size_t(a)], &pb = m.positions[std::size_t(b)], &pc = m.positions[std::size_t(c)];
@@ -70,6 +94,9 @@ void pushClockwiseTri(Model& m, ModMtxGroup& group, int ia, int ib, int ic, int 
 		Vec3 sum {};
 		for (int idx : { ia, ib, ic }) {
 			Vec3 p = m.positions[std::size_t(idx)];
+			p.x -= centre.x;
+			p.y -= centre.y;
+			p.z -= centre.z;
 			const float len = std::sqrt(p.x * p.x + p.y * p.y + p.z * p.z);
 			if (len > 1e-6f) {
 				sum.x += p.x / len;
@@ -104,15 +131,14 @@ void pushClockwiseTri(Model& m, ModMtxGroup& group, int ia, int ib, int ic, int 
 void addBoxMesh(Model& m, const StandInModelSpec& spec, int joint, int material, float hx, float hy, float hz, Vec3 center, bool replaceJoint = true)
 {
 	if (!jointInRange(spec, joint)) return;
-	if (replaceJoint) clearJointMesh(m, joint);
-	const int base = int(m.positions.size());
+	ModMtxGroup& group = groupFor(m, joint, material, replaceJoint);
+	const int base     = int(m.positions.size());
 	for (int c = 0; c < 8; c++) {
 		m.positions.push_back({ center.x + ((c & 1) ? hx : -hx), center.y + ((c & 2) ? hy : -hy), center.z + ((c & 4) ? hz : -hz) });
 	}
 	if (m.normals.empty()) m.normals.assign(kFaceNormal, kFaceNormal + 6);
 	if (m.uvs[0].empty()) m.uvs[0].push_back(Vec2 {});
 
-	ModMtxGroup& group = jointGroup(m, joint);
 	for (int f = 0; f < 6; f++) {
 		const int* q = kFaces[f];
 		const int tri[2][3] = { { q[0], q[1], q[2] }, { q[0], q[2], q[3] } };
@@ -120,48 +146,58 @@ void addBoxMesh(Model& m, const StandInModelSpec& spec, int joint, int material,
 			pushClockwiseTri(m, group, base + t[0], base + t[1], base + t[2], f);
 		}
 	}
-	setJointMaterial(m, joint, material);
 }
 
-void addSphereMesh(Model& m, const StandInModelSpec& spec, int joint, int material, float radius, int stacks, int slices, Vec3 center, bool replaceJoint = true)
+// Ellipsoid split into horizontal bands, top to bottom, one material per band:
+// light top, darker underside. Unlit stand-in draws are flat colour, so the bands
+// are what make a bulb or a hull read as round.
+void addBandedEllipsoid(Model& m, const StandInModelSpec& spec, int joint, const std::vector<int>& bands, Vec3 radii, int stacks, int slices,
+                        Vec3 center, bool replaceJoint = true)
 {
-	if (!jointInRange(spec, joint)) return;
-	if (replaceJoint) clearJointMesh(m, joint);
+	if (!jointInRange(spec, joint) || bands.empty()) return;
 	if (m.normals.empty()) m.normals.assign(kFaceNormal, kFaceNormal + 6);
 	if (m.uvs[0].empty()) m.uvs[0].push_back(Vec2 {});
+	// Make every band's mesh first: groupFor can grow m.meshes and move groups.
+	groupFor(m, joint, bands[0], replaceJoint);
+	for (int mat : bands) groupFor(m, joint, mat, false);
+	auto bandGroup = [&](int row) -> ModMtxGroup& {
+		const int mat = bands[std::size_t(std::min(int(bands.size()) - 1, row * int(bands.size()) / stacks))];
+		return groupFor(m, joint, mat, false);
+	};
 
-	ModMtxGroup& group = jointGroup(m, joint);
-	const int base       = int(m.positions.size());
-	const int north      = base;
-	m.positions.push_back({ center.x, center.y + radius, center.z });
+	const int base  = int(m.positions.size());
+	const int north = base;
+	m.positions.push_back({ center.x, center.y + radii.y, center.z });
 	for (int si = 1; si < stacks; si++) {
-		const float v     = float(si) / float(stacks);
-		const float phi   = v * 3.14159265f;
+		const float phi = float(si) / float(stacks) * 3.14159265f;
 		for (int ti = 0; ti < slices; ti++) {
-			const float u     = float(ti) / float(slices);
-			const float theta = u * 2.0f * 3.14159265f;
-			m.positions.push_back({ center.x + radius * std::sin(phi) * std::cos(theta), center.y + radius * std::cos(phi),
-			                        center.z + radius * std::sin(phi) * std::sin(theta) });
+			const float theta = float(ti) / float(slices) * 2.0f * 3.14159265f;
+			m.positions.push_back({ center.x + radii.x * std::sin(phi) * std::cos(theta), center.y + radii.y * std::cos(phi),
+			                        center.z + radii.z * std::sin(phi) * std::sin(theta) });
 		}
 	}
 	const int south = int(m.positions.size());
-	m.positions.push_back({ center.x, center.y - radius, center.z });
+	m.positions.push_back({ center.x, center.y - radii.y, center.z });
 
 	auto ring = [&](int si, int ti) { return base + 1 + (si - 1) * slices + (ti % slices); };
 	for (int ti = 0; ti < slices; ti++) {
-		pushClockwiseTri(m, group, north, ring(1, ti + 1), ring(1, ti), -1);
+		pushClockwiseTri(m, bandGroup(0), north, ring(1, ti + 1), ring(1, ti), -1, center);
 	}
 	for (int si = 1; si < stacks - 1; si++) {
 		for (int ti = 0; ti < slices; ti++) {
 			const int i0 = ring(si, ti), i1 = ring(si, ti + 1), i2 = ring(si + 1, ti + 1), i3 = ring(si + 1, ti);
-			pushClockwiseTri(m, group, i0, i1, i2, -1);
-			pushClockwiseTri(m, group, i0, i2, i3, -1);
+			pushClockwiseTri(m, bandGroup(si), i0, i1, i2, -1, center);
+			pushClockwiseTri(m, bandGroup(si), i0, i2, i3, -1, center);
 		}
 	}
 	for (int ti = 0; ti < slices; ti++) {
-		pushClockwiseTri(m, group, south, ring(stacks - 1, ti), ring(stacks - 1, ti + 1), -1);
+		pushClockwiseTri(m, bandGroup(stacks - 1), south, ring(stacks - 1, ti), ring(stacks - 1, ti + 1), -1, center);
 	}
-	setJointMaterial(m, joint, material);
+}
+
+void addSphereMesh(Model& m, const StandInModelSpec& spec, int joint, int material, float radius, int stacks, int slices, Vec3 center, bool replaceJoint = true)
+{
+	addBandedEllipsoid(m, spec, joint, { material }, { radius, radius, radius }, stacks, slices, center, replaceJoint);
 }
 
 Model skeletonModel(const StandInModelSpec& spec)
@@ -259,24 +295,24 @@ void buildPikiBody(Model& m, const StandInModelSpec& spec, bool red, bool yellow
 	const int flowerMat = addMaterial(m, { 255, 180, 210, 255 });
 	const int noseMat   = addMaterial(m, { 220, 40, 40, 255 });
 
-	// Elongated torso; small head box on its own joint (no giant head sphere).
-	addBoxMesh(m, spec, 0, skinMat, 2.2f, 3.8f, 2.0f, { 0.0f, -1.5f, 0.0f });
-	addBoxMesh(m, spec, 1, skinMat, 1.4f, 1.2f, 1.1f, { 0.0f, 2.0f, 0.15f });
-	addBoxMesh(m, spec, kPikiRigHeadJoint, skinMat, 1.15f, 1.05f, 1.05f, { 0.0f, 0.55f, 0.35f });
-	addBoxMesh(m, spec, kPikiRigHeadJoint, eyeDark, 0.14f, 0.14f, 0.08f, { -0.42f, 0.65f, 0.92f }, false);
-	addBoxMesh(m, spec, kPikiRigHeadJoint, eyeDark, 0.14f, 0.14f, 0.08f, { 0.42f, 0.65f, 0.92f }, false);
-	if (red) addBoxMesh(m, spec, 3, noseMat, 0.45f, 0.35f, 0.75f, { 0.0f, 0.45f, 1.05f });
-	// Stem
-	addBoxMesh(m, spec, 4, skinMat, 0.22f, 2.2f, 0.18f, { 0.0f, 3.6f, 0.0f });
-	// Happa toppers (also drawn via happa .mod at runtime; keep mesh hints for captures).
-	addBoxMesh(m, spec, kPikiRigLeafTipJoint, leafMat, 1.1f, 0.35f, 0.55f, { 0.0f, 2.0f, 0.0f });
-	addBoxMesh(m, spec, 5, budMat, 0.55f, 0.55f, 0.55f, { 0.0f, 4.8f, 0.0f });
-	addBoxMesh(m, spec, kPikiRigLeafTipJoint, flowerMat, 0.75f, 0.25f, 0.75f, { 0.0f, 2.4f, 0.0f }, false);
-	addBoxMesh(m, spec, kPikiRigRightHandJoint, skinMat, 0.65f, 0.45f, 0.65f, { 1.85f, 0.0f, 0.0f });
-	addBoxMesh(m, spec, kPikiRigLeftHandJoint, skinMat, 0.65f, 0.45f, 0.65f, { -1.85f, 0.0f, 0.0f });
-	addBoxMesh(m, spec, 9, skinMat, 1.0f, 0.45f, 0.95f, { 0.0f, -4.2f, 0.0f });
-	addBoxMesh(m, spec, 10, skinMat, 0.55f, 1.1f, 0.55f, { 0.7f, -5.4f, 0.0f });
-	addBoxMesh(m, spec, 11, skinMat, 0.55f, 1.1f, 0.55f, { -0.7f, -5.4f, 0.0f });
+	// The stand-in animations leave every joint at the model origin, so each part's
+	// offset is its rest position; the feet sit about 1 unit under the origin.
+	// Legs, a round body, a big round head on top with two dark eyes on its front
+	// (+z), and the stem rising from the crown. The happa .mod is drawn at the
+	// leaf-tip joint and is offset up to the stem top in its own stand-in.
+	addBoxMesh(m, spec, 10, skinMat, 0.3f, 0.55f, 0.3f, { 0.55f, -0.55f, 0.0f });
+	addBoxMesh(m, spec, 11, skinMat, 0.3f, 0.55f, 0.3f, { -0.55f, -0.55f, 0.0f });
+	addBandedEllipsoid(m, spec, 0, { skinMat }, { 1.2f, 1.6f, 1.1f }, 6, 10, { 0.0f, 1.4f, 0.0f });
+	addBoxMesh(m, spec, kPikiRigRightHandJoint, skinMat, 0.28f, 0.85f, 0.28f, { 1.35f, 1.5f, 0.0f });
+	addBoxMesh(m, spec, kPikiRigLeftHandJoint, skinMat, 0.28f, 0.85f, 0.28f, { -1.35f, 1.5f, 0.0f });
+	addSphereMesh(m, spec, kPikiRigHeadJoint, skinMat, 1.6f, 7, 10, { 0.0f, 4.4f, 0.2f });
+	addBoxMesh(m, spec, kPikiRigHeadJoint, eyeDark, 0.28f, 0.36f, 0.1f, { -0.55f, 4.7f, 1.72f }, false);
+	addBoxMesh(m, spec, kPikiRigHeadJoint, eyeDark, 0.28f, 0.36f, 0.1f, { 0.55f, 4.7f, 1.72f }, false);
+	if (red) addBoxMesh(m, spec, 3, noseMat, 0.3f, 0.25f, 0.45f, { 0.0f, 4.15f, 1.85f });
+	addBoxMesh(m, spec, 4, skinMat, 0.15f, 1.1f, 0.15f, { 0.0f, 7.0f, 0.0f });
+	(void)leafMat;
+	(void)budMat;
+	(void)flowerMat;
 }
 
 void buildCaptain(Model& m, const StandInModelSpec& spec)
@@ -285,65 +321,109 @@ void buildCaptain(Model& m, const StandInModelSpec& spec)
 	const int pack = addMaterial(m, { 190, 55, 55, 255 });
 	const int helm = addMaterial(m, { 200, 220, 255, 255 });
 	const int dark = addMaterial(m, { 35, 35, 45, 255 });
-	const int eyeWhite = addMaterial(m, { 250, 250, 255, 255 });
-	addBoxMesh(m, spec, 0, dark, 3.0f, 0.9f, 3.0f, { 0.0f, -2.0f, 0.0f });
-	addBoxMesh(m, spec, 1, suit, 2.0f, 2.4f, 1.7f, { 0.0f, 1.0f, 0.0f });
-	addSphereMesh(m, spec, kPikiRigHeadJoint, helm, 3.0f, 7, 10, { 0.0f, 3.6f, 0.6f });
-	addBoxMesh(m, spec, kPikiRigHeadJoint, dark, 3.15f, 0.35f, 3.15f, { 0.0f, 2.2f, 0.6f }, false);
-	addBoxMesh(m, spec, kPikiRigHeadJoint, eyeWhite, 0.45f, 0.35f, 0.2f, { -0.85f, 3.9f, 2.3f }, false);
-	addBoxMesh(m, spec, kPikiRigHeadJoint, eyeWhite, 0.45f, 0.35f, 0.2f, { 0.85f, 3.9f, 2.3f }, false);
-	addBoxMesh(m, spec, 4, pack, 1.35f, 1.8f, 0.8f, { 0.0f, 1.5f, -1.9f });
-	addBoxMesh(m, spec, 5, dark, 0.18f, 3.0f, 0.18f, { 0.0f, 5.6f, 0.0f });
-	addBoxMesh(m, spec, 6, dark, 0.35f, 0.35f, 0.35f, { 0.0f, 7.0f, 0.0f });
-	addBoxMesh(m, spec, kPikiRigRightHandJoint, suit, 0.9f, 0.65f, 0.9f, { 2.2f, 0.5f, 0.0f });
-	addBoxMesh(m, spec, kPikiRigLeftHandJoint, suit, 0.9f, 0.65f, 0.9f, { -2.2f, 0.5f, 0.0f });
-	addBoxMesh(m, spec, 9, dark, 1.35f, 0.65f, 1.15f, { 0.0f, -3.5f, 0.0f });
-	addBoxMesh(m, spec, 10, dark, 0.75f, 1.5f, 0.75f, { 0.75f, -5.1f, 0.0f });
-	addBoxMesh(m, spec, 11, dark, 0.75f, 1.5f, 0.75f, { -0.75f, -5.1f, 0.0f });
+	const int face = addMaterial(m, { 235, 190, 150, 255 });
+	// Every joint stays at the origin (see buildPikiBody); feet about 1 under it.
+	// Dark boots, a round white suit with the red pack on his back, then the glass
+	// helmet with his face, big nose and dark eyes at the front, and the antenna.
+	addBoxMesh(m, spec, 10, dark, 0.45f, 0.8f, 0.45f, { 0.7f, -0.2f, 0.0f });
+	addBoxMesh(m, spec, 11, dark, 0.45f, 0.8f, 0.45f, { -0.7f, -0.2f, 0.0f });
+	addBandedEllipsoid(m, spec, 1, { suit }, { 1.7f, 1.8f, 1.5f }, 6, 10, { 0.0f, 2.2f, 0.0f });
+	addBoxMesh(m, spec, 4, pack, 1.2f, 1.4f, 0.6f, { 0.0f, 2.6f, -1.7f });
+	addBoxMesh(m, spec, kPikiRigRightHandJoint, suit, 0.45f, 1.0f, 0.45f, { 2.0f, 2.4f, 0.0f });
+	addBoxMesh(m, spec, kPikiRigLeftHandJoint, suit, 0.45f, 1.0f, 0.45f, { -2.0f, 2.4f, 0.0f });
+	addBoxMesh(m, spec, 0, dark, 1.9f, 0.25f, 1.9f, { 0.0f, 3.9f, 0.0f });
+	addSphereMesh(m, spec, kPikiRigHeadJoint, helm, 2.2f, 7, 10, { 0.0f, 6.0f, 0.3f });
+	addBoxMesh(m, spec, kPikiRigHeadJoint, face, 1.2f, 1.0f, 0.15f, { 0.0f, 6.0f, 2.45f }, false);
+	addSphereMesh(m, spec, kPikiRigHeadJoint, face, 0.6f, 5, 8, { 0.0f, 5.6f, 2.75f }, false);
+	addBoxMesh(m, spec, kPikiRigHeadJoint, dark, 0.25f, 0.3f, 0.1f, { -0.5f, 6.4f, 2.65f }, false);
+	addBoxMesh(m, spec, kPikiRigHeadJoint, dark, 0.25f, 0.3f, 0.1f, { 0.5f, 6.4f, 2.65f }, false);
+	addBoxMesh(m, spec, 5, dark, 0.12f, 1.0f, 0.12f, { 0.0f, 9.2f, 0.0f });
+	addSphereMesh(m, spec, 6, pack, 0.4f, 4, 6, { 0.0f, 10.4f, 0.0f });
 	(void)spec;
 }
 
 void buildOnion(Model& m, const StandInModelSpec& spec)
 {
-	// Red onion: single red bulb, pale cap, three thin legs (no two-tone checker).
-	const int bodyMat = addMaterial(m, { 225, 42, 48, 255 });
-	const int capMat  = addMaterial(m, { 255, 120, 125, 255 });
-	const int legMat  = addMaterial(m, { 130, 32, 38, 255 });
-	const float r     = spec.halfSize * 0.82f;
-	addSphereMesh(m, spec, 0, bodyMat, r, 8, 12, { 0.0f, r * 0.55f, 0.0f });
-	addBoxMesh(m, spec, 12, capMat, r * 0.52f, r * 0.22f, r * 0.52f, { 0.0f, r * 1.02f, 0.0f });
-	struct Leg { int joint; float ox, oz; };
-	for (Leg leg : { Leg { 3, 1.15f, 0.85f }, Leg { 6, -1.05f, -0.95f }, Leg { 9, 0.55f, -1.15f } }) {
-		addBoxMesh(m, spec, leg.joint, legMat, 0.34f, 2.8f, 0.34f, { leg.ox, -1.9f, leg.oz });
+	// Red Onion: a round red bulb up on three thin legs, a pale rim under it, and a
+	// stalk with a pale flower on top. The bulb is banded light to dark so it reads
+	// as round when drawn unlit.
+	const float k = spec.halfSize / 15.0f;
+	std::vector<int> bulb;
+	for (Rgba8 c : { Rgba8 { 255, 125, 120, 255 }, Rgba8 { 240, 60, 60, 255 }, Rgba8 { 215, 38, 44, 255 }, Rgba8 { 170, 26, 32, 255 },
+	                 Rgba8 { 120, 18, 24, 255 } }) {
+		bulb.push_back(addMaterial(m, c));
 	}
+	const int rimMat    = addMaterial(m, { 235, 225, 205, 255 });
+	const int legMat    = addMaterial(m, { 95, 70, 70, 255 });
+	const int footMat   = addMaterial(m, { 60, 45, 45, 255 });
+	const int stalkMat  = addMaterial(m, { 120, 190, 80, 255 });
+	const int petalMat  = addMaterial(m, { 255, 215, 225, 255 });
+	const int centreMat = addMaterial(m, { 255, 225, 70, 255 });
+	const float bulbY   = 30.0f * k;
+	addBandedEllipsoid(m, spec, 0, bulb, { 15.0f * k, 12.5f * k, 15.0f * k }, 10, 16, { 0.0f, bulbY, 0.0f });
+	addBandedEllipsoid(m, spec, 0, { rimMat }, { 9.0f * k, 2.2f * k, 9.0f * k }, 5, 12, { 0.0f, bulbY - 11.5f * k, 0.0f }, false);
+	// Legs: three joints (3, 6, 9 with children) at 120 degrees; each is a thin
+	// upper strut under the bulb, a lower strut further out and a foot pad.
+	const int legJoints[3][3] = { { 3, 4, 5 }, { 6, 7, 8 }, { 9, 10, 11 } };
+	for (int i = 0; i < 3; i++) {
+		const float a  = (90.0f + 120.0f * float(i)) * 3.14159265f / 180.0f;
+		const float dx = std::cos(a), dz = std::sin(a);
+		addBoxMesh(m, spec, legJoints[i][0], legMat, 0.9f * k, 6.0f * k, 0.9f * k, { dx * 10.0f * k, 15.0f * k, dz * 10.0f * k });
+		addBoxMesh(m, spec, legJoints[i][1], legMat, 0.9f * k, 5.0f * k, 0.9f * k, { dx * 13.0f * k, 5.5f * k, dz * 13.0f * k });
+		addBoxMesh(m, spec, legJoints[i][2], footMat, 2.0f * k, 0.6f * k, 2.0f * k, { dx * 13.5f * k, 0.6f * k, dz * 13.5f * k });
+	}
+	// Stalk and flower on joint 12.
+	addBoxMesh(m, spec, 12, stalkMat, 0.7f * k, 4.0f * k, 0.7f * k, { 0.0f, bulbY + 15.5f * k, 0.0f });
+	addBoxMesh(m, spec, 12, petalMat, 5.0f * k, 0.8f * k, 1.8f * k, { 0.0f, bulbY + 20.0f * k, 0.0f }, false);
+	addBoxMesh(m, spec, 12, petalMat, 1.8f * k, 0.8f * k, 5.0f * k, { 0.0f, bulbY + 20.0f * k, 0.0f }, false);
+	addBoxMesh(m, spec, 12, centreMat, 1.4f * k, 1.0f * k, 1.4f * k, { 0.0f, bulbY + 20.6f * k, 0.0f }, false);
 }
 
 void buildShip(Model& m, const StandInModelSpec& spec)
 {
-	// Compact Dolphin: silver hull, blue cockpit, nose + side fins (~onion scale).
-	const float s   = spec.halfSize * 0.88f;
-	const int hull  = addMaterial(m, { 178, 188, 208, 255 });
-	const int glass = addMaterial(m, { 55, 135, 220, 255 });
-	const int dark  = addMaterial(m, { 45, 50, 65, 255 });
-	const int nose  = addMaterial(m, { 195, 205, 220, 255 });
-	addBoxMesh(m, spec, 0, hull, s * 1.15f, s * 0.72f, s * 1.35f, { 0.0f, s * 0.45f, 0.0f });
-	addBoxMesh(m, spec, 0, nose, s * 0.48f, s * 0.42f, s * 0.65f, { 0.0f, s * 0.5f, s * 1.05f }, false);
-	addBoxMesh(m, spec, 3, glass, s * 0.58f, s * 0.32f, s * 0.52f, { 0.0f, s * 0.78f, s * 0.08f });
-	addBoxMesh(m, spec, 3, dark, s * 0.35f, s * 0.08f, s * 0.12f, { 0.0f, s * 0.82f, s * 0.38f }, false);
-	addBoxMesh(m, spec, 6, hull, s * 0.14f, s * 0.48f, s * 0.32f, { s * 0.92f, s * 0.35f, -s * 0.45f });
-	addBoxMesh(m, spec, 9, hull, s * 0.14f, s * 0.48f, s * 0.32f, { -s * 0.92f, s * 0.35f, -s * 0.45f });
-	for (int j : { 16, 18, 20 }) {
-		addBoxMesh(m, spec, j, dark, s * 0.12f, s * 0.55f, s * 0.12f, { 0.0f, -s * 0.15f, 0.0f });
+	// Dolphin: a long rounded silver hull on three short legs, a red-orange nose at
+	// +z, a blue cockpit dome on top and a tail fin. Banded light to dark like the
+	// onion so the hull reads as round when drawn unlit.
+	const float k = spec.halfSize / 20.0f;
+	std::vector<int> hull, nose;
+	for (Rgba8 c : { Rgba8 { 245, 247, 252, 255 }, Rgba8 { 222, 228, 238, 255 }, Rgba8 { 196, 204, 218, 255 }, Rgba8 { 160, 168, 186, 255 },
+	                 Rgba8 { 112, 120, 138, 255 } }) {
+		hull.push_back(addMaterial(m, c));
+	}
+	for (Rgba8 c : { Rgba8 { 255, 150, 90, 255 }, Rgba8 { 245, 95, 45, 255 }, Rgba8 { 215, 60, 35, 255 }, Rgba8 { 150, 40, 25, 255 } }) {
+		nose.push_back(addMaterial(m, c));
+	}
+	const int glassTop = addMaterial(m, { 140, 200, 255, 255 });
+	const int glass    = addMaterial(m, { 50, 120, 215, 255 });
+	const int dark     = addMaterial(m, { 55, 60, 75, 255 });
+	const int finMat   = addMaterial(m, { 205, 60, 45, 255 });
+	const float hullY  = 12.0f * k;
+	addBandedEllipsoid(m, spec, 0, hull, { 13.0f * k, 8.5f * k, 24.0f * k }, 10, 18, { 0.0f, hullY, 0.0f });
+	addBandedEllipsoid(m, spec, 0, nose, { 7.0f * k, 6.0f * k, 7.5f * k }, 8, 12, { 0.0f, hullY - 0.5f * k, 21.0f * k }, false);
+	addBandedEllipsoid(m, spec, 0, { glassTop, glass, glass }, { 6.0f * k, 4.5f * k, 8.0f * k }, 6, 12, { 0.0f, hullY + 7.0f * k, 8.0f * k }, false);
+	// Tail fin and side engine pods.
+	addBoxMesh(m, spec, 0, finMat, 0.8f * k, 5.0f * k, 4.0f * k, { 0.0f, hullY + 9.0f * k, -18.0f * k }, false);
+	addBandedEllipsoid(m, spec, 0, { hull[1], hull[2], hull[3] }, { 3.5f * k, 3.5f * k, 7.0f * k }, 6, 10, { 13.5f * k, hullY - 1.0f * k, -10.0f * k }, false);
+	addBandedEllipsoid(m, spec, 0, { hull[1], hull[2], hull[3] }, { 3.5f * k, 3.5f * k, 7.0f * k }, 6, 10, { -13.5f * k, hullY - 1.0f * k, -10.0f * k }, false);
+	// Three landing legs down to the ground.
+	for (Vec3 c : { Vec3 { 8.0f * k, 2.5f * k, -10.0f * k }, Vec3 { -8.0f * k, 2.5f * k, -10.0f * k }, Vec3 { 0.0f, 2.5f * k, 14.0f * k } }) {
+		addBoxMesh(m, spec, 0, dark, 0.8f * k, 2.5f * k, 0.8f * k, c, false);
+		addBoxMesh(m, spec, 0, dark, 2.0f * k, 0.4f * k, 2.0f * k, { c.x, 0.4f * k, c.z }, false);
 	}
 }
 
 void buildPellet(Model& m, const StandInModelSpec& spec)
 {
-	const int shell = addMaterial(m, { 255, 220, 40, 255 });
-	const int spot  = addMaterial(m, { 255, 140, 30, 255 });
-	const float r   = spec.halfSize * 0.72f;
-	addSphereMesh(m, spec, 0, shell, r, 7, 10, { 0.0f, r * 0.85f, 0.0f });
-	addBoxMesh(m, spec, 0, spot, r * 0.28f, 0.2f, r * 0.28f, { 0.0f, r * 1.15f, r * 0.35f }, false);
+	// Number pellet: a thick upright disc, banded yellow, with a dark "1" on the face.
+	std::vector<int> shell;
+	for (Rgba8 c : { Rgba8 { 255, 245, 140, 255 }, Rgba8 { 255, 220, 40, 255 }, Rgba8 { 230, 180, 20, 255 }, Rgba8 { 170, 125, 10, 255 } }) {
+		shell.push_back(addMaterial(m, c));
+	}
+	const int mark = addMaterial(m, { 120, 70, 10, 255 });
+	const float r  = spec.halfSize * 0.9f;
+	addBandedEllipsoid(m, spec, 0, shell, { r, r, r * 0.55f }, 8, 14, { 0.0f, r, 0.0f });
+	addBoxMesh(m, spec, 0, mark, r * 0.12f, r * 0.5f, 0.15f, { 0.0f, r, r * 0.55f }, false);
+	addBoxMesh(m, spec, 0, mark, r * 0.12f, r * 0.5f, 0.15f, { 0.0f, r, -r * 0.55f }, false);
 }
 
 void buildChappy(Model& m, const StandInModelSpec& spec)
@@ -522,9 +602,11 @@ Model buildArtStandInModel(const StandInModelSpec& spec)
 		addSphereMesh(m, spec, 0, addMaterial(m, { 255, 255, 100, 120 }), spec.halfSize, 5, 8, {});
 		break;
 	case Kind::Happa:
-		if (spec.path.find("leaf") != std::string::npos) addBoxMesh(m, spec, 0, addMaterial(m, spec.colour), 0.2f, 2.0f, 1.0f, { 0.0f, 1.0f, 0.0f });
-		else if (spec.path.find("bud") != std::string::npos) addSphereMesh(m, spec, 0, addMaterial(m, spec.colour), 1.5f, 4, 6, { 0.0f, 0.8f, 0.0f });
-		else addBoxMesh(m, spec, 0, addMaterial(m, spec.colour), 1.2f, 0.3f, 1.2f, { 0.0f, 0.5f, 0.0f });
+		// Drawn at the Pikmin's leaf-tip joint, which stays at its origin: lift the
+		// leaf, bud or flower to the top of the stem (y 8.1 in buildPikiBody).
+		if (spec.path.find("leaf") != std::string::npos) addBoxMesh(m, spec, 0, addMaterial(m, spec.colour), 0.15f, 1.0f, 0.6f, { 0.0f, 9.0f, 0.0f });
+		else if (spec.path.find("bud") != std::string::npos) addSphereMesh(m, spec, 0, addMaterial(m, spec.colour), 0.75f, 4, 6, { 0.0f, 8.7f, 0.0f });
+		else addBoxMesh(m, spec, 0, addMaterial(m, spec.colour), 1.0f, 0.25f, 1.0f, { 0.0f, 8.3f, 0.0f });
 		break;
 	case Kind::Pellet: buildPellet(m, spec); break;
 	case Kind::Onion: buildOnion(m, spec); break;

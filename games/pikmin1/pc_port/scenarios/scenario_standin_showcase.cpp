@@ -6,6 +6,7 @@
 #include "GlobalGameOptions.h"
 #include "GoalItem.h"
 #include "ItemMgr.h"
+#include "Navi.h"
 #include "NaviMgr.h"
 #include "UfoItem.h"
 #include "MapMgr.h"
@@ -15,9 +16,12 @@
 
 namespace {
 
-// Keep in sync with standin_showcase_stage.h spawn coordinates.
-constexpr float kShowcaseShipX = 26.0f;
-constexpr float kShowcaseShipZ = 36.0f;
+// The captain spawns in front of the ship generator (standin_showcase_stage.h);
+// the ship is then moved to the back right of the frame so he does not cover it.
+constexpr float kShowcaseShipX = 74.0f;
+constexpr float kShowcaseShipZ = 30.0f;
+// Side-on to the camera, nose to the right of the frame.
+constexpr float kShowcaseShipYaw = 1.5707964f;
 
 void snapShowcaseShip()
 {
@@ -26,17 +30,24 @@ void snapShowcaseShip()
 	if (!ufo) return;
 	Vector3f p(kShowcaseShipX, 0.0f, kShowcaseShipZ);
 	if (mapMgr) p.y = mapMgr->getMinY(p.x, p.z, true);
-	ufo->mSRT.t = p;
+	// UfoItem::update puts mSRT.t back on mSpotlightPosition every tick.
+	ufo->mSpotlightPosition = p;
+	ufo->mSRT.t             = p;
+	ufo->mFaceDirection     = kShowcaseShipYaw;
+	ufo->mSRT.r.y           = kShowcaseShipYaw;
 }
 
 void updateShowcaseCamera(Navi* navi)
 {
 	if (!navi) return;
+	// Fixed offsets from the captain: the eye is in front of, above and right of him,
+	// looking back along -z so the Pikmin and the captain face the camera and the
+	// onion and the ship fill the upper half of the frame.
 	Vector3f focus = navi->mSRT.t;
-	focus.x += 2.0f;
-	focus.z += 14.0f;
+	focus.x += 20.0f;
 	focus.y += 12.0f;
-	Vector3f eye(focus.x - 24.0f, focus.y + 32.0f, focus.z - 58.0f);
+	focus.z -= 24.0f;
+	Vector3f eye(navi->mSRT.t.x + 18.0f, navi->mSRT.t.y + 55.0f, navi->mSRT.t.z + 91.0f);
 	PcScenarioDebugCamera cam {};
 	cam.active  = true;
 	cam.eyeX    = eye.x;
@@ -45,7 +56,7 @@ void updateShowcaseCamera(Navi* navi)
 	cam.focusX  = focus.x;
 	cam.focusY  = focus.y;
 	cam.focusZ  = focus.z;
-	cam.fov     = 36.0f;
+	cam.fov     = 40.0f;
 	pc_scenario_set_debug_camera(cam);
 }
 
@@ -58,11 +69,11 @@ void spawnShowcasePiki(Navi* navi, int colour, PikiHappa happa, int slot)
 		Piki* p = static_cast<Piki*>(*it);
 		if (!p || p->mColor != colour) continue;
 		Vector3f want = navi->mSRT.t;
-		want.x += 18.0f * float(slot) - 18.0f;
-		want.z += 22.0f + 6.0f * float(slot);
+		want.x += 12.0f * float(slot) + 20.0f;
+		want.z += 5.0f;
 		want.y = p->mSRT.t.y;
 		p->mSRT.t = want;
-		p->mHappa = happa;
+		p->setFlower(happa); // also swaps the leaf, bud or flower model
 		break;
 	}
 }
@@ -74,7 +85,19 @@ public:
 
 	void providePads(unsigned /*tick*/, PcInputPad& /*pad0*/) override
 	{
-		if (Navi* navi = naviMgr ? naviMgr->getNavi(0) : nullptr) updateShowcaseCamera(navi);
+		if (Navi* navi = naviMgr ? naviMgr->getNavi(0) : nullptr) {
+			// The whistle cursor and its marker would sit between the captain and the
+			// camera; this capture is about the models.
+			navi->mIsCursorVisible = FALSE;
+			// Face the camera (+z) so the eyes are in the shot.
+			navi->mFaceDirection = 0.35f;
+			Iterator it(pikiMgr);
+			CI_LOOP(it)
+			{
+				if (Piki* p = static_cast<Piki*>(*it)) p->mFaceDirection = 0.0f;
+			}
+			updateShowcaseCamera(navi);
+		}
 	}
 
 	void onStageReady() override

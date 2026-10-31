@@ -419,11 +419,23 @@ void testStandIns(const std::string& manifestPath)
 		check(m.joints.size() == std::size_t(spec->jointCount()), f.path + ": joint count");
 		check(isChain(spec->parents), f.path + ": joint 0 is the root and parents are lower");
 		for (std::size_t j = 0; j < m.joints.size(); j++) check(m.joints[j].parent == spec->parents[j], f.path + ": joint parent");
-		check(m.meshes.size() == m.joints.size() && m.materials.size() >= 1, f.path + ": one mesh per joint, at least one material");
+		// Joint j owns mesh j; a joint drawn in several colours owns extra meshes after
+		// those, one per material, all rigid on that joint and listed in its matPolys.
+		check(m.meshes.size() >= m.joints.size() && m.materials.size() >= 1, f.path + ": a mesh per joint, at least one material");
 		for (std::size_t j = 0; j < m.meshes.size(); j++) {
-			check(m.meshes[j].parentJoint == int(j) && m.meshes[j].groups.size() == 1 && m.meshes[j].groups[0].deps.size() == 1, f.path + ": rigid mesh layout");
-			check(m.vtxMatrices[std::size_t(m.meshes[j].groups[0].deps[0])].joint && m.vtxMatrices[std::size_t(m.meshes[j].groups[0].deps[0])].index == int(j),
+			const int owner = m.meshes[j].parentJoint;
+			check((j < m.joints.size() ? owner == int(j) : owner >= 0 && owner < int(m.joints.size())) && m.meshes[j].groups.size() == 1
+			          && m.meshes[j].groups[0].deps.size() == 1,
+			      f.path + ": rigid mesh layout");
+			check(m.vtxMatrices[std::size_t(m.meshes[j].groups[0].deps[0])].joint && m.vtxMatrices[std::size_t(m.meshes[j].groups[0].deps[0])].index == owner,
 			      f.path + ": mesh depends on its own joint");
+		}
+		for (std::size_t j = 0; j < m.joints.size(); j++) {
+			check(!m.joints[j].matPolys.empty(), f.path + ": every joint draws a mesh");
+			for (const auto& mp : m.joints[j].matPolys) {
+				check(mp.second >= 0 && std::size_t(mp.second) < m.meshes.size() && m.meshes[std::size_t(mp.second)].parentJoint == int(j),
+				      f.path + ": matPoly mesh belongs to its joint");
+			}
 		}
 
 		// Front faces are clockwise: n = (c - a) x (b - a) points along the stored normal.
