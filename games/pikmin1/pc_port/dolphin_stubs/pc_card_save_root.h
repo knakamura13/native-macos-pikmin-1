@@ -17,6 +17,10 @@ struct PcCardSaveRootOptions {
 
 std::filesystem::path pc_card_resolve_save_root(PcCardSaveRootOptions options = {});
 
+// When NECTAR_SAVE_READ_ONLY is set to a non-zero value, card writes fail with
+// CARD_RESULT_IOERROR so the game keeps its normal "cannot save" handling.
+bool pc_card_save_writes_blocked();
+
 inline std::filesystem::path pc_card_card0_directory(PcCardSaveRootOptions options = {})
 {
     return pc_card_resolve_save_root(options) / "card0";

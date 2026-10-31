@@ -85,7 +85,16 @@ std::vector<fs::path> legacySaveRoots()
     return legacy;
 }
 
+bool envIsTruthy(const char* name)
+{
+    const char* value = std::getenv(name);
+    if (value == nullptr || *value == '\0') return false;
+    return !(value[0] == '0' && value[1] == '\0');
+}
+
 } // namespace
+
+bool pc_card_save_writes_blocked() { return envIsTruthy("NECTAR_SAVE_READ_ONLY"); }
 
 fs::path pc_card_resolve_save_root(PcCardSaveRootOptions options)
 {
