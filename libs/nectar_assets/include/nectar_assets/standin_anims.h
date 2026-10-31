@@ -76,6 +76,10 @@ constexpr int kAnimInfoPickLoop = 68; ///< PIKIANIM_PickLoop (46)
 // on its KEY_Action0 (PikiGrowupState::procAnimMsg). These three are NOT measured on
 // the disc: the stand-in keeps the generic 40 frames and adds only the keys the states
 // wait on (loop start 10 to loop end 20 for Mizunomi, Action0 at frame 10 for GrowUp).
+// A Pikmin picking a bomb up (bomb_firsts): ActPick plays PIKIANIM_Pick (info 1) and
+// calls InteractGrab on the bomb on its KEY_Action0, so without that key nothing is held.
+// Not measured on the disc: the generic 40 frames with Action0 at frame 10.
+constexpr int kAnimInfoPick     = 1;  ///< PIKIANIM_Pick (4)
 constexpr int kAnimInfoGrowUp1  = 39; ///< PIKIANIM_GrowUp1 (17)
 constexpr int kAnimInfoGrowUp2  = 40; ///< PIKIANIM_GrowUp2 (18)
 constexpr int kAnimInfoMizunomi = 67; ///< PIKIANIM_Mizunomi (47)

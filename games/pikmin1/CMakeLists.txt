@@ -464,6 +464,10 @@ if (PIKMIN_BUILD_SCENARIOS)
         pc_port/scenarios/scenario_tutorial_skip.cpp
         pc_port/scenarios/scenario_tutorial_firsts.cpp
         pc_port/scenarios/scenario_tutorial_day1.cpp
+        pc_port/scenarios/scenario_carry_blocked.cpp
+        pc_port/scenarios/scenario_bomb_firsts.cpp
+        pc_port/scenarios/scenario_nectar_growth.cpp
+        pc_port/scenarios/scenario_ship_part_carry.cpp
         pc_port/scenarios/scenario_ufo_part_discovery.cpp
         pc_port/scenarios/scenario_pellet_table.cpp
         pc_port/scenarios/scenario_pellet_carry.cpp
@@ -2256,7 +2260,11 @@ if(PIKMIN_BUILD_SCENARIOS)
 
     # Disc-free W2 scenarios (coverage/milestones.md, issue #94), name:stage:rates.
     foreach(entry pellet_table:sandbox:30,60 ufo_part_discovery:sandbox:30,60
-        pellet_carry:sandbox_objects:30,60)
+        pellet_carry:sandbox_objects:30,60
+        ship_part_carry:practice:30,60
+        nectar_growth:sandbox:30,60
+        bomb_firsts:sandbox:30,60
+        carry_blocked:sandbox_objects:30,60)
         string(REPLACE ":" ";" parts "${entry}")
         list(GET parts 0 scenario)
         list(GET parts 1 stage)

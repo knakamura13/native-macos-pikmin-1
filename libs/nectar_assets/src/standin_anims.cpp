@@ -92,6 +92,13 @@ StandInAnimSet buildPikiSet()
 				k.keyType = std::uint8_t(type);
 				a.info.infoKeys.push_back(k);
 			}
+		} else if (i == kAnimInfoPick) {
+			// ActPick grabs the bomb on KEY_Action0 (frame 10) and ends on KEY_Finished.
+			a.frameCount    = kStandInDefaultFrames;
+			a.info.animKeys = { 0, 10, kStandInDefaultFrames - 1 };
+			a.info.flags    = 5;
+			a.info.speed    = 30.0f;
+			a.info.infoKeys = { actionKey(1) };
 		} else if (i == kAnimInfoGrowUp1 || i == kAnimInfoGrowUp2) {
 			a.frameCount    = kStandInDefaultFrames;
 			a.info.animKeys = { 0, 10, kStandInDefaultFrames - 1 };
