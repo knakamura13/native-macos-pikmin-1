@@ -53,6 +53,23 @@ inline constexpr int kMenuCountsX = 400;
 // The pad drawing on the controller page, between the two columns of windows.
 inline constexpr Rect kMenuPad { 232, 150, 172, 108 };
 
+// Title menus (#99): m_select, m_selec2, option, s_select, v_select, ms_selec. Rows are centred
+// text boxes stacked from kTitleRowY; the glass panel ('yoko') sits behind them with the
+// menu's name on top. Press START sits low in the middle, under where the logo would be.
+inline constexpr int kTitleRowX    = 180;
+inline constexpr int kTitleRowW    = 280;
+inline constexpr int kTitleRowH    = 28;
+inline constexpr int kTitleRowStep = 36;
+inline constexpr int kTitleRowY    = 260;
+inline constexpr int kTitlePanelPad = 26;
+inline constexpr Rect kPressStart { 160, 340, 320, 40 };
+
+inline constexpr Rect titlePanel(int items)
+{
+	return { kTitleRowX - kTitlePanelPad - 20, kTitleRowY - kTitlePanelPad - 34, kTitleRowW + 2 * (kTitlePanelPad + 20),
+		     kTitleRowStep * (items - 1) + kTitleRowH + 2 * kTitlePanelPad + 34 };
+}
+
 inline constexpr bool rectInsideScreen(Rect r)
 {
 	return r.x >= 0 && r.y >= 0 && r.x + r.w <= kScreenW && r.y + r.h <= kScreenH;

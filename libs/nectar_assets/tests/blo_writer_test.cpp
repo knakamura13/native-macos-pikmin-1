@@ -675,6 +675,31 @@ int checkHudLayout(const std::string& file, const std::vector<BloPane>& tree)
 	return bad;
 }
 
+// Title menus (#99): every shown row lies on screen and inside the glass panel, and its label
+// fits on one line (the stand-in font's advance is at most 0.9 of the glyph size).
+int checkTitleLayout(const std::string& file, const std::vector<BloPane>& tree)
+{
+	int bad              = 0;
+	const BloPane* yoko  = nectar::findBloPane(tree, "yoko");
+	const BloPane* glass = (yoko && !yoko->children.empty()) ? &yoko->children[0] : nullptr;
+	if (!glass) return 1;
+	for (int i = 0; i < 10; i++) {
+		char tag[8];
+		std::snprintf(tag, sizeof tag, "he%02d", i);
+		const BloPane* p = nectar::findBloPane(tree, tag);
+		if (!p) break;
+		if (!p->visible) continue;
+		const bool onScreen = p->x >= 0 && p->y >= 0 && p->x + p->w <= 640 && p->y + p->h <= 480;
+		const bool inPanel  = p->x >= glass->x && p->y >= glass->y && p->x + p->w <= glass->x + glass->w && p->y + p->h <= glass->y + glass->h;
+		const bool oneLine  = int(p->text.size()) * p->fontWidth * 9 <= p->w * 10 && p->fontHeight <= p->h;
+		if (!onScreen || !inPanel || !oneLine) {
+			std::printf("  %s %s '%s': on screen %d, in panel %d, one line %d\n", file.c_str(), tag, p->text.c_str(), onScreen, inPanel, oneLine);
+			bad++;
+		}
+	}
+	return bad;
+}
+
 // Check a layout (stand-in or disc) against its requirement list. `strict` also
 // applies the stand-in rules. Returns the number of problems it logged.
 int checkReqs(const std::string& file, const std::vector<BloPane>& tree, const LayoutReq& l, const char* who)
@@ -755,7 +780,9 @@ void walkTextAndTags(const std::vector<BloPane>& v, const std::string& file)
 		// The HUD and the Y menu (#99) carry their own stand-in art (standin_art.cpp, artScreenTexture).
 		static const std::set<std::string> kTexturedLayouts = { "play09.blo", "play10.blo", "play_day.blo", "sund.blo",   "black.blo",
 			                                                    "cont_y.blo", "m_menu2.blo", "cont_00.blo", "m_menu2m.blo", "p_map00.blo",
-			                                                    "p_map01.blo", "p_map02.blo", "p_map03.blo", "p_map04.blo", "test2.blo" };
+			                                                    "p_map01.blo", "p_map02.blo", "p_map03.blo", "p_map04.blo", "test2.blo",
+			                                                    "m_select.blo", "m_selec2.blo", "option.blo", "s_select.blo", "v_select.blo",
+			                                                    "ms_selec.blo" };
 		const bool hudPic = kTexturedLayouts.count(file) != 0;
 		check(p.type != BloType::Picture || p.texture.empty() || hudPic, file + ": picture '" + p.tag + "' carries a texture name");
 		check(p.type != BloType::TextBox || !p.font.empty(), file + ": text box '" + p.tag + "' has no font name");
@@ -799,6 +826,23 @@ int main()
 		};
 		check(bytes.size() == sizeof(want) && std::memcmp(bytes.data(), want, sizeof(want)) == 0, "golden bytes");
 		if (bytes.size() != sizeof(want)) std::printf("  golden size %zu, want %zu\n", bytes.size(), sizeof(want));
+	}
+
+	// ---- negative control for checkTitleLayout: a row too long, one outside the panel ----
+	{
+		BloPane yoko  = mk(BloType::Pane, "yoko", 640, 480);
+		BloPane glass = mk(BloType::Picture, "", 300, 200);
+		glass.tag = std::string(4, '\0'), glass.x = 100, glass.y = 100;
+		yoko.children.push_back(glass);
+		BloPane ok = mk(BloType::TextBox, "he00", 200, 28);
+		ok.x = 150, ok.y = 150, ok.text = "Start", ok.fontWidth = 20, ok.fontHeight = 20;
+		check(checkTitleLayout("ctl", { yoko, ok }) == 0, "title check passes a good row");
+		BloPane longRow = ok;
+		longRow.tag = "he01", longRow.text = "A label far too long for its row";
+		check(checkTitleLayout("ctl", { yoko, ok, longRow }) == 1, "title check catches a label longer than one line");
+		BloPane outside = ok;
+		outside.tag = "he01", outside.y = 290;
+		check(checkTitleLayout("ctl", { yoko, ok, outside }) == 1, "title check catches a row outside the panel");
 	}
 
 	// ---- round trip, all four pane types, nesting, game oracle ---------------------
@@ -857,6 +901,13 @@ int main()
 		rejects(p, "a 3-byte tag");
 		p.tag = std::string(4, '\0');
 		rejects(p, "tag 0");
+		{ // ...except on a picture (untagged menu glass, stretched by pcExtendMenu).
+			BloPane glass = mk(BloType::Picture, "glas");
+			glass.tag     = std::string(4, '\0');
+			std::vector<std::uint8_t> o;
+			std::string e;
+			check(nectar::writeBlo({ glass }, o, e), "writer accepts an untagged picture: " + e);
+		}
 		p     = ok;
 		p.w   = 0;
 		rejects(p, "an empty rectangle");
@@ -964,6 +1015,9 @@ int main()
 			if (l.file == "play10.blo" || l.file == "play09.blo" || l.file == "play_day.blo") {
 				check(checkHudLayout(l.file, back) == 0, l.file + ": HUD panes sit in expected regions");
 			}
+			if (l.file == "m_select.blo" || l.file == "m_selec2.blo" || l.file == "option.blo" || l.file == "s_select.blo" ||
+			    l.file == "v_select.blo" || l.file == "ms_selec.blo")
+				check(checkTitleLayout(l.file, back) == 0, l.file + ": title rows sit on screen, inside the panel, on one line");
 			if (l.file == "f_result.blo") {
 				// DrawTotalScore::DrawTotalScore strcpy's each record row into a char[0x80] buffer.
 				for (const char* fmt : { "pd%02d", "lp%02d", "dp%02d" })

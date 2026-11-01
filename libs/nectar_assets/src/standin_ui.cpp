@@ -697,41 +697,68 @@ std::vector<StandinLayout> standinBloLayouts()
 			}
 		out.push_back(layout("cha_hi.blo", k));
 	}
-	{
+	{ // ogStart.cpp: the whole screen pulses, so only the prompt lives here (the disc's logo is
+		// the opening cinema's 3D scene, not part of press_s).
 		Kids k;
-		k.add(pane("root"));
+		k.add(menuRoot({ txt("pst0", "Press START", standin_layout::kPressStart, 30, kCream, kGold) }));
 		out.push_back(layout("press_s.blo", k));
 	}
-	auto titleMenu = [](int items) {
-		Kids k = drawMenuSet(items);
-		k.add(pic("back"));
+	// A title menu: glass panel and name ('yoko', DrawMenuTitle), centred rows heNN with the
+	// highlight colour in se_c, a small Pikmin either side of each row (iNNl / iNNr) and the
+	// arrow cursors (z00l / z00r). 'back' is the black backdrop ogScrTitleMgr turns off.
+	auto titleMenu = [](const char* name, std::initializer_list<const char*> labels) {
+		namespace L = standin_layout;
+		const int items = int(labels.size());
+		Kids k;
+		k.add(texPic("back", "sx_black.bti", { 0, 0, L::kScreenW, L::kScreenH }));
+		const L::Rect panel = L::titlePanel(items);
+		BloPane glass       = texPic(std::string(4, '\0'), "sx_panel.bti", panel); // untagged: pcExtendMenu stretches it
+		BloPane heading     = txt("yttl", name, { panel.x, panel.y + 10, panel.w, 28 }, 22, kGold, kOrange);
+		k.add(with(placed(pane("yoko"), { 0, 0, L::kScreenW, L::kScreenH }), { glass, heading }));
+		k.add(placed(pane("pall"), { 0, 0, L::kScreenW, L::kScreenH })).add(pane("cent"));
+		k.add(txt("se_c", "", { 0, 0, 32, 32 }, 20, kGold, kOrange));
+		int i = 0;
+		for (const char* label : labels) {
+			const int y = L::kTitleRowY + i * L::kTitleRowStep;
+			k.add(txt(tagf("he%02d", i), label, { L::kTitleRowX, y, L::kTitleRowW, L::kTitleRowH }, 20, kWhite, kSky));
+			i++;
+		}
+		for (i = 0; i < items; i++) {
+			const int y = L::kTitleRowY + i * L::kTitleRowStep - 2;
+			k.add(texPic(tagf("i%02dl", i), "sx_pikmin_r.bti", { L::kTitleRowX - 22, y, 16, 32 }));
+			k.add(texPic(tagf("i%02dr", i), "sx_pikmin_b.bti", { L::kTitleRowX + L::kTitleRowW + 6, y, 16, 32 }));
+		}
+		k.add(texPic("z00l", "sx_arrow_r.bti", { L::kTitleRowX - 22, L::kTitleRowY, 24, 24 }));
+		k.add(texPic("z00r", "sx_arrow_l.bti", { L::kTitleRowX + L::kTitleRowW, L::kTitleRowY, 24, 24 }));
 		return k;
 	};
 	{
-		Kids k = titleMenu(2);
+		Kids k = titleMenu("Pikmin", { "Start", "Options" });
 		out.push_back(layout("m_select.blo", k));
 	}
 	{
-		Kids k = titleMenu(3);
+		Kids k = titleMenu("Pikmin", { "Start", "Options", "Challenge Mode" });
 		out.push_back(layout("m_selec2.blo", k));
 	}
 	{
-		Kids k = titleMenu(4);
+		Kids k = titleMenu("Options", { "Sound", "Messages", "Rumble", "High Scores" });
+		for (BloPane& p : k.v)
+			if (p.tag == "he01") p.visible = false; // hidden on the disc too (ogTitle.cpp, pcSetupAdvancedMenu)
 		out.push_back(layout("option.blo", k));
 	}
 	{
-		Kids k = titleMenu(2);
+		Kids k = titleMenu("Sound", { "Music", "Effects" });
 		k.add(pic("on21")).add(pic("on22")).add(box("on_c", "on")).add(box("offc", "off"));
 		for (int i = 1; i <= 10; i++) k.add(pic(tagf("on%02d", i)));
 		for (int i = 11; i <= 20; i++) k.add(pic(tagf("on%02d", i)));
 		out.push_back(layout("s_select.blo", k));
 	}
 	{
-		Kids k = titleMenu(2);
+		Kids k = titleMenu("Rumble", { "On", "Off" });
 		out.push_back(layout("v_select.blo", k));
 	}
 	{
-		Kids k = titleMenu(2);
+		Kids k = titleMenu("Messages", { "Normal", "Kana" });
 		out.push_back(layout("ms_selec.blo", k));
 	}
 
