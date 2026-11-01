@@ -66,6 +66,16 @@ PcScenario* pc_scenario_make_ship_part_carry(void);
 PcScenario* pc_scenario_make_nectar_growth(void);
 PcScenario* pc_scenario_make_bomb_firsts(void);
 PcScenario* pc_scenario_make_carry_blocked(void);
+// Disc-free W3 (#95).
+PcScenario* pc_scenario_make_pikmin_cap(void);
+PcScenario* pc_scenario_make_pikmin_cap_1(void);
+PcScenario* pc_scenario_make_pikmin_cap_250(void);
+PcScenario* pc_scenario_make_pikmin_cap_999(void);
+PcScenario* pc_scenario_make_day_clock(void);
+PcScenario* pc_scenario_make_demo_timers(void);
+PcScenario* pc_scenario_make_throw_levels(void);
+PcScenario* pc_scenario_make_whistle_radius(void);
+PcScenario* pc_scenario_make_navi_invincible(void);
 PcScenario* pc_scenario_make_title_boot(void);
 PcScenario* pc_scenario_make_piki_hazard_deaths(void);
 PcScenario* pc_scenario_make_piki_hazard_fire_red_fail(void);
