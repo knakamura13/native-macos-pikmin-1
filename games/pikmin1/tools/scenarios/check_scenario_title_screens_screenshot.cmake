@@ -1,8 +1,9 @@
 # title_boot captures of the stand-in title, main menu and file select with region guards
 # (issue #99). The boot path counts boot ticks the same way at 30 and 60 Hz (both runs reach
 # the stage after 577 boot ticks and the captures are pixel-identical), so the ticks are fixed:
-# 314 is the Press START prompt at the top of its blink, 340 the main menu fully open and 520
-# the file select with its three cards. A black screen or the wrong screen fails.
+# 314 is the Press START prompt at the top of its blink, 350 the main menu fully open (at 340
+# it is still scaling in) and 528 the file select with its three cards, faded in (at 520 it is
+# still fading). A black screen or the wrong screen fails.
 cmake_minimum_required(VERSION 3.16)
 
 foreach(var GAME WORK_DIR RATE PIKMIN_STANDIN_DATA)
@@ -22,8 +23,8 @@ execute_process(
         "PIKMIN_SCENARIO_STAGE=stages/sandbox.ini"
         "${GAME}" --scenario title_boot --scenario-tick-rate ${RATE}
         --scenario-screenshot "boot:314:${press_png}"
-        --scenario-screenshot "boot:340:${menu_png}"
-        --scenario-screenshot "boot:520:${files_png}"
+        --scenario-screenshot "boot:350:${menu_png}"
+        --scenario-screenshot "boot:528:${files_png}"
     OUTPUT_VARIABLE out
     ERROR_VARIABLE err
     RESULT_VARIABLE rc)
@@ -47,15 +48,18 @@ if(NOT press_rc STREQUAL "0")
 endif()
 
 # Main menu: the dark-blue panel with its light-blue frame in the centre, the gold "Pikmin"
-# heading and selected row, white rows, and nothing in the file select's top plate or footer.
+# heading, the selected row and its two gold cursors, white rows, the panel reaching below the
+# last row (Exit), and nothing in the file select's top plate or footer.
 execute_process(
     COMMAND "${Python3_EXECUTABLE}" "${verify}" "${menu_png}" ${common} --min-variance 100.0
-        --region-colour 110,110,570,360:0F1D3A:8:30000
-        --region-colour 110,110,570,360:94CEFF:30:3000
-        --region-colour 270,130,500,235:FFC000:60:150
-        --region-colour 110,110,570,360:E5E5E5:30:150
+        --region-colour 110,140,530,390:0F1D3A:8:50000
+        --region-colour 110,140,530,390:94CEFF:30:4000
+        --region-colour 250,150,500,240:FFC000:60:250
+        --region-colour 150,200,500,240:FFCE29:30:100
+        --region-colour 110,140,530,390:E5E5E5:30:200
+        --region-colour 130,352,510,372:0F1D3A:8:4000
         --max-region-colour 140,10,500,70:0D1A34:6:50
-        --max-region-colour 0,380,640,480:0D1A34:8:50
+        --max-region-colour 0,390,640,480:0D1A34:8:50
     RESULT_VARIABLE menu_rc)
 if(NOT menu_rc STREQUAL "0")
     message(FATAL_ERROR "title main menu (${menu_png}) failed its region checks")
