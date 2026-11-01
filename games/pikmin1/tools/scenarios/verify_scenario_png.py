@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import re
 import struct
 import sys
 import zlib
@@ -287,6 +288,34 @@ def count_in_region(
     return n
 
 
+def parse_region_colour(text: str) -> tuple[tuple[int, int, int, int], tuple[int, int, int], int, int]:
+    """Parse ``x0,y0,x1,y1:RRGGBB:tol:count`` (a region, a hex colour, a per-channel tolerance, a bound)."""
+    parts = text.split(":")
+    if len(parts) != 4 or not re.fullmatch(r"[0-9a-fA-F]{6}", parts[1]):
+        raise ValueError(f"region colour must be x0,y0,x1,y1:RRGGBB:tol:count, got {text!r}")
+    rgb = (int(parts[1][0:2], 16), int(parts[1][2:4], 16), int(parts[1][4:6], 16))
+    return parse_region(parts[0]), rgb, int(parts[2]), int(parts[3])
+
+
+def region_colour_count(
+    width: int,
+    height: int,
+    pixels: list[tuple[int, int, int]],
+    region: tuple[int, int, int, int],
+    rgb: tuple[int, int, int],
+    tol: int,
+) -> int:
+    """Pixels in ``region`` within ``tol`` of ``rgb`` on every channel."""
+    r0, g0, b0 = rgb
+    return count_in_region(
+        width,
+        height,
+        pixels,
+        region,
+        lambda r, g, b: abs(r - r0) <= tol and abs(g - g0) <= tol and abs(b - b0) <= tol,
+    )
+
+
 def edge_object_pixels(
     width: int,
     height: int,
@@ -403,6 +432,18 @@ def main() -> int:
     p.add_argument("--min-saturated-blue", type=int, default=0)
     p.add_argument("--onion-region", default="", help="x0,y0,x1,y1 where the onion bulb must be")
     p.add_argument("--min-onion-red", type=int, default=0, help="min saturated red pixels in --onion-region")
+    p.add_argument(
+        "--region-colour",
+        action="append",
+        default=[],
+        help="x0,y0,x1,y1:RRGGBB:tol:min, fail if fewer pixels in the region are within tol of the colour (repeatable)",
+    )
+    p.add_argument(
+        "--max-region-colour",
+        action="append",
+        default=[],
+        help="x0,y0,x1,y1:RRGGBB:tol:max, fail if more pixels in the region are within tol of the colour (repeatable)",
+    )
     p.add_argument("--ship-region", default="", help="x0,y0,x1,y1 where the ship hull must be")
     p.add_argument("--min-ship-silver", type=int, default=0, help="min silver/white pixels in --ship-region")
     p.add_argument(
@@ -498,6 +539,13 @@ def main() -> int:
                 print(f"ship region has {n} silver pixels (need >= {args.min_ship_silver})", file=sys.stderr)
                 return 1
             print(f"ship silver ok ({n})")
+        for spec, is_max in [(v, False) for v in args.region_colour] + [(v, True) for v in args.max_region_colour]:
+            region, rgb, tol, bound = parse_region_colour(spec)
+            n = region_colour_count(w, h, pixels, region, rgb, tol)
+            if (n > bound) if is_max else (n < bound):
+                print(f"region colour {spec}: {n} pixels (need {'<=' if is_max else '>='} {bound})", file=sys.stderr)
+                return 1
+            print(f"region colour {spec} ok ({n})")
     except ValueError as e:
         print(str(e), file=sys.stderr)
         return 1
