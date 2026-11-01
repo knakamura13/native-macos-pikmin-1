@@ -83,6 +83,17 @@ constexpr int kAnimInfoPick     = 1;  ///< PIKIANIM_Pick (4)
 constexpr int kAnimInfoGrowUp1  = 39; ///< PIKIANIM_GrowUp1 (17)
 constexpr int kAnimInfoGrowUp2  = 40; ///< PIKIANIM_GrowUp2 (18)
 constexpr int kAnimInfoMizunomi = 67; ///< PIKIANIM_Mizunomi (47)
+// The captain's whistle (whistle_gather, whistle_release, #96): NaviGatherState grows the
+// whistle circle, calls callPikis and runs Whistle Pluck only after PIKIANIM_Fue's
+// KEY_LoopStart (mWhistleAnimPhase 1), and NaviReleaseState disbands the squad
+// (releasePikis) on that same key. Measured on the disc (VERSION_GPIE01_01,
+// pikis/animMgr.bin info 74, read-only): frame count 20, anim keys [0, 1, 3, 19],
+// loop start at anim key 1 and loop end at anim key 2 (frames 1 to 3 loop until
+// finishMotion), no event keys, flags 5, speed 30. No curves or names are copied.
+constexpr int kAnimInfoFue    = 74; ///< PIKIANIM_Fue (49)
+constexpr int kFueFrames      = 20;
+constexpr int kFueLoopStart   = 1; ///< frame of KEY_LoopStart (anim key 1)
+constexpr int kFueLoopEnd     = 3; ///< frame of KEY_LoopEnd (anim key 2)
 
 /// One info: its AnimMgr record and the frame count of its payload.
 struct StandInAnim {

@@ -16,15 +16,13 @@
 //            radius. The last two are inside the full radius but outside the halved one, so they
 //            stay Free.
 // Every Pikmin is spawned at least kClear from the captain, so touching him does not call it.
-// The stand-in Fue motion has no info keys, so its KEY_LoopStart never fires and
-// NaviGatherState::exec would return before the circle grows. While B is held the scenario sets
-// NaviGatherState::mWhistleAnimPhase to 1, as that key would, and requires the circle to reach
-// mode 2 (full, callPikis(R) run) within the hold.
-// Every Pikmin is spawned at least kClear from the captain, so touching him does not call it.
+// Nothing is poked: the stand-in Fue motion carries the disc's loop keys (#96), so its
+// KEY_LoopStart sets NaviGatherState::mWhistleAnimPhase to 1 by itself. The hold requires Gather,
+// that phase, and the circle at mode 2 (full, callPikis(R) run) within it.
 //
-// Not covered: a partial whistle (B released before the circle is full, Navi::callPikis(scale)),
+// Not covered here: a partial whistle and X's disband (whistle_gather_release covers both), and
 // Pikmin in the excluded states (Drown, Flick, Nukare, Swallowed, Absorb, LookAt, Pressed;
-// piki_drown covers Drown) and X's disband (EC-32's other half).
+// piki_drown covers Drown).
 //
 // Negative controls: the Pikmin outside R (they would join if the radius were ignored), and round
 // 2's Pikmin at 0.65 and 0.9 of the full radius (they would join if the setting did nothing).
@@ -140,25 +138,22 @@ public:
 			}
 			return;
 		case Hold:
-			// The stand-in Fue motion has no info keys, so KEY_LoopStart never comes and
-			// NaviGatherState::exec returns before the circle grows: set its phase as the
-			// key would. exec reads it next tick.
+			// No poke: the stand-in Fue's KEY_LoopStart sets the phase (read by exec that tick).
 			if (navi->getCurrState()->getID() == NAVISTATE_Gather) {
 				NaviGatherState* g = static_cast<NaviGatherState*>(navi->getCurrState());
-				if (g->mWhistleAnimPhase == 0) {
-					g->mWhistleAnimPhase = 1;
-					mGatherTick          = t;
-				}
+				if (!mGatherTick) mGatherTick = t;
+				if (g->mWhistleAnimPhase == 1 && !mLoopTick) mLoopTick = t;
 				if (navi->mWhistleCircleMode == 2 && !mCalledTick) mCalledTick = t;
 			}
 			if (s >= C_NAVI_PARM(navi, mWhistleExpandTime) + 0.5f) {
-				if (!mGatherTick || !mCalledTick) {
-					fail(t, "B held: Gather, and the circle full (mode 2, callPikis at R) within mWhistleExpandTime + 0.5 s", "Gather tick %u, full tick %u, state %d",
-					     mGatherTick, mCalledTick, navi->getCurrState()->getID());
+				if (!mGatherTick || !mLoopTick || !mCalledTick) {
+					fail(t, "B held: Gather, KEY_LoopStart by itself, and the circle full (mode 2, callPikis at R) within mWhistleExpandTime + 0.5 s",
+					     "Gather tick %u, phase-1 tick %u, full tick %u, state %d", mGatherTick, mLoopTick, mCalledTick, navi->getCurrState()->getID());
 					return;
 				}
-				std::printf("[scenario] whistle_radius: round %d: circle full %.2f s after Gather\n", mRound, (mCalledTick - mGatherTick) / float(mRate));
-				mGatherTick = mCalledTick = 0;
+				std::printf("[scenario] whistle_radius: round %d: KEY_LoopStart %u ticks, circle full %.2f s after Gather\n", mRound, mLoopTick - mGatherTick,
+				            (mCalledTick - mGatherTick) / float(mRate));
+				mGatherTick = mLoopTick = mCalledTick = 0;
 				enter(Check, t);
 			}
 			return;
@@ -248,7 +243,7 @@ private:
 	}
 
 	Phase mPhase        = Away;
-	unsigned mPhaseTick = 0, mRate = 30, mGatherTick = 0, mCalledTick = 0;
+	unsigned mPhaseTick = 0, mRate = 30, mGatherTick = 0, mCalledTick = 0, mLoopTick = 0;
 	int mRound          = 0;
 	float mFull = 0, mR = 0;
 	Vector3f mCentre, mFrom[kMaxPikis];

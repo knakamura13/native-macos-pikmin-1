@@ -49,9 +49,9 @@
 // to the colour and dropped onto the floor), away from the stage's sprouts. It
 // then calls pc_whistle_pluck, the mod's entry that NaviGatherState::exec calls
 // while the whistle is held, with the cursor on the sprout: first with the
-// setting off (it must pluck nothing), then on. The stand-in whistle motion has no
-// KEY_LoopStart, so NaviGatherState itself never reaches that call on the
-// stand-in tree (not covered: the call site, its cooldown and radius). The
+// setting off (it must pluck nothing), then on. The call site itself, with its
+// cooldown and radius, is whistle_pluck_held's (#96); here the entry is called
+// directly so the unlock path is isolated from the whistle's timing. The
 // Pikmin leaves through PikiAutoNukiState, whose cleanup runs
 // pcUnlockColourFromAutoPluck. The same state changes as the hand pluck are
 // asserted for yellow and blue (red has no whistle unlock path, by design),
@@ -485,9 +485,8 @@ protected:
 	}
 
 	/// What NaviGatherState::exec does while the whistle is held: pc_whistle_pluck with the current circle's radius. The
-	/// stand-in whistle motion (PIKIANIM_Fue, a 40-frame one-shot) has no KEY_LoopStart, so NaviGatherState never reaches
-	/// its call on the stand-in tree; the scenario calls the mod's entry itself, with the cursor on the sprout and the
-	/// circle at the minimum radius. The other sprouts are at least 80 units away.
+	/// scenario calls the mod's entry itself (whistle_pluck_held covers the real call site), with the cursor on the
+	/// sprout and the circle at the minimum radius. The other sprouts are at least 80 units away.
 	bool whistle(unsigned t) override
 	{
 		Navi* navi           = naviMgr->getNavi();
