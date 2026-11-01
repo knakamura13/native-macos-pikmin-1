@@ -76,6 +76,8 @@ PcScenario* pc_scenario_make_demo_timers(void);
 PcScenario* pc_scenario_make_throw_levels(void);
 PcScenario* pc_scenario_make_whistle_radius(void);
 PcScenario* pc_scenario_make_navi_invincible(void);
+PcScenario* pc_scenario_make_whistle_gather_release(void);
+PcScenario* pc_scenario_make_whistle_pluck_held(void);
 PcScenario* pc_scenario_make_enemy_kills(void);
 PcScenario* pc_scenario_make_onion_menu_transfer(void);
 PcScenario* pc_scenario_make_navi_states(void);

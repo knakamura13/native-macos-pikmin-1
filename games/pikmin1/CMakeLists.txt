@@ -476,6 +476,8 @@ if (PIKMIN_BUILD_SCENARIOS)
         pc_port/scenarios/scenario_throw_levels.cpp
         pc_port/scenarios/scenario_whistle_radius.cpp
         pc_port/scenarios/scenario_navi_invincible.cpp
+        pc_port/scenarios/scenario_whistle_gather_release.cpp
+        pc_port/scenarios/scenario_whistle_pluck_held.cpp
         pc_port/scenarios/scenario_enemy_kills.cpp
         pc_port/scenarios/scenario_onion_menu_transfer.cpp
         pc_port/scenarios/scenario_navi_states.cpp
@@ -2360,7 +2362,9 @@ if(PIKMIN_BUILD_SCENARIOS)
     foreach(entry pikmin_cap:sandbox_objects:30,60 pikmin_cap_1:sandbox_objects:30,60
         pikmin_cap_250:sandbox_objects:30,60 pikmin_cap_999:sandbox_objects:30,60
         day_clock:sandbox:30,60 demo_timers:practice:30,60 throw_levels:sandbox:30,60
-        whistle_radius:sandbox:30,60 navi_invincible:sandbox:30,60)
+        whistle_radius:sandbox:30,60 navi_invincible:sandbox:30,60
+        # Disc-free W4 (issue #96): the real whistle, gather and release paths.
+        whistle_gather_release:sandbox:30,60 whistle_pluck_held:sandbox:30,60)
         string(REPLACE ":" ";" parts "${entry}")
         list(GET parts 0 scenario)
         list(GET parts 1 stage)

@@ -95,6 +95,8 @@ const std::vector<PcScenario*>& pc_scenario_all(void)
 		pc_scenario_make_throw_levels(),
 		pc_scenario_make_whistle_radius(),
 		pc_scenario_make_navi_invincible(),
+		pc_scenario_make_whistle_gather_release(),
+		pc_scenario_make_whistle_pluck_held(),
 		pc_scenario_make_enemy_kills(),
 		pc_scenario_make_onion_menu_transfer(),
 		pc_scenario_make_navi_states(),
