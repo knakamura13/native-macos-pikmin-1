@@ -189,3 +189,12 @@ dataDir/cinemas/demo68.cin
 # zero-length movies, as above. The scenario asserts the demo flags, not the movies.
 dataDir/cinemas/demo08.cin
 dataDir/cinemas/demo13.cin
+# world_map_day_end, title_round_trip (#99): the day end goes through the world map to
+# The Impact Site (stages/practice.ini) on Day 3, so its day file is 2.gen (guarded and
+# skipped, as above). The Impact Site landing (DEMOID_LandingPractice, demo40) and the
+# Onion landing with its Pikmin (DEMOID_PikminInOnyonPractice, demo44) are not written:
+# the missing movie ends at once and the scenarios assert the stage, day and course,
+# not the movies.
+dataDir/stages/practice/2.gen
+dataDir/cinemas/demo40.cin
+dataDir/cinemas/demo44.cin
