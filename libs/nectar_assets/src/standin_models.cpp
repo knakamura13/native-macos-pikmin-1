@@ -174,7 +174,7 @@ std::vector<StandInModelSpec> buildSpecs()
 	// (se dibujan con la matriz 6 del Pikmin). marker.mod necesita material
 	// (navi.cpp:3985).
 	add("shapes/cursor/marker.mod", { -1 }, yellow, 5.0f);
-	add("shapes/cursor/cursor.mod", { -1 }, white, 5.0f);
+	add("shapes/cursor/cursor.mod", { -1, 0 }, white, 5.0f);
 	add("pikis/happas/leaf.mod", { -1 }, { 60, 200, 60, 255 }, 2.0f);
 	add("pikis/happas/bud.mod", { -1 }, { 200, 120, 160, 255 }, 2.0f);
 	add("pikis/happas/flower.mod", { -1 }, { 240, 240, 120, 255 }, 2.0f);

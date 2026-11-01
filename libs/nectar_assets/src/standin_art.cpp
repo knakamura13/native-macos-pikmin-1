@@ -597,6 +597,7 @@ Model buildArtStandInModel(const StandInModelSpec& spec)
 		break;
 	case Kind::Cursor:
 		addBoxMesh(m, spec, 0, addMaterial(m, { 255, 255, 255, 255 }), 1.4f, 0.18f, 0.18f, { 0.0f, 0.0f, 0.0f });
+		addBoxMesh(m, spec, 1, addMaterial(m, { 255, 255, 80, 255 }), 0.25f, 0.25f, 2.2f, { 0.0f, 0.0f, 1.8f });
 		break;
 	case Kind::Marker:
 		addSphereMesh(m, spec, 0, addMaterial(m, { 255, 255, 100, 120 }), spec.halfSize, 5, 8, {});
