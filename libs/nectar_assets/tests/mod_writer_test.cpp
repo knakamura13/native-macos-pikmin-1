@@ -529,6 +529,9 @@ void testStandIns(const std::string& manifestPath)
 	};
 	check(joints("objects/pikihead/pikihead.mod") >= 4, "pikihead has at least 4 joints (joint 3)");
 	check(joints("shapes/cursor/marker.mod") >= 1 && joints("shapes/cursor/cursor.mod") >= 1, "cursor shapes have a joint");
+	// Regression guard for #118/#119: a cursor with a mesh on joint 1 used to
+	// crash the draw, because the cursor never runs updateAnim.
+	check(joints("shapes/cursor/cursor.mod") == 2, "cursor.mod keeps its second joint (#119)");
 	for (const nectar::StandInModelSpec& s : specs) check(s.jointCount() >= 1, s.path + ": at least one joint");
 
 	// The 16 ship parts: any repair index below the disc's joint count stays in range (#66).

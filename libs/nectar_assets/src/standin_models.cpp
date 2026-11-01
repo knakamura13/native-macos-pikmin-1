@@ -169,10 +169,11 @@ std::vector<StandInModelSpec> buildSpecs()
 	};
 	for (const Part& p : fuzoku) add((std::string("objects/ufoparts/") + p.name + ".mod").c_str(), p.parents, grey, 8.0f, centOnly(p.radius, p.cy));
 
-	// GlobalShape::init. Una articulación y una malla bastan: cursor.mod se
-	// instancia en la 0 (navi.cpp:669) y hoja, capullo y flor no leen ninguna
-	// (se dibujan con la matriz 6 del Pikmin). marker.mod necesita material
-	// (navi.cpp:3985).
+	// GlobalShape::init. Una articulación y una malla bastan para marker.mod,
+	// hoja, capullo y flor (se dibujan con la matriz 6 del Pikmin); marker.mod
+	// necesita material (navi.cpp:3985). cursor.mod se instancia en la 0
+	// (navi.cpp:669) y se dibuja sin updateAnim; lleva dos articulaciones a
+	// propósito (la flecha va en la 1) para que boot_smoke cubra #118/#119.
 	add("shapes/cursor/marker.mod", { -1 }, yellow, 5.0f);
 	add("shapes/cursor/cursor.mod", { -1, 0 }, white, 5.0f);
 	add("pikis/happas/leaf.mod", { -1 }, { 60, 200, 60, 255 }, 2.0f);
