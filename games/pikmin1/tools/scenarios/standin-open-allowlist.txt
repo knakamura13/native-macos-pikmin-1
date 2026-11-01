@@ -185,3 +185,7 @@ dataDir/screen/eng_tex/image014.bti
 # bomb_firsts: the first bomb a Pikmin brings back (DEMOFLAG_GrabFirstBomb, DEMOID_YellowWithBomb)
 # plays as a zero-length movie, as above. The scenario asserts the flag, not the movie.
 dataDir/cinemas/demo68.cin
+# demo_timers: the NoPikminTimeout and Unk9 hint movies (DF07 demo08, DF09 demo13) play as
+# zero-length movies, as above. The scenario asserts the demo flags, not the movies.
+dataDir/cinemas/demo08.cin
+dataDir/cinemas/demo13.cin
