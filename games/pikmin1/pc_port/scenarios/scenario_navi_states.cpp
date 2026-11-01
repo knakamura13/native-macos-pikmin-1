@@ -89,7 +89,7 @@ public:
 				const float off = std::sqrt(dx * dx + dz * dz);
 				std::printf("[scenario] navi_states: Walk after %.2f s at (%.0f, %.0f), %.1f from the target\n", s, navi->mSRT.t.x, navi->mSRT.t.z,
 				            off);
-				if (std::fabs(dx) > 40.0f || std::fabs(dz) > 40.0f) {
+				if (off > 40.0f) {
 					fail(t, "EC-51: the geyser lands the captain at its target (within 40 units)", "%.1f away", off);
 					return;
 				}

@@ -74,8 +74,9 @@ public:
 		const bool taken = hit(1.0f);
 		std::printf("[scenario] gate_break: scratch: taken %d, stage %d, health %.1f, waypoint open %d\n", (int)taken, mGate->mCurrStage,
 		            mGate->mHealth, (int)mGate->mWayPoint->mIsOpen);
-		if (!taken || mGate->mCurrStage != 0 || mGate->mWayPoint->mIsOpen) {
-			fail(0, "a 1-damage hit is taken and moves no stage", "taken %d, stage %d", (int)taken, mGate->mCurrStage);
+		if (!taken || mGate->mCurrStage != 0 || mGate->mWayPoint->mIsOpen || std::fabs(mGate->mHealth - (kGateHealth - 1.0f)) > 0.01f) {
+			fail(0, "a 1-damage hit is taken, takes 1 health and moves no stage", "taken %d, stage %d, health %.1f", (int)taken, mGate->mCurrStage,
+			     mGate->mHealth);
 		}
 	}
 
