@@ -35,6 +35,8 @@ PcScenario* pc_scenario_make_save_load_flags(void);
 PcScenario* pc_scenario_make_results_nosave_map(void);
 PcScenario* pc_scenario_make_results_nosave_cardselect(void);
 PcScenario* pc_scenario_make_pause_continue(void);
+PcScenario* pc_scenario_make_map_menu(void);
+PcScenario* pc_scenario_make_map_menu_lockout(void);
 PcScenario* pc_scenario_make_permadeath_erase(void);
 PcScenario* pc_scenario_make_permadeath_unsaved(void);
 PcScenario* pc_scenario_make_permadeath_bad_slot(void);

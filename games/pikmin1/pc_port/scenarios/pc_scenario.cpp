@@ -270,7 +270,7 @@ void startWatchdog(const char* name)
 void usage(const char* msg)
 {
 	std::fprintf(stderr, "[scenario] %s\n", msg);
-	std::fprintf(stderr, "usage: nectar --scenario <name> [--scenario-tick-rate 30|60] [--scenario-visible] [--scenario-realtime] [--scenario-handoff] [--scenario-screenshot tick:path]...\n");
+	std::fprintf(stderr, "usage: nectar --scenario <name> [--scenario-tick-rate 30|60] [--scenario-visible] [--scenario-realtime] [--scenario-handoff] [--scenario-screenshot [boot:|between:]tick:path]...\n");
 	std::fprintf(stderr, "scenarios:");
 	for (PcScenario* s : pc_scenario_all()) {
 		if (!s->testOnly()) std::fprintf(stderr, " %s", s->name());
@@ -662,7 +662,7 @@ int pc_scenario_parse_argv(int argc, char** argv)
 				return PC_SCENARIO_EXIT_USAGE;
 			}
 			if (!pc_scenario_screenshot_parse_arg(argv[++i])) {
-				usage("--scenario-screenshot must be tick:path (for example 100:out.png)");
+				usage("--scenario-screenshot must be [boot:|between:]tick:path (for example 100:out.png)");
 				return PC_SCENARIO_EXIT_USAGE;
 			}
 		} else if (std::strcmp(argv[i], "--scenario-replay") == 0) {
@@ -942,13 +942,25 @@ void pc_scenario_on_stage_ready(void)
 
 void pc_scenario_on_tick_begin(void)
 {
-	if (!sActive || sVerdict || !sStageReady || !sIntroDone) return;
+	if (!sActive || sVerdict) return;
+	if (!sStageReady) {
+		// Boot (title, file select) and between-stage (world map) captures, counted as the
+		// pad providers count them (providePadsDuringBoot, providePadsBetweenStages).
+		if (sBetweenStages) {
+			pc_scenario_screenshot_on_phase_tick_begin(PC_CAPTURE_BETWEEN, sBetweenTicks);
+		} else if (sStageNumber == 0) {
+			pc_scenario_screenshot_on_phase_tick_begin(PC_CAPTURE_BOOT, sBootTicks);
+		}
+		return;
+	}
+	if (!sIntroDone) return;
 	pc_scenario_screenshot_on_tick_begin(sTick);
 }
 
 void pc_scenario_on_tick_end(void)
 {
 	if (!sActive) return;
+	pc_scenario_screenshot_on_phase_tick_end();
 	if (sProbe.active) probeTick();
 	// After a hand-off sVerdict is set too: no scenario code and no check runs.
 	if (sVerdict) return;

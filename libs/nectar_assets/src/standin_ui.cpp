@@ -172,6 +172,46 @@ StandinLayout tutorialPage(const char* file)
 	return layout(file, k);
 }
 
+
+// A styled text box: rect, glyph size, top and bottom colours (vertical gradient) and binding
+// (H 0 centre, 1 right, 2 left; V 0 centre, 1 bottom, 2 top). Text wraps inside the rect.
+BloPane txt(const std::string& tag, const std::string& text, standin_layout::Rect r, int size, BloColour top, BloColour bottom,
+            std::uint8_t h = 0, std::uint8_t v = 0)
+{
+	BloPane p    = placed(box(tag, text), r);
+	p.fontWidth  = size;
+	p.fontHeight = size;
+	p.charColour = top;
+	p.gradColour = bottom;
+	p.hBinding   = h;
+	p.vBinding   = v;
+	p.leading    = size + size / 4; // line advance: 0 stacks wrapped lines on top of each other
+	return p;
+}
+
+// A lower-case 'root' pane (ogDrawScrMenu::setScreen, ogRaderMgr): the screen the menu rotates.
+BloPane menuRoot(std::initializer_list<BloPane> kids)
+{
+	BloPane r = placed(pane("root"), { 0, 0, standin_layout::kScreenW, standin_layout::kScreenH });
+	for (const BloPane& k : kids) r.children.push_back(k);
+	return r;
+}
+
+StandinLayout rootLayout(const char* file, BloPane root)
+{
+	Kids k;
+	k.add(std::move(root));
+	return layout(file, k);
+}
+
+constexpr BloColour kWhite { 255, 255, 255, 255 };
+constexpr BloColour kCream { 255, 244, 200, 255 };
+constexpr BloColour kGold { 255, 210, 60, 255 };
+constexpr BloColour kOrange { 240, 140, 30, 255 };
+constexpr BloColour kSky { 150, 220, 255, 255 };
+constexpr BloColour kBlueText { 70, 140, 255, 255 };
+constexpr BloColour kShadow { 0, 0, 0, 255 };
+
 } // namespace
 
 std::vector<StandinLayout> standinBloLayouts()
@@ -180,7 +220,8 @@ std::vector<StandinLayout> standinBloLayouts()
 
 	{ // ogPause.cpp:37-40: se castea a imagen y se le pone alfa 0.
 		Kids k;
-		k.add(pic("blck"));
+		// A black texture so the alpha the game sets actually darkens (#99, the Y menu's fade).
+		k.add(texPic("blck", "sx_black.bti", { 0, 0, standin_layout::kScreenW, standin_layout::kScreenH }));
 		out.push_back(layout("black.blo", k));
 	}
 	{ // ogPause.cpp:43-50, 75-77: tres filas (setMenuItemActiveSw(1, ..) y he02/hm02).
@@ -692,6 +733,154 @@ std::vector<StandinLayout> standinBloLayouts()
 	{
 		Kids k = titleMenu(2);
 		out.push_back(layout("ms_selec.blo", k));
+	}
+
+	// The map and controller menu (Y in the field, #99): ogScrMenuMgr (ogMenu.cpp) loads cont_y,
+	// m_menu2, cont_00, m_menu2m and black, and the radar (ogRader.cpp) one p_map0N by stage. Tags
+	// and types are every search(.., true) of those constructors; positions follow the retail
+	// screens roughly (map on the left with the Pikmin counts beside it; the controller in the
+	// middle with a labelled window per button around it). Each lives under a lower-case 'root'.
+	{ // ogMenu.h, ogDrawLR: ya_l and ya_r, the page arrows, with the L and R letters as text-box
+		// children (pcInitTouchHints hides them for touch).
+		BloPane l = texPic("ya_l", "sx_arrow_l.bti", standin_layout::kMenuArrowL);
+		l.children.push_back(txt("yatl", "L", { 2, 20, 32, 32 }, 24, { 30, 50, 110, 255 }, { 10, 20, 60, 255 }));
+		BloPane r = texPic("ya_r", "sx_arrow_r.bti", standin_layout::kMenuArrowR);
+		r.children.push_back(txt("yatr", "R", { 2, 20, 32, 32 }, 24, { 30, 50, 110, 255 }, { 10, 20, 60, 255 }));
+		out.push_back(rootLayout("cont_y.blo", menuRoot({ l, r })));
+	}
+	{ // ogMenu.cpp, ogDrawScrInfo::ogDrawScrInfo: m_menu2.blo. The digits are pictures
+		// (setNumberTag, NumberPicCallBack); p_* group a colour's icon and digits; ti00..ti04 are
+		// the area names (one shown, by stage id); se_c's alpha is the black fade's.
+		using standin_layout::Rect;
+		BloPane root = menuRoot({});
+		root.children.push_back(texPic("bk_i", "sx_panel.bti", standin_layout::kMenuInfoPanel));
+		static const char* const areas[5] = { "The Impact Site", "The Forest of Hope", "The Forest Navel", "The Distant Spring",
+			                                  "The Final Trial" };
+		for (int i = 0; i < 5; i++) root.children.push_back(txt(tagf("ti%02d", i), areas[i], standin_layout::kMenuTitle, 28, kGold, kOrange));
+		root.children.push_back(txt("idou", "Stick: scroll", { 388, 390, 208, 20 }, 14, kWhite, kSky, 2));
+		root.children.push_back(txt("zoom", "D-pad: zoom", { 388, 412, 208, 20 }, 14, kWhite, kSky, 2));
+		const int x0 = standin_layout::kMenuCountsX;
+		root.children.push_back(txt("hd_s", "Squad", { x0 + 30, 90, 72, 22 }, 14, kWhite, kSky));
+		root.children.push_back(txt("hd_t", "Total", { x0 + 102, 90, 72, 22 }, 14, kWhite, kSky));
+		auto digits = [](BloPane& g, const char* pre, int x, int y) {
+			for (int d = 0; d < 3; d++) {
+				char t[8];
+				std::snprintf(t, sizeof t, "%s_%c", pre, "lcr"[d]);
+				g.children.push_back(texPic(t, "0_64.bti", { x + d * 20, y, 20, 26 }));
+			}
+		};
+		static const char* const colours[3][3] = { { "r", "rp_l64.bti", "sx_pikmin_r.bti" }, { "y", "yp_l64.bti", "sx_pikmin_y.bti" },
+			                                                   { "b", "bp_l64.bti", "sx_pikmin_b.bti" } };
+		for (int c = 0; c < 3; c++) {
+			const int y = 120 + c * 52;
+			const std::string k = colours[c][0];
+			BloPane field = placed(pane("p_" + k + "p"), { x0, y, 100, 40 });
+			field.children.push_back(texPic("ic_" + k, colours[c][2], { 0, 0, 20, 40 }));
+			digits(field, (k + "p").c_str(), 36, 7);
+			BloPane total = placed(pane("p_" + k + "c"), { x0 + 104, y, 68, 40 });
+			digits(total, (k + "c").c_str(), 4, 7);
+			root.children.push_back(field);
+			root.children.push_back(total);
+		}
+		root.children.push_back(txt("fp_t", "On the field", { x0, 286, 112, 20 }, 12, kWhite, kSky, 2));
+		{
+			BloPane g = placed(pane("fp_g"), { x0 + 112, 280, 62, 34 });
+			digits(g, "fp", 2, 4);
+			root.children.push_back(g);
+		}
+		root.children.push_back(texPic("rk_i", "sx_rocket.bti", { x0 - 4, 326, 48, 48 }));
+		root.children.push_back(txt("pt_t", "Ship parts", { x0 + 46, 324, 126, 20 }, 14, kWhite, kSky, 2));
+		root.children.push_back(texPic("ro_l", "0_64.bti", { x0 + 50, 348, 20, 26 }));
+		root.children.push_back(texPic("ro_r", "0_64.bti", { x0 + 70, 348, 20, 26 }));
+		root.children.push_back(txt("sl_t", "/", { x0 + 92, 348, 16, 26 }, 20, kWhite, kCream));
+		root.children.push_back(texPic("rt_l", "0_64.bti", { x0 + 110, 348, 20, 26 }));
+		root.children.push_back(texPic("rt_r", "0_64.bti", { x0 + 130, 348, 20, 26 }));
+		// se_c: the alpha of its characters sets how dark the black fade goes (ogScrMenuMgr).
+		BloPane se = txt("se_c", " ", { 0, 0, 8, 8 }, 8, kWhite, kWhite);
+		se.charColour.a = 160;
+		root.children.push_back(se);
+		out.push_back(rootLayout("m_menu2.blo", root));
+	}
+	{ // ogMenu.cpp, ogDrawScrController::ogDrawScrController: cont_00.blo. Per button a window
+		// (_w, 3d_w the master), the button on the pad (l, r, ..; tinted from the label's colours
+		// by setTextColor), its icon in the window (_m) and the label (_c); st and st_c, START.
+		BloPane root = menuRoot({});
+		root.children.push_back(txt("ct_t", "Controls", standin_layout::kMenuTitle, 28, kGold, kOrange));
+		root.children.push_back(texPic("pad_", "control_sx.bti", standin_layout::kMenuPad));
+		struct Btn {
+			const char* key;
+			const char* label;
+			BloColour colour;
+			standin_layout::Rect window; // the labelled window
+			standin_layout::Rect onPad;  // the button drawn over the pad
+		};
+		const standin_layout::Rect pad = standin_layout::kMenuPad;
+		const int lx = 42, rx = 410, ww = 184, wh = 44;
+		// On-pad positions follow the drawing in control_sx (128 by 80, drawn at kMenuPad's size).
+		auto on = [&](float cx, float cy, int w, int h) {
+			const float sx = pad.w / 128.0f, sy = pad.h / 80.0f;
+			return standin_layout::Rect { pad.x + int(cx * sx) - w / 2, pad.y + int(cy * sy) - h / 2, w, h };
+		};
+		const Btn btns[9] = {
+			{ "l", "Camera behind", { 200, 200, 210, 255 }, { lx, 96, ww, wh }, on(30, 0, 44, 10) },
+			{ "r", "Zoom", { 200, 200, 210, 255 }, { rx, 96, ww, wh }, on(98, 0, 44, 10) },
+			{ "z", "Camera angle", { 180, 120, 255, 255 }, { rx, 148, ww, wh }, on(100, 8, 30, 8) },
+			{ "y", "Map menu", { 230, 230, 240, 255 }, { rx, 200, ww, wh }, on(96, 14, 14, 12) },
+			{ "x", "Disband", { 230, 230, 240, 255 }, { rx, 252, ww, wh }, on(112, 24, 12, 14) },
+			{ "a", "Throw / Pluck", { 60, 220, 120, 255 }, { rx, 304, ww, wh }, on(98, 28, 22, 22) },
+			{ "b", "Whistle", { 250, 80, 80, 255 }, { rx, 356, ww, wh }, on(84, 38, 13, 13) },
+			{ "c", "Swarm Pikmin", { 255, 220, 60, 255 }, { lx, 304, ww, wh }, on(82, 52, 18, 18) },
+			{ "3d", "Move Olimar", { 200, 200, 210, 255 }, { lx, 200, ww, wh }, on(30, 26, 22, 22) },
+		};
+		for (const Btn& b : btns) root.children.push_back(texPic(tag4((std::string(b.key) + "_w").c_str()), "sx_panel.bti", b.window));
+		for (const Btn& b : btns) {
+			const std::string k = b.key;
+			const char* shape = k == "3d" || k == "c" ? "sx_stick.bti" : (k == "l" || k == "r" || k == "z") ? "sx_bar.bti" : "sx_btn.bti";
+			root.children.push_back(texPic(tag4(k.c_str()), shape, b.onPad));
+			root.children.push_back(texPic(tag4((k + "_m").c_str()), shape, { b.window.x + 8, b.window.y + 8, 28, 28 }));
+			BloColour dark = b.colour;
+			dark.r = std::uint8_t(dark.r * 3 / 5);
+			dark.g = std::uint8_t(dark.g * 3 / 5);
+			dark.b = std::uint8_t(dark.b * 3 / 5);
+			root.children.push_back(txt(tag4((k + "_c").c_str()), b.label, { b.window.x + 40, b.window.y + 4, b.window.w - 46, b.window.h - 8 }, 12,
+			                            b.colour, dark, 2));
+		}
+		root.children.push_back(texPic(tag4("st"), "sx_btn.bti", on(64, 26, 10, 10)));
+		root.children.push_back(txt("st_c", "START: pause", { 220, 404, 200, 28 }, 16, kWhite, kSky));
+		out.push_back(rootLayout("cont_00.blo", root));
+	}
+	{ // ogMenu.cpp, ogDrawScrInfo2: m_menu2m.blo. 'maps' is the radar's window (ogScrMenuMgr::draw
+		// centres the radar on it, ogRaderMgr::startMenu scissors to it); 'yaji' the compass arrow.
+		BloPane root = menuRoot({});
+		root.children.push_back(placed(pane("maps"), standin_layout::kMenuMap));
+		const standin_layout::Rect m = standin_layout::kMenuMap;
+		root.children.push_back(texPic("yaji", "sx_compass.bti", { m.x + m.w - 52, m.y + 6, 44, 44 }));
+		out.push_back(rootLayout("m_menu2m.blo", root));
+	}
+	// ogRader.cpp, ogRaderMgr::ogRaderMgr: p_map00..p_map04, one per area (the stand-in sandbox, a
+	// test map, takes p_map00). mapN is the area map, drawn from the radar's origin (map pixels =
+	// (world + 2800) * 310 / 5400, ogCalcDispXZ); the icon templates are hidden and copied.
+	for (int i = 0; i < 5; i++) {
+		BloPane root = placed(pane("root"), { 0, 0, 320, 320 });
+		root.children.push_back(texPic(tagf("map%d", i), "sx_radar.bti", { 0, 0, 310, 310 }));
+		BloPane icons = placed(pane("i_bs"), { 0, 0, 310, 310 });
+		root.children.push_back(icons);
+		for (const auto& t : { std::pair<const char*, const char*> { "mbpi", "bp_l64.bti" }, { "mrpi", "rp_l64.bti" }, { "mypi", "yp_l64.bti" },
+		                       { "mmpi", "sx_seed.bti" }, { "part", "sx_part.bti" }, { "orim", "sx_olimar.bti" }, { "mbci", "sx_onion_b.bti" },
+		                       { "mrci", "sx_onion_r.bti" }, { "myci", "sx_onion_y.bti" }, { "mroi", "sx_rocket.bti" } })
+			root.children.push_back(texPic(t.first, t.second, { 0, 0, 16, 16 }));
+		out.push_back(rootLayout(tagf("p_map%02d.blo", i).c_str(), root));
+	}
+	{ // ogMap.cpp, ogScrMapMgr (the ogTest debug section only): test.blo and test2.blo (pic1, the
+		// typing text tx00 and the cursor curs).
+		Kids t;
+		t.add(txt("tx00", "Stand-in test screen.", { 64, 200, 512, 40 }, 20, kWhite, kSky));
+		out.push_back(layout("test.blo", t));
+		Kids t2;
+		t2.add(texPic("pic1", "sx_panel.bti", { 64, 120, 512, 240 }));
+		t2.add(txt("tx00", "Stand-in test text.", { 96, 160, 448, 160 }, 20, kWhite, kSky, 2, 2));
+		t2.add(texPic("curs", "sx_btn.bti", { 520, 320, 24, 24 }));
+		out.push_back(layout("test2.blo", t2));
 	}
 
 	return out;

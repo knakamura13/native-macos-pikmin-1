@@ -633,3 +633,208 @@ Model buildArtStandInModel(const StandInModelSpec& spec)
 }
 
 } // namespace nectar
+
+// ---------------------------------------------------------------------------------------------
+// Screen art for the stand-in menus (#99): sx_* (and control_sx) in screen.bun. Everything is
+// drawn here from shapes; nothing comes from the disc.
+namespace nectar {
+namespace {
+
+void sxPolygon(Image& img, std::initializer_list<std::pair<float, float>> pts, std::uint8_t r, std::uint8_t g, std::uint8_t b, std::uint8_t a = 255)
+{
+	std::vector<std::pair<float, float>> v(pts);
+	for (int y = 0; y < img.height; y++) {
+		for (int x = 0; x < img.width; x++) {
+			const float px = x + 0.5f, py = y + 0.5f;
+			bool in = false;
+			for (std::size_t i = 0, j = v.size() - 1; i < v.size(); j = i++) {
+				const auto [xi, yi] = v[i];
+				const auto [xj, yj] = v[j];
+				if ((yi > py) != (yj > py) && px < (xj - xi) * (py - yi) / (yj - yi) + xi) in = !in;
+			}
+			if (!in) continue;
+			std::uint8_t* p = img.at(x, y);
+			p[0] = r, p[1] = g, p[2] = b, p[3] = a;
+		}
+	}
+}
+
+void sxRoundRect(Image& img, int x0, int y0, int x1, int y1, int rad, std::uint8_t r, std::uint8_t g, std::uint8_t b, std::uint8_t a = 255)
+{
+	artFillRect(img, x0 + rad, y0, x1 - rad, y1, r, g, b, a);
+	artFillRect(img, x0, y0 + rad, x1, y1 - rad, r, g, b, a);
+	for (int cy : { y0 + rad, y1 - rad - 1 })
+		for (int cx : { x0 + rad, x1 - rad - 1 }) artFillCircle(img, cx, cy, rad, r, g, b, a);
+}
+
+std::uint32_t sxHash(int x, int y)
+{
+	std::uint32_t h = std::uint32_t(x) * 374761393u + std::uint32_t(y) * 668265263u;
+	h = (h ^ (h >> 13)) * 1274126177u;
+	return h ^ (h >> 16);
+}
+
+Image sxImage(int w, int h)
+{
+	Image img;
+	img.resize(w, h);
+	artFill(img, 0, 0, 0, 0);
+	return img;
+}
+
+void sxPikmin(Image& img, int cx, int cy, int s, std::uint8_t r, std::uint8_t g, std::uint8_t b, bool flower)
+{
+	// Body (a capsule), eyes, a stalk and a leaf or a flower: recognisably a Pikmin at icon size.
+	sxRoundRect(img, cx - s, cy - s / 2, cx + s, cy + 3 * s, s, r, g, b);
+	artFillCircle(img, cx, cy, s + s / 4, r, g, b);
+	artFillCircle(img, cx - s / 2, cy, s / 3 + 1, 255, 255, 255);
+	artFillCircle(img, cx + s / 2, cy, s / 3 + 1, 255, 255, 255);
+	artFillCircle(img, cx - s / 2, cy, s / 6 + 1, 20, 20, 20);
+	artFillCircle(img, cx + s / 2, cy, s / 6 + 1, 20, 20, 20);
+	artFillRect(img, cx - 1, cy - 3 * s, cx + 2, cy - s, 70, 150, 60);
+	if (flower) {
+		for (int i = 0; i < 5; i++) {
+			const float a = i * 6.2831853f / 5;
+			artFillCircle(img, cx + int(std::cos(a) * s * 0.7f), cy - 3 * s + int(std::sin(a) * s * 0.7f), s / 2, 255, 255, 255);
+		}
+		artFillCircle(img, cx, cy - 3 * s, s / 3 + 1, 250, 220, 60);
+	} else {
+		sxPolygon(img, { { float(cx), float(cy - 3 * s) }, { float(cx + s), float(cy - 4 * s) }, { float(cx + 2 * s), float(cy - 3 * s) }, { float(cx + s), float(cy - 2.4f * s) } },
+		          80, 200, 70);
+	}
+}
+
+void sxRocket(Image& img, int cx, int top, int s)
+{
+	// Hull (white), nose (red), window (blue), two fins (red) and an exhaust flame.
+	sxPolygon(img, { { float(cx), float(top) }, { float(cx + s), float(top + 2 * s) }, { float(cx + s), float(top + 5 * s) }, { float(cx - s), float(top + 5 * s) },
+	                 { float(cx - s), float(top + 2 * s) } },
+	          235, 235, 240);
+	sxPolygon(img, { { float(cx), float(top) }, { float(cx + s * 0.62f), float(top + 1.3f * s) }, { float(cx - s * 0.62f), float(top + 1.3f * s) } }, 220, 50, 40);
+	artFillCircle(img, cx, top + 2 * s + s / 2, s / 2, 60, 130, 230);
+	sxPolygon(img, { { float(cx - s), float(top + 3.4f * s) }, { float(cx - 2 * s), float(top + 5.6f * s) }, { float(cx - s), float(top + 5 * s) } }, 220, 50, 40);
+	sxPolygon(img, { { float(cx + s), float(top + 3.4f * s) }, { float(cx + 2 * s), float(top + 5.6f * s) }, { float(cx + s), float(top + 5 * s) } }, 220, 50, 40);
+	sxPolygon(img, { { float(cx - s * 0.6f), float(top + 5 * s) }, { float(cx + s * 0.6f), float(top + 5 * s) }, { float(cx), float(top + 6.6f * s) } }, 255, 170, 40);
+}
+
+void sxOnion(Image& img, int cx, int cy, int s, std::uint8_t r, std::uint8_t g, std::uint8_t b)
+{
+	for (int dx : { -s, 0, s }) sxPolygon(img, { { float(cx + dx * 0.5f), float(cy) }, { float(cx + dx * 1.2f - 1), float(cy + 1.6f * s) }, { float(cx + dx * 1.2f + 2), float(cy + 1.6f * s) } }, 120, 100, 70);
+	artFillCircle(img, cx, cy, s, r, g, b);
+	artFillCircle(img, cx - s / 3, cy - s / 3, s / 3, std::uint8_t(std::min(255, r + 70)), std::uint8_t(std::min(255, g + 70)), std::uint8_t(std::min(255, b + 70)));
+	artFillRect(img, cx - 1, cy - s - s / 2, cx + 2, cy - s + 1, 90, 160, 70);
+}
+
+} // namespace
+
+bool artIsScreenTexture(const std::string& stem) { return stem.rfind("sx_", 0) == 0 || stem == "control_sx"; }
+
+std::vector<std::uint8_t> artScreenTexture(const std::string& stem)
+{
+	Image img;
+	if (stem == "sx_panel") {
+		// 128 square so the border stays thin when a window stretches it to a few hundred pixels.
+		img = sxImage(128, 128);
+		sxRoundRect(img, 0, 0, 128, 128, 14, 150, 200, 255, 230);
+		sxRoundRect(img, 3, 3, 125, 125, 12, 18, 36, 78, 215);
+		artFillRect(img, 12, 7, 116, 10, 60, 100, 170, 200);
+	} else if (stem == "sx_black") {
+		img = sxImage(8, 8);
+		artFill(img, 0, 0, 0, 255);
+	} else if (stem == "sx_arrow_l" || stem == "sx_arrow_r") {
+		img = sxImage(64, 64);
+		const bool left = stem == "sx_arrow_l";
+		auto X = [&](float x) { return left ? x : 64 - x; };
+		sxPolygon(img, { { X(4), 32 }, { X(52), 2 }, { X(52), 62 } }, 90, 50, 0);
+		sxPolygon(img, { { X(10), 32 }, { X(48), 9 }, { X(48), 55 } }, 255, 200, 40);
+		sxPolygon(img, { { X(14), 30 }, { X(44), 12 }, { X(44), 28 } }, 255, 240, 150);
+	} else if (stem == "sx_btn") {
+		img = sxImage(32, 32);
+		artFillCircle(img, 16, 16, 15, 90, 90, 100);
+		artFillCircle(img, 16, 16, 13, 255, 255, 255);
+		artFillCircle(img, 12, 11, 4, 255, 255, 255);
+	} else if (stem == "sx_stick") {
+		img = sxImage(32, 32);
+		artFillRing(img, 16, 16, 15, 11, 90, 90, 100);
+		artFillCircle(img, 16, 16, 10, 255, 255, 255);
+		artFillRing(img, 16, 16, 7, 5, 170, 170, 180);
+	} else if (stem == "sx_bar") {
+		img = sxImage(64, 16);
+		sxRoundRect(img, 0, 0, 64, 16, 7, 90, 90, 100);
+		sxRoundRect(img, 2, 2, 62, 14, 5, 255, 255, 255);
+	} else if (stem == "control_sx") {
+		// A GameCube pad, front view: indigo body with two grips, the grey stick on the left,
+		// the yellow C stick lower right and the D-pad lower left. The face buttons, START and
+		// the shoulders are the layout's own button pictures drawn over it.
+		img = sxImage(128, 80);
+		sxRoundRect(img, 14, 4, 114, 46, 18, 80, 70, 160);
+		artFillCircle(img, 28, 44, 24, 80, 70, 160);
+		artFillCircle(img, 100, 44, 24, 80, 70, 160);
+		artFillCircle(img, 26, 62, 16, 70, 60, 145);
+		artFillCircle(img, 102, 62, 16, 70, 60, 145);
+		artFillCircle(img, 30, 26, 12, 50, 45, 100);
+		artFillCircle(img, 30, 26, 8, 170, 170, 180);
+		artFillCircle(img, 82, 50, 9, 50, 45, 100);
+		artFillCircle(img, 82, 50, 6, 240, 210, 50);
+		artFillRect(img, 42, 44, 56, 50, 40, 40, 60);
+		artFillRect(img, 46, 40, 52, 54, 40, 40, 60);
+	} else if (stem == "sx_radar") {
+		// An area map seen from above: grass with mottling, darker forest, a pond, dirt paths
+		// and a cliff rim, with a faint grid.
+		img = sxImage(128, 128);
+		for (int y = 0; y < 128; y++) {
+			for (int x = 0; x < 128; x++) {
+				const std::uint32_t h = sxHash(x / 4, y / 4);
+				const int dx = x - 64, dy = y - 64;
+				const int d2 = dx * dx + dy * dy;
+				std::uint8_t* p = img.at(x, y);
+				int r = 70, g = 140 + int(h % 24), b = 60;
+				if (d2 > 56 * 56) r = 40, g = 80 + int(h % 16), b = 40;           // forest edge
+				if (d2 > 62 * 62) r = 70, g = 60, b = 45;                         // cliff rim
+				if ((x - 88) * (x - 88) + (y - 40) * (y - 40) < 15 * 15) r = 50, g = 110, b = 210; // pond
+				const int path1 = std::abs(y - (64 + (x - 64) / 3)), path2 = std::abs(x - (60 - (y - 64) / 4));
+				if ((path1 < 3 || path2 < 3) && d2 < 56 * 56) r = 190, g = 160, b = 100;
+				if ((x % 32 == 0 || y % 32 == 0) && d2 < 62 * 62) r = r * 3 / 4, g = g * 3 / 4, b = b * 3 / 4;
+				p[0] = std::uint8_t(r), p[1] = std::uint8_t(g), p[2] = std::uint8_t(b), p[3] = 255;
+			}
+		}
+	} else if (stem == "sx_rocket") {
+		img = sxImage(64, 64);
+		sxRocket(img, 32, 4, 7);
+	} else if (stem == "sx_olimar") {
+		img = sxImage(32, 32);
+		sxPolygon(img, { { 16, 1 }, { 30, 30 }, { 16, 23 }, { 2, 30 } }, 255, 255, 255);
+		sxPolygon(img, { { 16, 5 }, { 26, 27 }, { 16, 21 }, { 6, 27 } }, 255, 200, 30);
+	} else if (stem == "sx_onion_r" || stem == "sx_onion_y" || stem == "sx_onion_b") {
+		img = sxImage(32, 32);
+		const char c = stem.back();
+		sxOnion(img, 16, 14, 10, c == 'r' ? 220 : c == 'y' ? 235 : 50, c == 'r' ? 50 : c == 'y' ? 205 : 80, c == 'b' ? 230 : 40);
+	} else if (stem == "sx_seed") {
+		img = sxImage(16, 16);
+		artFillCircle(img, 8, 8, 6, 255, 255, 255);
+	} else if (stem == "sx_part") {
+		img = sxImage(32, 32);
+		for (int i = 0; i < 8; i++) {
+			const float a = i * 0.785398f;
+			artFillCircle(img, 16 + int(std::cos(a) * 11), 16 + int(std::sin(a) * 11), 4, 230, 180, 40);
+		}
+		artFillCircle(img, 16, 16, 11, 230, 180, 40);
+		artFillCircle(img, 16, 16, 5, 120, 80, 20);
+	} else if (stem == "sx_compass") {
+		img = sxImage(64, 64);
+		artFillCircle(img, 32, 32, 30, 20, 30, 60, 200);
+		artFillRing(img, 32, 32, 30, 27, 220, 220, 230);
+		sxPolygon(img, { { 32, 6 }, { 41, 32 }, { 23, 32 } }, 230, 50, 40);
+		sxPolygon(img, { { 32, 58 }, { 41, 32 }, { 23, 32 } }, 230, 230, 235);
+	} else if (stem == "sx_pikmin_r" || stem == "sx_pikmin_y" || stem == "sx_pikmin_b") {
+		img = sxImage(32, 64);
+		const char c = stem.back();
+		sxPikmin(img, 16, 34, 7, c == 'r' ? 225 : c == 'y' ? 240 : 50, c == 'r' ? 45 : c == 'y' ? 210 : 90, c == 'b' ? 235 : 40, c != 'r');
+	} else {
+		img = sxImage(64, 64);
+		artFill(img, 255, 0, 255);
+	}
+	return artBtiRgb5a3(img.width, img.height, img);
+}
+
+} // namespace nectar

@@ -42,6 +42,17 @@ inline constexpr int kTopBandMaxY = 120;
 inline constexpr int kBottomRightMinX = kPlay10Life.x;
 inline constexpr int kBottomRightMinY = kPlay10Life.y;
 
+// Map and controller menu (#99): cont_y, m_menu2, m_menu2m and cont_00.
+inline constexpr Rect kMenuArrowL { 2, 204, 36, 72 };
+inline constexpr Rect kMenuArrowR { 602, 204, 36, 72 };
+inline constexpr Rect kMenuTitle { 64, 28, 512, 40 };
+// The radar's window (m_menu2m 'maps'): left half, under the title.
+inline constexpr Rect kMenuMap { 40, 84, 336, 320 };
+inline constexpr Rect kMenuInfoPanel { 384, 80, 212, 304 };
+inline constexpr int kMenuCountsX = 400;
+// The pad drawing on the controller page, between the two columns of windows.
+inline constexpr Rect kMenuPad { 232, 150, 172, 108 };
+
 inline constexpr bool rectInsideScreen(Rect r)
 {
 	return r.x >= 0 && r.y >= 0 && r.x + r.w <= kScreenW && r.y + r.h <= kScreenH;

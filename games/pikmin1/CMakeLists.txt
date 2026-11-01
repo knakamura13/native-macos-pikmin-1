@@ -458,6 +458,8 @@ if (PIKMIN_BUILD_SCENARIOS)
         pc_port/scenarios/scenario_coop.cpp
         pc_port/scenarios/pc_scenario_note.cpp pc_port/scenarios/scenario_save_common.cpp pc_port/scenarios/scenario_save_load.cpp
         pc_port/scenarios/scenario_results_exit.cpp pc_port/scenarios/scenario_pause_continue.cpp
+        pc_port/scenarios/scenario_map_menu.cpp
+        pc_port/scenarios/scenario_map_menu_lockout.cpp
         pc_port/scenarios/scenario_permadeath.cpp pc_port/scenarios/scenario_card_errors.cpp
         pc_port/scenarios/scenario_ending_day30.cpp
         pc_port/scenarios/scenario_ending_happy.cpp
@@ -2356,7 +2358,9 @@ if(PIKMIN_BUILD_SCENARIOS)
     foreach(entry pikmin_cap:sandbox_objects:30,60 pikmin_cap_1:sandbox_objects:30,60
         pikmin_cap_250:sandbox_objects:30,60 pikmin_cap_999:sandbox_objects:30,60
         day_clock:sandbox:30,60 demo_timers:practice:30,60 throw_levels:sandbox:30,60
-        whistle_radius:sandbox:30,60 navi_invincible:sandbox:30,60)
+        whistle_radius:sandbox:30,60 navi_invincible:sandbox:30,60
+        # Disc-free W9 (#99): the Y menu's map and controller pages on the stand-in screens.
+        map_menu:practice:30,60 map_menu_lockout:practice:30,60)
         string(REPLACE ":" ";" parts "${entry}")
         list(GET parts 0 scenario)
         list(GET parts 1 stage)

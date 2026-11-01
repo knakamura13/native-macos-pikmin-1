@@ -115,7 +115,7 @@ bool standInTextureFiles(std::vector<StandInFile>& out, std::string& error)
 	for (const std::string& name : screenTextureNames()) {
 		const std::string base = name.substr(name.rfind('/') + 1);
 		const std::string stem = base.substr(0, base.size() - 4);
-		screen.push_back({ BUNDLE_BTI, name, artHudTexture(stem) });
+		screen.push_back({ BUNDLE_BTI, name, artIsScreenTexture(stem) ? artScreenTexture(stem) : artHudTexture(stem) });
 	}
 	StandInFile lang { "screen/eng_tex/screen.bun", {}, false };
 	if (!writeBundle(screen, lang.bytes, error)) return false;
@@ -146,6 +146,12 @@ const std::vector<std::string>& screenTextureNames()
 		for (int i = 1; i <= 21; i++) v.push_back("screen/eng_tex/c_anim" + std::string(i < 10 ? "0" : "") + std::to_string(i) + ".bti");
 		// DrawContainer (drawContainer.cpp:138-146); ws08_160 y ws08_yel ya van sueltas.
 		for (const char* n : { "p2b_64", "p2r_64", "p2y_64", "ws08_red", "p2b_c_4", "p2b_c_r", "p2b_c_y" })
+			v.push_back(std::string("screen/eng_tex/") + n + ".bti");
+		// Stand-in menu art (#99): the map menu, controller page, title and file select
+		// layouts name these (standin_ui.cpp); the disc's own names are not reused.
+		for (const char* n : { "sx_panel", "sx_black", "sx_arrow_l", "sx_arrow_r", "sx_btn", "sx_stick", "sx_bar", "control_sx", "sx_radar", "sx_rocket",
+		                       "sx_olimar", "sx_onion_r", "sx_onion_y", "sx_onion_b", "sx_seed", "sx_part", "sx_compass", "sx_pikmin_r",
+		                       "sx_pikmin_y", "sx_pikmin_b" })
 			v.push_back(std::string("screen/eng_tex/") + n + ".bti");
 		return v;
 	}();

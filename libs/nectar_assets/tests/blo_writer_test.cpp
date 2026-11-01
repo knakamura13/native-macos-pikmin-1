@@ -599,6 +599,38 @@ std::map<std::string, LayoutReq> requirements()
 		cat(l.reqs, run("on%02d", 1, 20, 'P'));
 		l.menuItems = 2;
 	}
+	// The Y menu (#99): ogDrawLR, ogDrawScrInfo, ogDrawScrController and ogDrawScrInfo2
+	// (ogMenu.cpp/.h) and the radar's p_map0N (ogRader.cpp).
+	m["cont_y.blo"].reqs = list({ "ya_l", "ya_r" }, 'P');
+	{
+		std::vector<Req>& r = m["m_menu2.blo"].reqs;
+		r                   = { { "root", 'B' }, { "idou", 'A' }, { "zoom", 'A' }, { "se_c", 'T' } };
+		cat(r, run("ti%02d", 0, 5, 'A'));
+		cat(r, list({ "p_rp", "p_rc", "p_yp", "p_yc", "p_bp", "p_bc" }, 'A'));
+		for (const char* g : { "rp", "rc", "yp", "yc", "bp", "bc", "fp" })
+			for (const char* d : { "_l", "_c", "_r" }) r.push_back({ std::string(g) + d, 'P' });
+		cat(r, list({ "rt_l", "rt_r", "ro_l", "ro_r" }, 'P'));
+	}
+	{
+		std::vector<Req>& r = m["cont_00.blo"].reqs;
+		// Multi-character constants shorter than four ('l_m', 'st') are tags with leading NULs.
+		auto t4 = [](std::string t) { return std::string(4 - t.size(), '\0') + t; };
+		r = { { t4("st"), 'P' }, { "st_c", 'T' } };
+		for (const char* k : { "l", "r", "z", "y", "x", "a", "b", "c", "3d" }) {
+			r.push_back({ t4(k), 'P' });
+			r.push_back({ t4(std::string(k) + "_m"), 'P' });
+			r.push_back({ t4(std::string(k) + "_c"), 'T' });
+			r.push_back({ t4(std::string(k) + "_w"), 'P' });
+		}
+	}
+	m["m_menu2m.blo"].reqs = { { "root", 'B' }, { "maps", 'A' }, { "yaji", 'A' } };
+	for (int i = 0; i <= 4; i++) {
+		std::vector<Req>& r = m["p_map0" + std::to_string(i) + ".blo"].reqs;
+		r                   = { { "root", 'B' }, { "map" + std::to_string(i), 'P' }, { "i_bs", 'A' } };
+		cat(r, list({ "mbpi", "mrpi", "mypi", "mmpi", "part", "orim", "mbci", "mrci", "myci", "mroi" }, 'P'));
+	}
+	m["test.blo"].reqs  = {};
+	m["test2.blo"].reqs = { { "tx00", 'T' }, { "curs", 'P' } };
 	return m;
 }
 
@@ -720,7 +752,11 @@ void walkTextAndTags(const std::vector<BloPane>& v, const std::string& file)
 			          p.otherCorners[2] == "p2b_64.bti",
 			      file + ": '" + p.tag + "' corners are not all p2b_64.bti");
 		}
-		const bool hudPic = (file == "play09.blo" || file == "play10.blo" || file == "play_day.blo" || file == "sund.blo");
+		// The HUD and the Y menu (#99) carry their own stand-in art (standin_art.cpp, artScreenTexture).
+		static const std::set<std::string> kTexturedLayouts = { "play09.blo", "play10.blo", "play_day.blo", "sund.blo",   "black.blo",
+			                                                    "cont_y.blo", "m_menu2.blo", "cont_00.blo", "m_menu2m.blo", "p_map00.blo",
+			                                                    "p_map01.blo", "p_map02.blo", "p_map03.blo", "p_map04.blo", "test2.blo" };
+		const bool hudPic = kTexturedLayouts.count(file) != 0;
 		check(p.type != BloType::Picture || p.texture.empty() || hudPic, file + ": picture '" + p.tag + "' carries a texture name");
 		check(p.type != BloType::TextBox || !p.font.empty(), file + ": text box '" + p.tag + "' has no font name");
 		walkTextAndTags(p.children, file);
@@ -878,7 +914,8 @@ int main()
 	{
 		std::vector<nectar::StandinLayout> layouts = nectar::standinBloLayouts();
 		std::map<std::string, LayoutReq> reqs      = requirements();
-		check(layouts.size() == 115, "115 layouts: prior 77, re_k_00 (W1 hazards), 36 W2 text pages (#94) and tu_tx28 (W3, #95)");
+		check(layouts.size() == 126,
+		      "126 layouts: prior 77, re_k_00 (W1 hazards), 36 W2 text pages (#94), tu_tx28 (W3, #95) and 11 Y-menu screens (W9, #99)");
 		const char* bootOrder[] = { "black.blo", "pause.blo", "pause_ok.blo", "gameover.blo", "gameove2.blo", "count.blo",
 			                        "con01.blo", "sund.blo",  "account.blo",  "play09.blo",   "play10.blo",   "play_day.blo" };
 		for (size_t i = 0; i < 12 && i < layouts.size(); i++) check(layouts[i].file == bootOrder[i], std::string("load order: ") + bootOrder[i]);
