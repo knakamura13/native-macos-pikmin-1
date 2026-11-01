@@ -92,6 +92,19 @@ StandInAnimSet buildPikiSet()
 				k.keyType = std::uint8_t(type);
 				a.info.infoKeys.push_back(k);
 			}
+		} else if (i == kAnimInfoFue) {
+			// Disc timing (standin_anims.h): loop start at anim key 1, loop end at anim key 2.
+			a.frameCount    = kFueFrames;
+			a.measured      = true;
+			a.info.animKeys = { 0, kFueLoopStart, kFueLoopEnd, kFueFrames - 1 };
+			a.info.flags    = 5;
+			a.info.speed    = 30.0f;
+			for (const auto& [key, type] : { std::pair<int, int> { 1, 0 }, { 2, 1 } }) {
+				AnimKeyRecord k;
+				k.frame   = key;
+				k.keyType = std::uint8_t(type);
+				a.info.infoKeys.push_back(k);
+			}
 		} else if (i == kAnimInfoPick) {
 			// ActPick grabs the bomb on KEY_Action0 (frame 10) and ends on KEY_Finished.
 			a.frameCount    = kStandInDefaultFrames;
@@ -180,6 +193,16 @@ bool checkStandInAnims(const StandInAnimSet& set, std::string& error)
 				if (want >= a.frameCount) return fail(i, "KEY_Action0 frame is not below the frame count");
 			}
 			if (actions != 1) return fail(i, "needs exactly one KEY_Action0 info key");
+		}
+		if (i == kAnimInfoFue) {
+			// NaviGatherState and NaviReleaseState wait on KEY_LoopStart: without it the whistle never grows and X never disbands.
+			int starts = 0, ends = 0;
+			for (const AnimKeyRecord& k : a.info.infoKeys) {
+				const std::int32_t f = a.info.animKeys[std::size_t(k.frame)];
+				if (k.keyType == 0 && f == kFueLoopStart) starts++;
+				if (k.keyType == 1 && f == kFueLoopEnd) ends++;
+			}
+			if (starts != 1 || ends != 1) return fail(i, "needs one KEY_LoopStart at the recorded frame and one KEY_LoopEnd after it");
 		}
 	}
 	return true;
