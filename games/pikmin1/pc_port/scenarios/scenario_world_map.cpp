@@ -1,7 +1,7 @@
 // World map scenarios on the stand-in tree (#99): a day end that goes through the real
 // world map (stand-in w_*.blo screens) into the next day, a title round trip from that map,
 // and a hand-off that plays through one day end. Coverage: milestones.md WM1-WM3,
-// terminals.md T01 and T21.
+// terminals.md T01, T11 and T19.
 //
 // Every run starts on Day 2 on the stand-in object stage (stages/sandbox_objects.ini),
 // jumps the clock to just before the end hour as day_end does, and closes the texts and
