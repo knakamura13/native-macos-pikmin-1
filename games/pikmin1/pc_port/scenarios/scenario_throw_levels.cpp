@@ -29,7 +29,7 @@
 //          the cursor (23 at 30 Hz), so the cursor check is for the disc's parms only.
 //
 // Not covered: a cliff or wall in the flight (EC-40's main case; the stand-in sandbox is flat
-// where the captain stands), water (EC-41: no water stand-in), Chain Actions timing (EC-43), and
+// where the captain stands), water (EC-41: piki_throw_water, on sandbox_water), Chain Actions timing (EC-43), and
 // a yellow Pikmin (its fixed mYellowThrowHeight).
 //
 // The peak differs by tick rate (+61.3 at 30 Hz, +68.0 at 60 Hz) but is the same across levels at
