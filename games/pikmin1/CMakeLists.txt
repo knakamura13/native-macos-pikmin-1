@@ -484,6 +484,7 @@ if (PIKMIN_BUILD_SCENARIOS)
         pc_port/scenarios/scenario_pellet_table.cpp
         pc_port/scenarios/scenario_pellet_carry.cpp
         pc_port/scenarios/scenario_title_boot.cpp
+        pc_port/scenarios/scenario_world_map.cpp
         pc_port/scenarios/scenario_piki_hazard_deaths.cpp
         pc_port/scenarios/scenario_piki_drown.cpp
         pc_port/scenarios/scenario_piki_throw_water.cpp
