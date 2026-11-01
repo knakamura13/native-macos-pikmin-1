@@ -478,6 +478,8 @@ if (PIKMIN_BUILD_SCENARIOS)
         pc_port/scenarios/scenario_throw_levels.cpp
         pc_port/scenarios/scenario_whistle_radius.cpp
         pc_port/scenarios/scenario_navi_invincible.cpp
+        pc_port/scenarios/scenario_whistle_gather_release.cpp
+        pc_port/scenarios/scenario_whistle_pluck_held.cpp
         pc_port/scenarios/scenario_nectar_growth.cpp
         pc_port/scenarios/scenario_ship_part_carry.cpp
         pc_port/scenarios/scenario_ufo_part_discovery.cpp
@@ -2175,7 +2177,7 @@ if(PIKMIN_BUILD_SCENARIOS)
     endforeach()
 
     foreach(scenario title_boot)
-        foreach(rate 30)
+        foreach(rate 30 60)
             add_test(NAME scenario_${scenario}_${rate}
                 COMMAND ${CMAKE_COMMAND}
                     -DGAME=$<TARGET_FILE:${NECTAR_GAME}>
@@ -2360,8 +2362,12 @@ if(PIKMIN_BUILD_SCENARIOS)
         pikmin_cap_250:sandbox_objects:30,60 pikmin_cap_999:sandbox_objects:30,60
         day_clock:sandbox:30,60 demo_timers:practice:30,60 throw_levels:sandbox:30,60
         whistle_radius:sandbox:30,60 navi_invincible:sandbox:30,60
-        # Disc-free W9 (#99): the Y menu's map and controller pages on the stand-in screens.
-        map_menu:practice:30,60 map_menu_lockout:practice:30,60)
+        # Disc-free W4 (issue #96): the real whistle, gather and release paths.
+        whistle_gather_release:sandbox:30,60 whistle_pluck_held:sandbox:30,60
+        # Disc-free W9 (#99): the Y menu's map and controller pages on the stand-in screens;
+        # a day end through the real world map, a title round trip from it.
+        map_menu:practice:30,60 map_menu_lockout:practice:30,60
+        world_map_day_end:sandbox_objects:30,60 title_round_trip:sandbox_objects:30,60)
         string(REPLACE ":" ";" parts "${entry}")
         list(GET parts 0 scenario)
         list(GET parts 1 stage)
@@ -2468,6 +2474,33 @@ if(PIKMIN_BUILD_SCENARIOS)
             -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/check_scenario_exit.cmake)
     set_tests_properties(scenario_piki_throw_water_red_survive_fail PROPERTIES
         FIXTURES_REQUIRED scenario_standin_tree ENVIRONMENT "${PIKMIN_WATER_ENV}" TIMEOUT 600)
+    # Disc-free W9 (#99) negative controls for the world map checks (scenario_world_map.cpp):
+    # the same day end with B on the confirm window, "Continue" instead of "Return to
+    # Title", and the day-end hand-off with B, under the hand-off probe. Each must fail
+    # with the message its positive scenario asserts.
+    foreach(entry
+            "world_map_cancel:the next stage is ready within 20 s of the map opening:"
+            "title_round_trip_continue:the title section within 15 s of Return to Title:"
+            "day_end_handoff_cancel:the next stage is ready within 20 s of the map opening:--scenario-handoff")
+        string(REPLACE ":" ";" parts "${entry}")
+        list(GET parts 0 scenario)
+        list(GET parts 1 expected)
+        list(GET parts 2 extra)
+        set(env "${PIKMIN_OBJECTS_ENV}")
+        if(extra)
+            set(env "${env};PIKMIN_SCENARIO_HANDOFF_PROBE=1")
+        endif()
+        foreach(rate 30 60)
+            add_test(NAME scenario_${scenario}_fail_${rate}
+                COMMAND ${CMAKE_COMMAND} -DGAME=$<TARGET_FILE:${NECTAR_GAME}> -DSCENARIO=${scenario} -DRATE=${rate} -DEXPECT=1
+                    "-DARGS=${extra}"
+                    "-DEXPECT_OUTPUT=FAIL ${scenario} tick [0-9]+: expected ${expected}"
+                    "-DFORBID_OUTPUT=\\[scenario(-probe)?\\] (PASS|hand-off)|hand-off point"
+                    -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/check_scenario_exit.cmake)
+            set_tests_properties(scenario_${scenario}_fail_${rate} PROPERTIES
+                FIXTURES_REQUIRED scenario_standin_tree ENVIRONMENT "${env}" TIMEOUT 600)
+        endforeach()
+    endforeach()
 
     # Replay determinism (EC-60): two runs, identical per-tick state hash logs.
     file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/scenario-determinism")
@@ -2544,8 +2577,9 @@ if(PIKMIN_BUILD_SCENARIOS)
     # The hand-off itself, headless (check_scenario_handoff.cmake): the scripted
     # pad wins before it, the real input path (a virtual SDL game controller)
     # after it, at real-time pacing, and nothing is written outside the scratch
-    # save dir. free_play at both rates (the pacing is per rate), first_yellow at 30.
-    foreach(entry free_play:30 free_play:60 first_yellow:30)
+    # save dir. free_play at both rates (the pacing is per rate), first_yellow at 30, and
+    # day_end_handoff at both (#99: the hand-off after a day end through the world map).
+    foreach(entry free_play:30 free_play:60 first_yellow:30 day_end_handoff:30 day_end_handoff:60)
         string(REPLACE ":" ";" parts "${entry}")
         list(GET parts 0 scenario)
         list(GET parts 1 rate)

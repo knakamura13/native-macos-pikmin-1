@@ -523,6 +523,12 @@ void testStandInSet()
 	breaks("two KEY_Action0 on ThrowWait", [](nectar::StandInAnimSet& s) {
 		s.anims[nectar::kAnimInfoThrowWait].info.infoKeys.push_back(s.anims[nectar::kAnimInfoThrowWait].info.infoKeys[0]);
 	});
+	breaks("no KEY_LoopStart on Fue", [](nectar::StandInAnimSet& s) { s.anims[nectar::kAnimInfoFue].info.infoKeys.clear(); });
+	breaks("Fue's KEY_LoopStart at the wrong frame", [](nectar::StandInAnimSet& s) { s.anims[nectar::kAnimInfoFue].info.infoKeys[0].frame = 2; });
+	check(set.anims[nectar::kAnimInfoFue].frameCount == nectar::kFueFrames
+	          && set.anims[nectar::kAnimInfoFue].info.animKeys == std::vector<std::int32_t>({ 0, nectar::kFueLoopStart, nectar::kFueLoopEnd, nectar::kFueFrames - 1 })
+	          && set.anims[nectar::kAnimInfoFue].info.eventKeys.empty(),
+	      "Fue has the disc's 20 frames, anim keys [0, 1, 3, 19] and no event keys");
 	breaks("info key past the anim-key list", [](nectar::StandInAnimSet& s) { s.anims[3].info.infoKeys = { { 2, 0, 0, 2 } }; });
 	breaks("17 info keys", [](nectar::StandInAnimSet& s) { s.anims[3].info.infoKeys.assign(17, { 1, 0, 0, 2 }); s.anims[3].info.animKeys = { 0, 5, 39 }; });
 	breaks("duplicate names", [](nectar::StandInAnimSet& s) { s.anims[8].info.name = s.anims[9].info.name; });
