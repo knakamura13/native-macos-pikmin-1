@@ -830,6 +830,93 @@ std::vector<std::uint8_t> artScreenTexture(const std::string& stem)
 		img = sxImage(32, 64);
 		const char c = stem.back();
 		sxPikmin(img, 16, 34, 7, c == 'r' ? 225 : c == 'y' ? 240 : 50, c == 'r' ? 45 : c == 'y' ? 210 : 90, c == 'b' ? 235 : 40, c != 'r');
+	} else if (stem == "sx_space") {
+		// The world map's sky (w_back): deep navy darkening towards the top, with scattered stars.
+		img = sxImage(256, 256);
+		for (int y = 0; y < 256; y++) {
+			for (int x = 0; x < 256; x++) {
+				std::uint8_t* p = img.at(x, y);
+				p[0] = std::uint8_t(4 + y / 24), p[1] = std::uint8_t(6 + y / 16), p[2] = std::uint8_t(28 + y / 5), p[3] = 255;
+				const std::uint32_t h = sxHash(x, y);
+				if (h % 233 == 0) p[0] = p[1] = p[2] = std::uint8_t(170 + h % 80);
+			}
+		}
+	} else if (stem == "sx_planet") {
+		// The planet seen from orbit (w_back): green land mottled with forest, brown highlands and
+		// blue lakes, lit from the upper left, inside a pale blue rim of atmosphere.
+		img = sxImage(256, 256);
+		const int c = 128, rad = 120;
+		auto noise = [](int x, int y, float cell, std::uint32_t seed) {
+			const float fx = x / cell, fy = y / cell;
+			const int ix = int(fx), iy = int(fy);
+			const float tx = fx - ix, ty = fy - iy;
+			auto v = [&](int i, int j) { return float(sxHash(i + int(seed) * 131, j + int(seed) * 71) % 1024) / 1023.0f; };
+			const float sx = tx * tx * (3 - 2 * tx), sy = ty * ty * (3 - 2 * ty);
+			const float top = v(ix, iy) + (v(ix + 1, iy) - v(ix, iy)) * sx;
+			const float bot = v(ix, iy + 1) + (v(ix + 1, iy + 1) - v(ix, iy + 1)) * sx;
+			return top + (bot - top) * sy;
+		};
+		for (int y = 0; y < 256; y++) {
+			for (int x = 0; x < 256; x++) {
+				const int dx = x - c, dy = y - c, d2 = dx * dx + dy * dy;
+				std::uint8_t* p = img.at(x, y);
+				if (d2 > (rad + 6) * (rad + 6)) continue;
+				if (d2 > rad * rad) {
+					p[0] = 120, p[1] = 190, p[2] = 255, p[3] = 150;
+					continue;
+				}
+				// Smooth value noise (two octaves) instead of hard cells, so the land has soft coasts.
+				const float n = 0.65f * noise(x, y, 40.0f, 3) + 0.35f * noise(x, y, 14.0f, 9);
+				const float f = noise(x, y, 22.0f, 17);
+				int r = 84, g = 150 + int(30.0f * f), b = 62;
+				if (f > 0.62f) r = 52, g = 108, b = 48;                    // forest
+				if (n > 0.66f) r = 150, g = 126, b = 80;                   // highland
+				if (n < 0.30f) r = 56, g = 118, b = 200;                   // lake
+				const float light = 1.15f - 0.55f * float(dx + dy + 2 * rad) / float(4 * rad);
+				p[0] = std::uint8_t(std::min(255.0f, r * light));
+				p[1] = std::uint8_t(std::min(255.0f, g * light));
+				p[2] = std::uint8_t(std::min(255.0f, b * light));
+				p[3] = 255;
+			}
+		}
+	} else if (stem == "sx_pin" || stem == "sx_pin_s") {
+		// A course marker: a map pin, white stem and head (red unselected, gold selected).
+		img = sxImage(32, 48);
+		const bool sel = stem == "sx_pin_s";
+		sxPolygon(img, { { 11, 20 }, { 21, 20 }, { 16, 47 } }, 240, 240, 245);
+		artFillCircle(img, 16, 16, 15, 40, 20, 10);
+		artFillCircle(img, 16, 16, 13, sel ? 255 : 220, sel ? 205 : 50, sel ? 40 : 40);
+		artFillCircle(img, 12, 11, 4, 255, 255, 255);
+	} else if (stem == "sx_ring") {
+		// An open course's landing ring.
+		img = sxImage(64, 32);
+		for (int y = 0; y < 32; y++)
+			for (int x = 0; x < 64; x++) {
+				const float ex = (x - 31.5f) / 31.0f, ey = (y - 15.5f) / 15.0f, e = ex * ex + ey * ey;
+				if (e <= 1.0f && e >= 0.55f) {
+					std::uint8_t* p = img.at(x, y);
+					p[0] = 120, p[1] = 255, p[2] = 140, p[3] = 220;
+				}
+			}
+	} else if (stem == "sx_halo") {
+		// The selected course's glow (w_line).
+		img = sxImage(64, 64);
+		for (int y = 0; y < 64; y++)
+			for (int x = 0; x < 64; x++) {
+				const float dx = x - 31.5f, dy = y - 31.5f, d = std::sqrt(dx * dx + dy * dy);
+				if (d > 31.0f) continue;
+				std::uint8_t* p = img.at(x, y);
+				p[0] = 255, p[1] = 220, p[2] = 80, p[3] = std::uint8_t(d > 26.0f ? 230 : 90 * d / 26.0f);
+			}
+	} else if (stem == "sx_part_n") {
+		// A ship part not yet found: a grey outline of sx_part.
+		img = sxImage(32, 32);
+		for (int i = 0; i < 8; i++) {
+			const float a = i * 0.785398f;
+			artFillCircle(img, 16 + int(std::cos(a) * 11), 16 + int(std::sin(a) * 11), 4, 110, 110, 120);
+		}
+		artFillCircle(img, 16, 16, 11, 110, 110, 120);
+		artFillCircle(img, 16, 16, 8, 40, 40, 50);
 	} else {
 		img = sxImage(64, 64);
 		artFill(img, 255, 0, 255);

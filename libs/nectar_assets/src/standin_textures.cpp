@@ -147,11 +147,11 @@ const std::vector<std::string>& screenTextureNames()
 		// DrawContainer (drawContainer.cpp:138-146); ws08_160 y ws08_yel ya van sueltas.
 		for (const char* n : { "p2b_64", "p2r_64", "p2y_64", "ws08_red", "p2b_c_4", "p2b_c_r", "p2b_c_y" })
 			v.push_back(std::string("screen/eng_tex/") + n + ".bti");
-		// Stand-in menu art (#99): the map menu, controller page, title and file select
+		// Stand-in menu art (#99): the map menu, controller page, title, file select and world map
 		// layouts name these (standin_ui.cpp); the disc's own names are not reused.
 		for (const char* n : { "sx_panel", "sx_black", "sx_arrow_l", "sx_arrow_r", "sx_btn", "sx_stick", "sx_bar", "control_sx", "sx_radar", "sx_rocket",
 		                       "sx_olimar", "sx_onion_r", "sx_onion_y", "sx_onion_b", "sx_seed", "sx_part", "sx_compass", "sx_pikmin_r",
-		                       "sx_pikmin_y", "sx_pikmin_b" })
+		                       "sx_pikmin_y", "sx_pikmin_b", "sx_space", "sx_planet", "sx_pin", "sx_pin_s", "sx_ring", "sx_halo", "sx_part_n" })
 			v.push_back(std::string("screen/eng_tex/") + n + ".bti");
 		return v;
 	}();

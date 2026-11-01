@@ -677,82 +677,133 @@ std::vector<StandinLayout> standinBloLayouts()
 	// World map, title and file-select screens (#99). Tags match search(.., true) in
 	// drawWorldMap.cpp, drawWMPause.cpp, ogTitle.cpp, ogStart.cpp, drawHiScore.cpp,
 	// ogDiary.cpp (m_menu_r).
-	auto wmConfirm = []() {
-		Kids k = drawMenuSet(2);
-		k.add(pic("z**l")).add(pic("z**r"));
-		return k;
+	// The world map (DrawWorldMap): a planet seen from orbit filling the left of the screen with
+	// a pin per course, the course name sliding in at the top left (WorldMapTitleObj moves it to
+	// 40,30) and a panel on the right with the course preview, the day, the ship parts and the
+	// Pikmin of each colour. Course points follow WorldMapCoursePointMgr::init's links: point
+	// 0..4 are x_1..x_5 (Distant Spring, Forest of Hope, Impact Site, Forest Navel, Final Trial
+	// by mapNoScr2Game), each up/down/left/right of its neighbours as linked there.
+	struct WmPoint {
+		int x, y; // the pin's tip
 	};
+	static const WmPoint kWmPoints[5] = { { 200, 190 }, { 170, 330 }, { 310, 370 }, { 400, 250 }, { 320, 130 } };
 	{
 		Kids k;
 		k.pics("wp%02d", 0, 4);
 		out.push_back(layout("w_wipe.blo", k));
 	}
-	{
+	{ // WorldMapCursorMgr::init: the rocket ('ri') and an Onion following it per colour.
 		Kids k;
-		k.add(pic(tag4("ri"))).add(pic("ci_b")).add(pic("ci_r")).add(pic("ci_y"));
+		k.add(texPic(tag4("ri"), "sx_rocket.bti", { 296, 330, 32, 32 }));
+		k.add(texPic("ci_b", "sx_onion_b.bti", { 296, 360, 20, 20 }));
+		k.add(texPic("ci_r", "sx_onion_r.bti", { 316, 360, 20, 20 }));
+		k.add(texPic("ci_y", "sx_onion_y.bti", { 336, 360, 20, 20 }));
 		out.push_back(layout("w_icon.blo", k));
 	}
-	{
+	{ // WorldMapTitleMgr. Its init and setTitle both pass through mapNoScr2Game, so course
+		// game id g shows map<M[M[g]] + 1>: map1 Distant Spring, map2 Forest of Hope, map3 Impact
+		// Site, map4 Forest Navel, map5 Final Trial (checked on the world map capture).
+		static const char* const names[5] = { "The Distant Spring", "The Forest of Hope", "The Impact Site", "The Forest Navel",
+			                                  "The Final Trial" };
 		Kids k;
-		for (int i = 1; i <= 5; i++) k.add(pic(tagf("map%d", i)));
+		// mapN is a picture on the disc (the #72 table); here an untextured one carrying the name.
+		// WorldMapTitleObj centres it on (40, 30), so the name sits in its right half.
+		for (int i = 1; i <= 5; i++)
+			k.add(with(placed(pic(tagf("map%d", i)), { 40, 12, 420, 36 }),
+			           { txt(tagf("mt_%d", i), names[i - 1], { 0, 0, 420, 36 }, 24, kGold, kOrange, 1) }));
 		out.push_back(layout("w_title.blo", k));
 	}
-	{
+	{ // WorldMapMapImageMgr: the course preview in the panel's window.
 		Kids k;
-		for (int i = 1; i <= 5; i++) k.add(pic(tagf("mi_%d", i)));
+		for (int i = 1; i <= 5; i++) k.add(texPic(tagf("mi_%d", i), "sx_radar.bti", { 504, 72, 120, 96 }));
 		out.push_back(layout("w_moni.blo", k));
 	}
-	{
+	{ // The panel: Day (DrawWorldMapDateCallBack), parts found / total (NumberPicCallBack) and
+		// the Pikmin of each colour (p_rc / p_yc / p_bc, hidden while displayPikiCount is off).
+		auto digit = [](const char* t, int x, int y) { return texPic(t, "0_64.bti", { x, y, 16, 22 }); };
 		Kids k;
-		for (const char* t : { "dc_c", "dc_l", "dc_r", "ro_l", "ro_c", "ro_r", "rt_l", "rt_c", "rt_r", "bp_l", "bp_c", "bp_r", "rp_l", "rp_c", "rp_r",
-		                       "yp_l", "yp_c", "yp_r", "p_bc", "p_rc", "p_yc" })
-			k.add(pic(t));
+		k.add(texPic("dpnl", "sx_panel.bti", { 496, 60, 136, 410 }));
+		k.add(txt("dayt", "Day", { 506, 180, 56, 26 }, 18, kGold, kOrange, 2));
+		k.add(digit("dc_l", 564, 182)).add(digit("dc_c", 572, 182)).add(digit("dc_r", 580, 182));
+		k.add(texPic("rokt", "sx_rocket.bti", { 504, 214, 28, 30 }));
+		k.add(digit("ro_l", 534, 220)).add(digit("ro_c", 1, 1)).add(digit("ro_r", 550, 220));
+		k.add(txt("slsh", "/", { 566, 218, 16, 26 }, 16, kWhite, kCream));
+		k.add(digit("rt_l", 582, 220)).add(digit("rt_c", 1, 1)).add(digit("rt_r", 598, 220));
+		const struct {
+			const char* group;
+			const char* tex;
+			const char* d;
+			int         y;
+		} rows[] = { { "p_rc", "sx_pikmin_r.bti", "rp", 256 }, { "p_yc", "sx_pikmin_y.bti", "yp", 296 }, { "p_bc", "sx_pikmin_b.bti", "bp", 336 } };
+		for (const auto& r : rows) {
+			const std::string d(r.d);
+			// The group is the colour's Pikmin picture (a picture on the disc) with its digits.
+			k.add(with(texPic(r.group, r.tex, { 506, r.y, 16, 32 }),
+			           { digit((d + "_l").c_str(), 34, 6), digit((d + "_c").c_str(), 50, 6), digit((d + "_r").c_str(), 66, 6) }));
+		}
+		// The 1×1 ro_c / rt_c are the disc's unused middle digits; nothing sets them.
+		for (BloPane& p : k.v)
+			if (p.tag == "ro_c" || p.tag == "rt_c") p.visible = false;
 		out.push_back(layout("w_data1.blo", k));
 	}
-	{
+	{ // WorldMapPartsInfoMgr: a found part (paNN) over a missing one (pnNN), four to a row.
 		Kids k;
 		for (int i = 0; i < 13; i++) {
-			k.add(pic(tagf("pa%02d", i)));
-			k.add(pic(tagf("pn%02d", i)));
+			const int x = 508 + (i % 4) * 28, y = 376 + (i / 4) * 22;
+			k.add(texPic(tagf("pn%02d", i), "sx_part_n.bti", { x, y, 20, 20 }));
+			k.add(texPic(tagf("pa%02d", i), "sx_part.bti", { x, y, 20, 20 }));
 		}
 		out.push_back(layout("w_data2.blo", k));
 	}
-	{
+	{ // WorldMapCoursePoint::setPane / setCursorPoint: x_N pin, x_Ns selected pin, poNN open
+		// ring, onyN where the rocket waits and chaN where it lands.
 		Kids k;
-		k.add(pic(tag4("x_1"))).add(pic("x_1s")).add(pic("po01"));
-		for (int i = 2; i <= 5; i++) {
-			char bx[8], bxs[8], bpo[8];
-			std::snprintf(bx, sizeof bx, "x_%d", i);
-			std::snprintf(bxs, sizeof bxs, "x_%ds", i);
-			std::snprintf(bpo, sizeof bpo, "po%02d", i);
-			k.add(pic(tag4(bx)));
-			k.add(pic(bxs));
-			k.add(pic(bpo));
+		for (int i = 1; i <= 5; i++) {
+			const WmPoint& p = kWmPoints[i - 1];
+			k.add(texPic(tagf("po%02d", i), "sx_ring.bti", { p.x - 22, p.y - 11, 44, 22 }));
 		}
 		for (int i = 1; i <= 5; i++) {
-			k.add(pic(tagf("sli%d", i)));
-			k.add(pane(tagf("ony%d", i)));
-			k.add(pane(tagf("cha%d", i)));
+			const WmPoint& p = kWmPoints[i - 1];
+			char x[8], xs[8];
+			std::snprintf(x, sizeof x, "x_%d", i);
+			std::snprintf(xs, sizeof xs, "x_%ds", i);
+			k.add(texPic(tag4(x), "sx_pin.bti", { p.x - 12, p.y - 36, 24, 36 }));
+			k.add(texPic(xs, "sx_pin_s.bti", { p.x - 14, p.y - 42, 28, 42 }));
+			k.add(placed(pane(tagf("ony%d", i)), { p.x + 6, p.y - 54, 1, 1 }));
+			k.add(placed(pane(tagf("cha%d", i)), { p.x - 16, p.y - 16, 1, 1 }));
 		}
+		k.pics("sli%d", 1, 5); // also in w_line on the disc; the ones drawn are w_line's
 		out.push_back(layout("w_point.blo", k));
 	}
-	{
+	{ // The selected course's glow (WorldMapCoursePoint::select shows sliN).
+		// The planet lives here, not in w_back: the PC port stretches w_back to the wide edge.
 		Kids k;
-		for (int i = 1; i <= 5; i++) k.add(pic(tagf("sli%d", i)));
+		k.add(texPic("plnt", "sx_planet.bti", { 40, 40, 420, 420 }));
+		for (int i = 1; i <= 5; i++) {
+			const WmPoint& p = kWmPoints[i - 1];
+			k.add(texPic(tagf("sli%d", i), "sx_halo.bti", { p.x - 28, p.y - 30, 56, 56 }));
+		}
 		out.push_back(layout("w_line.blo", k));
 	}
-	{
+	{ // Space (drawn first, stretched to the wide edge).
 		Kids k;
+		k.add(texPic("spac", "sx_space.bti", { 0, 0, 640, 480 }));
 		out.push_back(layout("w_back.blo", k));
 	}
-	{
-		Kids k = wmConfirm();
+	{ // WorldMapConfirmMgr: "Land here?" with Yes / No rows (heNN moved under pall), Pikmin
+		// either side of each row and the z**l / z**r cursors. The screen spins in about its centre.
+		Kids k;
+		k.add(with(placed(pane("pall"), { 0, 0, 640, 480 }),
+		           { texPic("cpnl", "sx_panel.bti", { 200, 176, 240, 132 }), txt("cask", "Land here?", { 200, 188, 240, 30 }, 22, kGold, kOrange) }));
+		k.add(pane("cent"));
+		k.add(txt("se_c", "", { 0, 0, 32, 32 }, 20, kGold, kOrange));
+		k.add(txt("he00", "Yes", { 260, 228, 120, 28 }, 20, kWhite, kSky));
+		k.add(txt("he01", "No", { 260, 264, 120, 28 }, 20, kWhite, kSky));
+		k.add(texPic("i00l", "sx_pikmin_r.bti", { 238, 226, 16, 32 })).add(texPic("i00r", "sx_pikmin_b.bti", { 386, 226, 16, 32 }));
+		k.add(texPic("i01l", "sx_pikmin_r.bti", { 238, 262, 16, 32 })).add(texPic("i01r", "sx_pikmin_b.bti", { 386, 262, 16, 32 }));
+		k.add(texPic("z**l", "sx_arrow_r.bti", { 236, 230, 24, 24 })).add(texPic("z**r", "sx_arrow_l.bti", { 380, 230, 24, 24 }));
+		cursors(k); // z00l / z00r: on the disc too, unused by WorldMapConfirmMgr
 		out.push_back(layout("w_ok.blo", k));
-	}
-	{
-		Kids k = drawMenuSet(2);
-		k.add(pic("back"));
-		out.push_back(layout("pause_w.blo", k));
 	}
 	{
 		Kids k;
@@ -852,6 +903,11 @@ std::vector<StandinLayout> standinBloLayouts()
 	{
 		Kids k = titleMenu("Messages", { "Normal", "Kana" });
 		out.push_back(layout("ms_selec.blo", k));
+	}
+	{ // DrawWMPause: START on the world map. Row 0 (also B) carries on, row 1 returns to the
+		// title (DrawWMPause::update: sel + 1 == Cancelled); 'back' is the dimmer it fades to 127.
+		Kids k = titleMenu("Paused", { "Continue", "Return to Title" });
+		out.push_back(layout("pause_w.blo", k));
 	}
 
 	// The map and controller menu (Y in the field, #99): ogScrMenuMgr (ogMenu.cpp) loads cont_y,

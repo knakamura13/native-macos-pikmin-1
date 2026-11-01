@@ -803,7 +803,8 @@ void walkTextAndTags(const std::vector<BloPane>& v, const std::string& file)
 			                                                    "m_select.blo", "m_selec2.blo", "option.blo", "s_select.blo", "v_select.blo",
 			                                                    "ms_selec.blo", "data1.blo", "data2.blo", "data3.blo", "data1_n.blo",
 			                                                    "data2_n.blo", "data3_n.blo", "data_t1.blo", "data_t2.blo", "data_i.blo",
-			                                                    "data_pf.blo" };
+			                                                    "data_pf.blo", "w_icon.blo", "w_moni.blo", "w_data1.blo", "w_data2.blo",
+			                                                    "w_point.blo", "w_line.blo", "w_back.blo", "w_ok.blo", "pause_w.blo" };
 		const bool hudPic = kTexturedLayouts.count(file) != 0;
 		check(p.type != BloType::Picture || p.texture.empty() || hudPic, file + ": picture '" + p.tag + "' carries a texture name");
 		check(p.type != BloType::TextBox || !p.font.empty(), file + ": text box '" + p.tag + "' has no font name");
@@ -1043,11 +1044,12 @@ int main()
 				check(checkHudLayout(l.file, back) == 0, l.file + ": HUD panes sit in expected regions");
 			}
 			if (l.file == "m_select.blo" || l.file == "m_selec2.blo" || l.file == "option.blo" || l.file == "s_select.blo" ||
-			    l.file == "v_select.blo" || l.file == "ms_selec.blo")
+			    l.file == "v_select.blo" || l.file == "ms_selec.blo" || l.file == "pause_w.blo")
 				check(checkTitleLayout(l.file, back) == 0, l.file + ": title rows sit on screen, inside the panel, on one line");
-			static const std::set<std::string> kFileSelect = { "data1.blo", "data2.blo", "data3.blo", "data_t1.blo", "data_t2.blo", "data_i.blo", "data_pf.blo" };
-			if (kFileSelect.count(l.file))
-				check(checkLabelsFit(l.file, back[0].children) == 0, l.file + ": file-select labels sit inside their parents, on one line");
+			static const std::set<std::string> kLabelled = { "data1.blo",  "data2.blo",   "data3.blo", "data_t1.blo", "data_t2.blo",
+				                                             "data_i.blo", "data_pf.blo", "w_title.blo", "w_data1.blo", "w_ok.blo" };
+			if (kLabelled.count(l.file))
+				check(checkLabelsFit(l.file, back[0].children) == 0, l.file + ": file-select and world-map labels sit inside their parents, on one line");
 			if (l.file == "f_result.blo") {
 				// DrawTotalScore::DrawTotalScore strcpy's each record row into a char[0x80] buffer.
 				for (const char* fmt : { "pd%02d", "lp%02d", "dp%02d" })
