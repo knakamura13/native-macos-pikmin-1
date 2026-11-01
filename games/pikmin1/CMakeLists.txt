@@ -2652,7 +2652,8 @@ if(PIKMIN_BUILD_SCENARIOS)
         ENVIRONMENT "PIKMIN_SCENARIO_DATA_DIR=${PIKMIN_STANDIN_DATA}"
         RUN_SERIAL TRUE
         TIMEOUT 600)
-    # Disc-free W9 (#99): the Y menu's map and controller pages, region-checked at 30 and 60 Hz.
+    # Disc-free W9 (#99): the Y menu's map and controller pages, the world map and the title
+    # screens, region-checked at 30 and 60 Hz.
     foreach(rate 30 60)
         add_test(NAME scenario_screenshot_map_menu_${rate}
             COMMAND ${CMAKE_COMMAND}
@@ -2666,6 +2667,21 @@ if(PIKMIN_BUILD_SCENARIOS)
             WORKING_DIRECTORY "${PIKMIN_STANDIN_DATA}"
             RUN_SERIAL TRUE
             TIMEOUT 600)
+        # The world map (idle and confirm) and the title / main menu / file select boot screens.
+        foreach(shot world_map title_screens)
+            add_test(NAME scenario_screenshot_${shot}_${rate}
+                COMMAND ${CMAKE_COMMAND}
+                    -DGAME=$<TARGET_FILE:${NECTAR_GAME}>
+                    -DRATE=${rate}
+                    -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/scenario-screenshots/${shot}_${rate}
+                    -DPIKMIN_STANDIN_DATA=${PIKMIN_STANDIN_DATA}
+                    -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/scenarios/check_scenario_${shot}_screenshot.cmake)
+            set_tests_properties(scenario_screenshot_${shot}_${rate} PROPERTIES
+                FIXTURES_REQUIRED scenario_standin_tree
+                WORKING_DIRECTORY "${PIKMIN_STANDIN_DATA}"
+                RUN_SERIAL TRUE
+                TIMEOUT 600)
+        endforeach()
     endforeach()
     foreach(scenario standin_showcase)
         foreach(rate 30)
