@@ -1283,6 +1283,7 @@ static int sScenarioBluesOnlyWater = 0;
 static int sScenarioQuickGrab = -1;
 static int sScenarioThrowSpeedPct = -1;
 static int sScenarioChainActions = -1;
+static int sScenarioWhistleRadiusPct = -1;
 static int sScenarioPikiInvincible = -1;
 static int sScenarioNaviHealthPct = -1;
 static int sScenarioTekiHealthPct = -1;
@@ -9247,6 +9248,7 @@ void pc_settings_scenario_set_window_size(int width, int height)
 void pc_settings_scenario_set_quick_grab(int on) { sScenarioQuickGrab = on ? 1 : 0; }
 void pc_settings_scenario_set_throw_speed_pct(int pct) { sScenarioThrowSpeedPct = pct; }
 void pc_settings_scenario_set_chain_actions(int on) { sScenarioChainActions = on ? 1 : 0; }
+void pc_settings_scenario_set_whistle_radius_pct(int pct) { sScenarioWhistleRadiusPct = pct; }
 void pc_settings_scenario_set_piki_invincible(int on) { sScenarioPikiInvincible = on ? 1 : 0; }
 void pc_settings_scenario_set_navi_health_pct(int pct) { sScenarioNaviHealthPct = pct; }
 void pc_settings_scenario_set_teki_health_pct(int pct) { sScenarioTekiHealthPct = pct; }
@@ -9265,6 +9267,9 @@ int pc_settings_get_free_camera(void) { if (pc_speedrun_active()) return 0;
 }
 
 int pc_settings_get_whistle_radius_pct(void) { if (pc_speedrun_active()) return 100;
+#if PIKI_SCENARIOS
+    if (sScenarioSettings && sScenarioWhistleRadiusPct > 0) return sScenarioWhistleRadiusPct;
+#endif
     return sConfig.whistleRadiusPct;
 }
 

@@ -369,6 +369,7 @@ std::map<std::string, LayoutReq> requirements()
 	                       "ufo_n_0.blo", "ufo_o_0.blo", "ufo_p_0.blo", "ufo_q_0.blo", "ufo_r_0.blo", "ufo_s_0.blo", "ufo_t_0.blo", "ufo_u_0.blo", "ufo_v_0.blo", "ufo_w_0.blo",
 	                       "ufo_x_0.blo", "ufo_y_0.blo", "ufo_z_0.blo", "ufo_a1_0.blo", "ufo_b1_0.blo", "ufo_c1_0.blo" })
 		m[f].reqs = { { "tx00", 'A' } };
+	m["tu_tx28.blo"].reqs = { { "tx00", 'A' } }; // W3 (#95): TUT_Limit100's page for pikmin_cap
 
 	// captain_death: the results chain (ogResult.cpp, ogSave.cpp, ogMemChk.cpp, ogFileSelect.cpp ...).
 	// Tags built from NUL padding ('hai', 'fp') are written with tag3().
@@ -877,7 +878,7 @@ int main()
 	{
 		std::vector<nectar::StandinLayout> layouts = nectar::standinBloLayouts();
 		std::map<std::string, LayoutReq> reqs      = requirements();
-		check(layouts.size() == 114, "114 layouts: prior 77, re_k_00 (W1 hazards) and 36 W2 text pages (#94)");
+		check(layouts.size() == 115, "115 layouts: prior 77, re_k_00 (W1 hazards), 36 W2 text pages (#94) and tu_tx28 (W3, #95)");
 		const char* bootOrder[] = { "black.blo", "pause.blo", "pause_ok.blo", "gameover.blo", "gameove2.blo", "count.blo",
 			                        "con01.blo", "sund.blo",  "account.blo",  "play09.blo",   "play10.blo",   "play_day.blo" };
 		for (size_t i = 0; i < 12 && i < layouts.size(); i++) check(layouts[i].file == bootOrder[i], std::string("load order: ") + bootOrder[i]);

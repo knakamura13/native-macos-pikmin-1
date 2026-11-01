@@ -205,6 +205,8 @@ int pc_scenario_text_windows_opened(int* lastTextId)
 	if (lastTextId) *lastTextId = sScenarioLastTextId;
 	return sScenarioTextWindows;
 }
+GameCoreSection* pc_scenario_gamecore(void) { return sGamecoreLive ? gamecore : nullptr; }
+zen::DrawCountDown* pc_scenario_countdown_window(void) { return countWindow; }
 #endif
 
 /// Whether or not to play the parts discovery jingle (when walking close to them for the first time).
