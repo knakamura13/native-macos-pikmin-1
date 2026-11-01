@@ -14,7 +14,7 @@
 // Disc tree (any other stage, the ctest `_disc` entry): 62 configs, the disc's table; only the
 // range checks apply, since those values are the disc's.
 //
-// Negative control (manual): change kStandInConfigs to 15, or a pellet's seeds in the
+// Negative control (manual): change kStandInConfigs to 21, or a pellet's seeds in the
 // generator, and the run fails with the expected and observed numbers.
 #include "scenarios/pc_scenario_list.h"
 

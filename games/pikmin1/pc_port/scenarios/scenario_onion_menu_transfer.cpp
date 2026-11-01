@@ -19,15 +19,18 @@
 //   Absorb   Within 20 s the Onion stores +4, containerPikis[blue] +4, the squad is 2; the world
 //            clock has moved since the menu closed.
 //   Cancel   Open, stick up to 2, B -> Walk: store and squad unchanged for 3 s.
-//   Clamp    Seven free blue Pikmin join (field 9 of 10). Open, hold the stick down for 3 s: the
-//            delta stops at -1, MSG_SquadTotalFull was shown; A -> Walk.
-//   Exit     Within 10 s the field is exactly 10 and the store 3, and both hold for 2 s.
+//   Clamp    Free blue Pikmin join until the field count is 9 of 10. The field count is
+//            GameStat::mapPikis, which includes the stage's three buried sprouts (mePikis), as
+//            PikiMgr::birth and the menu count it. Open, hold the stick down for 3 s: the delta
+//            stops at -1, MSG_SquadTotalFull was shown; A -> Walk.
+//   Exit     Within 10 s the field count is exactly 10 and the store 3, and both hold for 2 s.
 //
 // Negative controls: Cancel is Deposit's contrast (same stick, B instead of A, nothing moves),
 // and the clock check after Absorb is the pause check's (the same clock read moves once the menu
-// is closed). Manual (2026-10-31, local, not committed): with A for B in Cancel it fails "B
-// cancels the transfer" (store 4 -> 6); with the field limit 100 it fails "EC-03: a withdrawal
-// past the field limit is clamped" (delta -4, no MSG_SquadTotalFull), both at 30 Hz.
+// is closed). Manual (2026-10-31, local, not committed), at 30 Hz: with A for B in Cancel it
+// fails "B cancels the transfer: store and squad unchanged" (squad 2 -> 0: the two go in); with
+// the field limit 100 it fails "EC-03: a withdrawal past the field limit is clamped (delta -1,
+// MSG_SquadTotalFull)" (delta -4, no message).
 #include "scenarios/pc_scenario_list.h"
 
 #if PIKI_SCENARIOS
@@ -97,7 +100,7 @@ public:
 			}
 		}
 		mStore0 = mOnion->getTotalStorePikis();
-		std::printf("[scenario] onion_menu_transfer: Onion stores %d, %d Pikmin on the field\n", mStore0, field());
+		std::printf("[scenario] onion_menu_transfer: Onion stores %d, %d Pikmin on the field, field count %d\n", mStore0, field(), mapTotal());
 	}
 
 	void providePads(unsigned tick, PcInputPad& pad) override
@@ -106,7 +109,12 @@ public:
 		if (!navi || !mOnion || mPhase == Done) return;
 		const int cap = navi->getCurrState()->getID();
 		const bool op = cap == NAVISTATE_Container && containerWindow->getStatus() == zen::DrawContainer::STATE_Operation;
-		const bool opening = mPhase == Open || (mPhase == Cancel && cap == NAVISTATE_Walk) || (mPhase == Clamp && cap == NAVISTATE_Walk);
+		const bool opening = mPhase == Open || mPhase == Cancel || mPhase == Clamp;
+		// The captain idles after a few seconds without input (NaviIdleState); A ends it.
+		if (opening && cap == NAVISTATE_Idle) {
+			if (tick % 4 == 0) pad.button = PAD_BUTTON_A;
+			return;
+		}
 		if (opening && cap == NAVISTATE_Walk) {
 			walkToOnionAndPressA(navi, tick, pad);
 			return;
@@ -233,20 +241,25 @@ public:
 			if (store != mStore1 || squad() != mSquad1) {
 				fail(t, "B cancels the transfer: store and squad unchanged", "store %d -> %d, squad %d -> %d", mStore1, store, mSquad1, squad());
 			} else if (s >= 3.0f) {
-				for (int i = 0; i < 7; ++i) {
+				// The field count is GameStat::mapPikis, which includes the stage's buried sprouts
+				// (mePikis); PikiMgr::birth and the menu both use it, refreshed in GameStat::update.
+				const int add = (kFieldLimit - 1) - mapTotal();
+				for (int i = 0; i < add; ++i) {
 					if (!spawnPiki(navi, Blue, PikiMode::FreeMode, i - 3)) {
 						mPhase = Done;
 						return;
 					}
+					GameStat::update();
 				}
-				std::printf("[scenario] onion_menu_transfer: B cancelled; 7 free Pikmin added, field %d\n", field());
+				std::printf("[scenario] onion_menu_transfer: B cancelled; %d free Pikmin added, field count %d (%d Pikmin, %d sprouts)\n", add, mapTotal(),
+				            field(), (int)GameStat::mePikis);
 				enter(Settle, t);
 			}
 			break;
 		case Settle:
 			if (s >= 1.0f) {
-				if (field() != kFieldLimit - 1) {
-					fail(t, "the field holds 9 before the withdrawal", "%d", field());
+				if (mapTotal() != kFieldLimit - 1) {
+					fail(t, "the field count is 9 before the withdrawal", "%d", mapTotal());
 					return;
 				}
 				mOpened = false;
@@ -275,26 +288,35 @@ public:
 			}
 			break;
 		case Exit:
-			if (field() > kFieldLimit) {
-				fail(t, "EC-03: the field never passes the limit", "%d", field());
-			} else if (field() == kFieldLimit && store == mStore1 - 1) {
+		{
+			const int fc = mapTotal();
+			if (fc > kFieldLimit) {
+				fail(t, "EC-03: the field count never passes the limit", "%d", fc);
+			} else if (fc == kFieldLimit && store == mStore1 - 1) {
 				if (!mExitAt) mExitAt = t;
 				if (float(t - mExitAt) / float(rate) >= 2.0f) {
-					std::printf("[scenario] onion_menu_transfer: field %d (limit %d), store %d\n", field(), kFieldLimit, store);
+					std::printf("[scenario] onion_menu_transfer: field count %d (limit %d), store %d\n", fc, kFieldLimit, store);
 					mPhase = Done;
 					scenarioPass();
 				}
 			} else if (mExitAt) {
-				fail(t, "EC-03: field at the limit and the rest in the Onion, held 2 s", "field %d, store %d", field(), store);
+				fail(t, "EC-03: field count at the limit and the rest in the Onion, held 2 s", "field count %d, store %d", fc, store);
 			} else if (s > 10.0f) {
-				fail(t, "EC-03: one Pikmin leaves the Onion within 10 s", "field %d, store %d (want %d)", field(), store, mStore1 - 1);
+				fail(t, "EC-03: one Pikmin leaves the Onion within 10 s", "field count %d, store %d (want %d)", fc, store, mStore1 - 1);
 			}
 			break;
+		}
 		default: break;
 		}
 	}
 
 private:
+	static int mapTotal()
+	{
+		GameStat::update();
+		return (int)GameStat::mapPikis;
+	}
+
 	int squad() const
 	{
 		int n = 0;

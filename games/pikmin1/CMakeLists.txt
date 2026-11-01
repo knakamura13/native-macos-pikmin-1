@@ -478,6 +478,8 @@ if (PIKMIN_BUILD_SCENARIOS)
         pc_port/scenarios/scenario_navi_invincible.cpp
         pc_port/scenarios/scenario_enemy_kills.cpp
         pc_port/scenarios/scenario_onion_menu_transfer.cpp
+        pc_port/scenarios/scenario_navi_states.cpp
+        pc_port/scenarios/scenario_gate_break.cpp
         pc_port/scenarios/scenario_nectar_growth.cpp
         pc_port/scenarios/scenario_ship_part_carry.cpp
         pc_port/scenarios/scenario_ufo_part_discovery.cpp
@@ -2381,7 +2383,7 @@ if(PIKMIN_BUILD_SCENARIOS)
     endforeach()
 
     # Disc-free W7 scenarios (coverage/milestones.md, issue #98), name:stage:rates.
-    foreach(entry enemy_kills:sandbox_all_objects:30,60 onion_menu_transfer:sandbox_objects:30,60)
+    foreach(entry enemy_kills:sandbox_all_objects:30,60 onion_menu_transfer:sandbox_objects:30,60 navi_states:sandbox:30,60 gate_break:sandbox_all_objects:30,60)
         string(REPLACE ":" ";" parts "${entry}")
         list(GET parts 0 scenario)
         list(GET parts 1 stage)

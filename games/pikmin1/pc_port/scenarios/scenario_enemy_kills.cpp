@@ -1,33 +1,39 @@
 // enemy_kills: every enemy on the stand-in stage killed once, the kill count, the diary flags,
 // and the buried enemies that cannot die until they surface (coverage/edge-cases.md EC-50,
-// coverage/milestones.md EN1), on sandbox_all_objects (8 tekis, the snake and the geyser).
+// coverage/milestones.md EN1), on sandbox_all_objects (7 tekis, rolling boulders, the snake and
+// the geyser).
 //
 // What the code does (GameCube original; characterised, nothing fixed): a teki at health 0 runs
 // its TAIAdeadCheck, then BTeki::dieSoon (tekibteki.cpp:616-660) drops a corpse pellet when
 // TPI_CorpseType is LeaveCorpse and counts GameStat::killTekis once. A boss counts once in its
 // AI's die state (SnakeAi::dieState, SnakeAi.cpp:1137). The Burrowing Snagret (snake) checks
-// dieTransit only once it has surfaced (SNAKEAI_Under has no die check) and the Water Dumple's
-// buried Waiting state (kabekuiB) has no TAIAdeadCheck, so both sit at 0 health uncounted until
-// the captain comes near. The plugged geyser (mizu, a boss object) is not an enemy: its life at
-// 0 counts nothing. Beatle's diary flag is setSeen (2) when it dies (TAIbeatle.cpp:794) and
-// Snake's when it starts to die (SnakeAi::initDie, SnakeAi.cpp:945).
+// dieTransit only once it has surfaced (SNAKEAI_Under has no die check), and a Sheargrub
+// (kabekuiA/B) that has burrowed (its Waiting state: invincible, no TAIAdeadCheck) stays at 0
+// health uncounted until the captain comes near. The plugged geyser (mizu, a boss object) is not
+// an enemy: its life at 0 counts nothing. Rolling boulders (iwagon) come from a generator, break
+// on their own through dieSoon and each adds 1 to killTekis; the scenario attributes those steps
+// to the boulder leaving tekiMgr on that tick and keeps them out of the per-enemy count. Beatle's
+// diary flag is 2 (setSeen) when it dies (TAIbeatle.cpp:794) and Snake's when it starts to die
+// (SnakeAi::initDie, SnakeAi.cpp:945).
 //
 // In order, each within a bound in seconds:
-//   Kill    Each surfaced teki (iwagon, chappy, swallow, palm, beatle, kabekuiA, otama) at
-//           health 0 adds exactly 1 to killTekis within 15 s, and nothing more in the next 2 s.
-//           After beatle, RESFLAG_Beatle is 2.
-//   Buried  kabekuiB and the snake at 0 health: killTekis unchanged for 5 s (snake flag still 0).
-//   Surface The captain is moved beside each: it surfaces and is counted once within 30 s; the
-//           snake's flag is then 2.
+//   Kill    Each teki (chappy, swallow, palm, beatle, kabekuiA, otama, kabekuiB) at health 0
+//           adds exactly 1 to killTekis within 15 s, and nothing more in the next 2 s. After
+//           beatle, RESFLAG_Beatle is 2.
+//   Buried  A teki still uncounted after 5 s must be burrowed (TEKIOPT_Invincible); the captain
+//           is moved beside it and it is counted once within 30 s. At least one is (kabekuiA at
+//           both rates).
+//   Snake   At life 0: killTekis unchanged for 5 s (flag still 0); the captain is moved beside it,
+//           it surfaces and is counted once within 30 s, and its flag is 2.
 //   Geyser  mizu at life 0: killTekis unchanged for 5 s.
-//   Total   killTekis is 9 (7 + 2).
+//   Total   killTekis is 8 plus the boulder breaks (at least 1).
 //
-// Negative controls: Buried and Geyser are in-scenario contrasts: an enemy at 0 health that is
-// not counted passes only because the count comes from the death path, and Surface then requires
-// the same enemy to count, so a count that always (or never) moved fails one or the other.
-// Manual (2026-10-31, local, not committed): with the kill of chappy removed it fails "EC-50: a
-// surfaced teki at health 0 is counted once within 15 s" (kills 1 -> 1); with the captain left
-// where he is it fails "a buried enemy surfaces and is counted once within 30 s", both at 30 Hz.
+// Negative controls: the Snake hold and Geyser are in-scenario contrasts: an enemy at 0 health
+// that is not counted passes only because the count comes from the death path, and the snake must
+// then count, so a count that always (or never) moved fails one or the other. Manual (2026-10-31,
+// local, not committed), at 30 Hz: with begin() leaving health as it is, it fails "EC-50: a
+// surfaced teki at health 0 is counted once within 15 s" (teki 0: kills 0 -> 0); with
+// moveCaptainBeside a no-op, it fails "a buried enemy surfaces and is counted once within 30 s" (teki 4: kills 4 -> 4).
 #include "scenarios/pc_scenario_list.h"
 
 #if PIKI_SCENARIOS
@@ -221,7 +227,8 @@ private:
 			cur.boss->subCurrentLife(cur.boss->getCurrentLife());
 			cur.boss->mHealth = 0.0f;
 		}
-		std::printf("[scenario] enemy_kills: tick %u %s %d at 0 health (kills %d)\n", t, cur.what, mIdx, k);
+		std::printf("[scenario] enemy_kills: tick %u %s %d (type %d) at 0 health (kills %d)\n", t, cur.what, mIdx,
+		            cur.teki ? cur.teki->mTekiType : cur.boss->mObjType, k);
 		enter((cur.buried || cur.geyser) ? Hold : Count, t);
 	}
 

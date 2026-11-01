@@ -78,6 +78,8 @@ PcScenario* pc_scenario_make_whistle_radius(void);
 PcScenario* pc_scenario_make_navi_invincible(void);
 PcScenario* pc_scenario_make_enemy_kills(void);
 PcScenario* pc_scenario_make_onion_menu_transfer(void);
+PcScenario* pc_scenario_make_navi_states(void);
+PcScenario* pc_scenario_make_gate_break(void);
 PcScenario* pc_scenario_make_title_boot(void);
 PcScenario* pc_scenario_make_piki_hazard_deaths(void);
 PcScenario* pc_scenario_make_piki_hazard_fire_red_fail(void);
