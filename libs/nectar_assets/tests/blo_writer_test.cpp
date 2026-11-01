@@ -700,6 +700,25 @@ int checkTitleLayout(const std::string& file, const std::vector<BloPane>& tree)
 	return bad;
 }
 
+// File select (#99): every text box with a label lies inside its parent (the screen for the top
+// level) and its label fits on one line, as for the title rows.
+int checkLabelsFit(const std::string& file, const std::vector<BloPane>& kids, int parentW = 640, int parentH = 480)
+{
+	int bad = 0;
+	for (const BloPane& p : kids) {
+		if (p.type == BloType::TextBox && !p.text.empty()) {
+			const bool inside  = p.x >= 0 && p.y >= 0 && p.x + p.w <= parentW && p.y + p.h <= parentH;
+			const bool oneLine = int(p.text.size()) * p.fontWidth * 9 <= p.w * 10 && p.fontHeight <= p.h;
+			if (!inside || !oneLine) {
+				std::printf("  %s '%s' '%s': inside parent %d, one line %d\n", file.c_str(), p.tag.c_str(), p.text.c_str(), inside, oneLine);
+				bad++;
+			}
+		}
+		bad += checkLabelsFit(file, p.children, p.w, p.h);
+	}
+	return bad;
+}
+
 // Check a layout (stand-in or disc) against its requirement list. `strict` also
 // applies the stand-in rules. Returns the number of problems it logged.
 int checkReqs(const std::string& file, const std::vector<BloPane>& tree, const LayoutReq& l, const char* who)
@@ -782,7 +801,9 @@ void walkTextAndTags(const std::vector<BloPane>& v, const std::string& file)
 			                                                    "cont_y.blo", "m_menu2.blo", "cont_00.blo", "m_menu2m.blo", "p_map00.blo",
 			                                                    "p_map01.blo", "p_map02.blo", "p_map03.blo", "p_map04.blo", "test2.blo",
 			                                                    "m_select.blo", "m_selec2.blo", "option.blo", "s_select.blo", "v_select.blo",
-			                                                    "ms_selec.blo" };
+			                                                    "ms_selec.blo", "data1.blo", "data2.blo", "data3.blo", "data1_n.blo",
+			                                                    "data2_n.blo", "data3_n.blo", "data_t1.blo", "data_t2.blo", "data_i.blo",
+			                                                    "data_pf.blo" };
 		const bool hudPic = kTexturedLayouts.count(file) != 0;
 		check(p.type != BloType::Picture || p.texture.empty() || hudPic, file + ": picture '" + p.tag + "' carries a texture name");
 		check(p.type != BloType::TextBox || !p.font.empty(), file + ": text box '" + p.tag + "' has no font name");
@@ -843,6 +864,12 @@ int main()
 		BloPane outside = ok;
 		outside.tag = "he01", outside.y = 290;
 		check(checkTitleLayout("ctl", { yoko, ok, outside }) == 1, "title check catches a row outside the panel");
+		// checkLabelsFit: the same good row passes; too long, or spilling out of its parent, fails.
+		check(checkLabelsFit("clf", { ok }) == 0, "label check passes a good label");
+		check(checkLabelsFit("clf", { longRow }) == 1, "label check catches a label longer than one line");
+		BloPane plate = mk(BloType::Picture, "plat", 120, 40);
+		plate.children.push_back(ok); // 150+200 is past the plate's 120
+		check(checkLabelsFit("clf", { plate }) == 1, "label check catches a label outside its parent");
 	}
 
 	// ---- round trip, all four pane types, nesting, game oracle ---------------------
@@ -1018,6 +1045,9 @@ int main()
 			if (l.file == "m_select.blo" || l.file == "m_selec2.blo" || l.file == "option.blo" || l.file == "s_select.blo" ||
 			    l.file == "v_select.blo" || l.file == "ms_selec.blo")
 				check(checkTitleLayout(l.file, back) == 0, l.file + ": title rows sit on screen, inside the panel, on one line");
+			static const std::set<std::string> kFileSelect = { "data1.blo", "data2.blo", "data3.blo", "data_t1.blo", "data_t2.blo", "data_i.blo", "data_pf.blo" };
+			if (kFileSelect.count(l.file))
+				check(checkLabelsFit(l.file, back[0].children) == 0, l.file + ": file-select labels sit inside their parents, on one line");
 			if (l.file == "f_result.blo") {
 				// DrawTotalScore::DrawTotalScore strcpy's each record row into a char[0x80] buffer.
 				for (const char* fmt : { "pd%02d", "lp%02d", "dp%02d" })

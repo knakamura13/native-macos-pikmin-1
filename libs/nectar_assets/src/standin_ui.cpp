@@ -3,6 +3,7 @@
 #include "nectar_assets/standin_layout.h"
 
 #include <cstdio>
+#include <cstring>
 
 namespace nectar {
 
@@ -414,12 +415,19 @@ std::vector<StandinLayout> standinBloLayouts()
 	{ // ogMemChk.cpp, ogScrMemChkMgr::ogScrMemChkMgr: data_m.blo. Every message is a text box
 		// (TypingTextMgr copies the text), the yes/no pair sits in yn_w, the rest are pictures.
 		Kids k;
-		for (const char* t : { "shom", "shot", "shch", "shoi", "shok", "shos", "shuf", "shsi", "shxx", "sari", "memo", "brom", "kaim", "ijom", "naim", "file", "se_c" })
+		for (const char* t : { "shom", "shot", "shch", "shoi", "shok", "shos", "shuf", "shsi", "shxx", "sari", "memo", "brom", "kaim", "ijom", "naim", "file" })
 			k.add(box(t, "Stand-in text."));
+		k.add(txt("se_c", "", { 0, 0, 4, 4 }, 20, kGold, kOrange)); // only a colour source (ogNitakuMgr): never drawn text
 		k.add(pic("abtn")).add(pic("main")).add(pic("curs")).add(pane("cpsl"));
-		k.add(with(pane("yn_w"), { box(tag3("cws"), "Stand-in text."), box(tag3("hai"), "Stand-in text."), box("fomt", "Stand-in text."),
-		                           box("rtry", "Stand-in text."), box(tag3("iie"), "Stand-in text.") }));
-		k.add(box("haic", "Stand-in text.")).add(box("iiec", "Stand-in text."));
+		// The shown choice pair (haic / iiec) takes its words from the hidden hai / iie / fomt /
+		// cws / rtry, so it lives in yn_w and only shows with the window (it sat at the top left,
+		// drawing 'Stand-in text.' over the black before the file select, #99).
+		BloPane yn = with(placed(pane("yn_w"), { 160, 280, 320, 100 }),
+		                  { box(tag3("cws"), "Continue"), box(tag3("hai"), "Yes"), box("fomt", "Format"), box("rtry", "Retry"), box(tag3("iie"), "No") });
+		for (BloPane& c : yn.children) c.visible = false; // word sources only
+		yn.children.push_back(txt("haic", "Yes", { 0, 10, 320, 32 }, 20, kWhite, kSky));
+		yn.children.push_back(txt("iiec", "No", { 0, 56, 320, 32 }, 20, kWhite, kSky));
+		k.add(yn);
 		nitaku(k); // ogNitakuMgr over this screen
 		out.push_back(layout("data_m.blo", k));
 	}
@@ -428,9 +436,15 @@ std::vector<StandinLayout> standinBloLayouts()
 	// First Pikmin death diary page (RESFLAG path from ogResult.cpp re_k_00).
 	out.push_back(tutorialPage("re_k_00.blo"));
 	{ // ogMakeDefault.cpp, ogScrMakeDefaultMgr::ogScrMakeDefaultMgr: data_pf.blo.
+		// Shown on the way to the file select when there is no save yet: one typed message on a
+		// panel, then the A prompt (#99; the 32x32 boxes at the top left showed as a 'xt.' smudge).
 		Kids k;
-		k.add(box("tx00", "Stand-in text.")).add(box("pfok", "Stand-in text.")).add(box("pfxx", "Stand-in text."));
-		k.add(pic("tx01")).add(pic("tx02")).add(pic("tx03")).add(pic("abtn")).add(pic("curs"));
+		k.add(texPic("pfbg", "sx_panel.bti", { 120, 190, 400, 100 }));
+		k.add(txt("tx00", "Creating save data", { 140, 210, 360, 32 }, 20, kWhite, kCream));
+		k.add(txt("pfok", "Save data created", { 140, 210, 360, 32 }, 20, kWhite, kCream));
+		k.add(txt("pfxx", "Could not save", { 140, 210, 360, 32 }, 20, kWhite, kCream));
+		k.add(placed(pic("tx01"), { 140, 250, 1, 1 })).add(placed(pic("tx02"), { 140, 250, 1, 1 })).add(placed(pic("tx03"), { 140, 250, 1, 1 }));
+		k.add(texPic("abtn", "sx_btn.bti", { 296, 250, 48, 28 })).add(texPic("curs", "sx_arrow_r.bti", { 268, 252, 24, 24 }));
 		out.push_back(layout("data_pf.blo", k));
 	}
 	{ // ogFileChkSel.cpp: data_b.blo (back).
@@ -438,42 +452,120 @@ std::vector<StandinLayout> standinBloLayouts()
 		k.add(pic("back")).add(pane("re_p"));
 		out.push_back(layout("data_b.blo", k));
 	}
-	for (int slot = 1; slot <= 3; slot++) { // ogFileSelect.cpp, getPane_FileIcon: data1..data3.blo.
-		Kids k;
-		for (const char* t : { "ce_p", "efmc", "ef_c" }) k.add(pane(t));
-		k.add(pic("newi")).add(pic("nemi")).add(pic("sm_c"));
-		if (slot == 1) k.add(pic("no_c")).add(pic("ne_c")); // only mSlotScreensData[0] is searched for them
-		k.add(with(pane("fp_m"), { pic("dcmc"), pic("dcml"), pic("dcmr") }));
-		k.add(with(pane(tag3("fp")), { pic("dc_c"), pic("dc_l"), pic("dc_r") }));
+	// The file select (ogFileSelect.cpp). Each data1..3 screen holds one save card centred on
+	// its ce_p (ogScrFileSelectMgr scales the whole screen about it: 1.0 when the slot is chosen,
+	// 0.7 otherwise): a glass card with the file name, the onion icon (fp) with the day number
+	// (dc_* digits), a faint Pikmin row (fp_m) and, for an empty file, the 'New Game' plate (newi)
+	// over a sprout (nemi).
+	for (int slot = 1; slot <= 3; slot++) { // getPane_FileIcon: data1..data3.blo.
+		const int   cx = 140 + 180 * (slot - 1), cy = 210;
+		const char* onion[] = { "sx_onion_r.bti", "sx_onion_y.bti", "sx_onion_b.bti" };
+		Kids        k;
+		k.add(texPic("card", "sx_panel.bti", { cx - 80, cy - 100, 160, 196 }));
+		k.add(txt("fnam", "File " + std::to_string(slot), { cx - 80, cy - 94, 160, 26 }, 20, kGold, kOrange));
+		k.add(placed(pane("ce_p"), { cx, cy, 2, 2 }));
+		k.add(placed(pane("ef_c"), { cx - 8, cy - 24, 16, 16 }));
+		k.add(placed(pane("efmc"), { cx - 8, cy + 52, 16, 16 }));
+		k.add(with(texPic("newi", "sx_btn.bti", { cx - 66, cy - 48, 132, 40 }),
+		           { txt("nwtx", "New Game", { 0, 0, 132, 40 }, 18, kWhite, kSky) }));
+		k.add(texPic("nemi", "sx_pikmin_r.bti", { cx - 12, cy + 4, 24, 48 }));
+		k.add(placed(pic("sm_c"), { cx, cy, 1, 1 }));
+		if (slot == 1) // only mSlotScreensData[0] is searched for them
+			k.add(placed(pic("no_c"), { cx, cy, 1, 1 })).add(placed(pic("ne_c"), { cx, cy, 1, 1 }));
+		// fp_m sits at alpha 64-70 even on the chosen slot: a faint Pikmin row under the onion.
+		// Its own digits (dcm*) are shown with the day's but kept to a dot.
+		k.add(with(placed(pane("fp_m"), { cx - 40, cy + 40, 80, 36 }),
+		           { texPic("pk_r", "sx_pikmin_r.bti", { 10, 0, 16, 32 }), texPic("pk_y", "sx_pikmin_y.bti", { 32, 0, 16, 32 }),
+		             texPic("pk_b", "sx_pikmin_b.bti", { 54, 0, 16, 32 }), texPic("dcmc", "0_64.bti", { 40, 18, 1, 1 }),
+		             texPic("dcml", "0_64.bti", { 40, 18, 1, 1 }), texPic("dcmr", "0_64.bti", { 40, 18, 1, 1 }) }));
+		k.add(with(placed(pane(tag3("fp")), { cx - 48, cy - 66, 96, 104 }),
+		           { texPic("onio", onion[slot - 1], { 12, 0, 72, 72 }), txt("fday", "Day", { 0, 76, 46, 24 }, 16, kWhite, kCream, 1),
+		             texPic("dc_l", "0_64.bti", { 50, 76, 18, 24 }), texPic("dc_c", "0_64.bti", { 59, 76, 18, 24 }),
+		             texPic("dc_r", "0_64.bti", { 68, 76, 18, 24 }) }));
 		out.push_back(layout(("data" + std::to_string(slot) + ".blo").c_str(), k));
 	}
 	for (int slot = 1; slot <= 3; slot++) {
-		Kids k; // data1_n.blo..data3_n.blo: only ROOT is looked up; the disc's panes are the icons' pieces.
-		k.add(pic("ce_p"));
+		Kids k; // data1_n.blo..data3_n.blo: only ROOT is looked up; drawn over data1..3, so empty.
+		k.add(placed(pic("ce_p"), { 140 + 180 * (slot - 1), 210, 1, 1 }));
 		out.push_back(layout(("data" + std::to_string(slot) + "_n.blo").c_str(), k));
 	}
-	{ // ogFileSelect.cpp, getPane_FileTop1: data_t1.blo.
+	{ // getPane_FileTop1: data_t1.blo. The prompt plate at the top (p_ma, one prompt shown at a
+		// time), the Y / X hints that slide in for a saved file (p_co / p_sh) and the yes / no
+		// window (yn_w) over its dimmed backdrop ('back').
 		Kids k;
-		k.add(pic("back")).add(pic("chui")).add(pic("p_sh")).add(pic("p_co")).add(pic("p_ma"));
-		k.add(with(pane("yn_w"), { box(tag3("hai"), "Stand-in text."), box(tag3("iie"), "Stand-in text.") }));
-		for (const char* t : { "dono", "doko", "d1co", "u1co", "copc", "dcop", "dcxx", "hsho", "usho", "savc", "ddxx", "dosa", "dasa", "uasa", "dsho", "se_c" })
-			k.add(box(t, "Stand-in text."));
-		k.add(box(tag3("sho"), "Stand-in text."));
-		nitaku(k);
+		k.add(texPic("back", "sx_black.bti", { 0, 0, 640, 480 }));
+		k.add(texPic("chui", "sx_seed.bti", { 584, 24, 32, 32 }));
+		k.add(with(texPic("p_co", "sx_btn.bti", { 476, 362, 148, 32 }), { txt("p_ct", "Y  Copy", { 0, 0, 148, 32 }, 18, kWhite, kSky) }));
+		k.add(with(texPic("p_sh", "sx_btn.bti", { 476, 404, 148, 32 }), { txt("p_st", "X  Delete", { 0, 0, 148, 32 }, 18, kWhite, kSky) }));
+		struct Prompt {
+			const char* tag;
+			const char* text;
+		};
+		const Prompt prompts[] = { { "dono", "Select a file" },     { "doko", "Copy to which file?" }, { "d1co", "Copy this file?" },
+			                       { "u1co", "Copy over it?" },     { "copc", "Copying..." },          { "dcop", "Done" },
+			                       { "dcxx", "Delete this file?" }, { "hsho", "File is damaged" },     { "usho", "Delete it?" },
+			                       { "savc", "Saved" },             { "ddxx", "Memory card full" },    { "dosa", "Save failed" },
+			                       { "dasa", "Card formatted" },    { "uasa", "Overwrite it?" },       { "dsho", "Memory card error" } };
+		BloPane     plate = texPic("p_ma", "sx_panel.bti", { 140, 24, 360, 56 });
+		for (const Prompt& p : prompts) {
+			BloPane t = txt(p.tag, p.text, { 0, 0, 360, 56 }, 20, kGold, kOrange);
+			// never shown by ogScrFileSelectMgr (only faded): kept off so they cannot stack
+			if (!std::strcmp(p.tag, "u1co") || !std::strcmp(p.tag, "usho") || !std::strcmp(p.tag, "uasa")) t.visible = false;
+			plate.children.push_back(t);
+		}
+		plate.children.push_back(txt(tag3("sho"), "No memory card", { 0, 0, 360, 56 }, 20, kGold, kOrange));
+		k.add(plate);
+		k.add(txt("se_c", "", { 0, 0, 4, 4 }, 20, kGold, kOrange));
+		k.add(with(placed(pane("yn_w"), { 200, 180, 240, 120 }),
+		           { texPic("ynbg", "sx_panel.bti", { 0, 0, 240, 120 }), txt(tag3("hai"), "Yes", { 60, 26, 120, 28 }, 22, kWhite, kSky),
+		             txt(tag3("iie"), "No", { 60, 66, 120, 28 }, 22, kWhite, kSky) }));
+		// ogNitakuMgr: the yes / no rows' cursor spots (hidden), then the arrows.
+		k.add(texPic("i00l", "sx_pikmin_r.bti", { 238, 204, 16, 32 })).add(texPic("i00r", "sx_pikmin_b.bti", { 386, 204, 16, 32 }));
+		k.add(texPic("i01l", "sx_pikmin_r.bti", { 238, 244, 16, 32 })).add(texPic("i01r", "sx_pikmin_b.bti", { 386, 244, 16, 32 }));
+		k.add(texPic("z00l", "sx_arrow_r.bti", { 230, 208, 24, 24 })).add(texPic("z00r", "sx_arrow_l.bti", { 386, 208, 24, 24 }));
 		out.push_back(layout("data_t1.blo", k));
 	}
-	{ // ogFileSelect.cpp, getPane_FileTop2: data_t2.blo.
+	{ // getPane_FileTop2: data_t2.blo. The chosen file's panel at the bottom left: its name
+		// (da_1..3), then either 'New Game' (newd) or the details (dall): ship parts found out of
+		// thirty and the Pikmin of each colour (rcon / ycon / bcon, hidden when unknown), with
+		// Olimar (navi) at the left.
 		Kids k;
-		for (const char* t : { "da_1", "da_2", "da_3", "ro_l", "ro_r", "rt_l", "rt_r", "rc_l", "rc_c", "rc_r", "bc_l", "bc_c", "bc_r", "yc_l", "yc_c",
-		                       "yc_r", "rcon", "bcon", "ycon", "dall", "navi" })
-			k.add(pic(t));
-		k.add(box("newd", "Stand-in text."));
+		k.add(texPic("ibak", "sx_panel.bti", { 40, 340, 420, 124 }));
+		for (int i = 1; i <= 3; i++) k.add(txt(tagf("da_%d", i), "File " + std::to_string(i), { 56, 348, 140, 26 }, 20, kGold, kOrange, 2));
+		k.add(txt("newd", "New Game", { 40, 384, 420, 40 }, 26, kWhite, kSky));
+		k.add(texPic("navi", "sx_olimar.bti", { 56, 384, 44, 56 }));
+		auto digit = [](const char* t, int x, int y) { return texPic(t, "0_64.bti", { x, y, 16, 22 }); };
+		BloPane all = placed(pane("dall"), { 0, 0, 640, 480 });
+		all.children.push_back(texPic("rokt", "sx_rocket.bti", { 112, 384, 36, 44 }));
+		all.children.push_back(digit("ro_l", 150, 396));
+		all.children.push_back(digit("ro_r", 166, 396));
+		all.children.push_back(txt("slsh", "/", { 181, 394, 16, 26 }, 16, kWhite, kCream));
+		all.children.push_back(digit("rt_l", 196, 396));
+		all.children.push_back(digit("rt_r", 212, 396));
+		const struct {
+			const char* con;
+			const char* tex;
+			const char* d;
+			int         x;
+		} groups[] = { { "rcon", "sx_pikmin_r.bti", "rc", 242 }, { "ycon", "sx_pikmin_y.bti", "yc", 316 }, { "bcon", "sx_pikmin_b.bti", "bc", 390 } };
+		for (const auto& g : groups) {
+			const std::string d(g.d);
+			all.children.push_back(with(placed(pane(g.con), { g.x, 386, 64, 40 }),
+			                            { texPic(d + "pk", g.tex, { 0, 0, 16, 32 }), digit((d + "_l").c_str(), 18, 10),
+			                              digit((d + "_c").c_str(), 32, 10), digit((d + "_r").c_str(), 46, 10) }));
+		}
+		k.add(all);
 		out.push_back(layout("data_t2.blo", k));
 	}
-	{ // ogFileSelect.cpp, getPane_CpyCurScreen: data_i.blo (i00u..i02d).
+	{ // getPane_CpyCurScreen: data_i.blo. Where the copy arrows sit either side of each card
+		// (i0Nu left, i0Nd right; hidden), then the arrows themselves.
 		Kids k;
-		for (const char* t : { "i00u", "i00d", "i01u", "i01d", "i02u", "i02d" }) k.add(pic(t));
-		cursors(k);
+		for (int i = 0; i < 3; i++) {
+			const int cx = 140 + 180 * i;
+			k.add(texPic(tagf("i%02du", i), "sx_arrow_r.bti", { cx - 106, 200, 24, 24 }));
+			k.add(texPic(tagf("i%02dd", i), "sx_arrow_l.bti", { cx + 82, 200, 24, 24 }));
+		}
+		k.add(texPic("z00l", "sx_arrow_r.bti", { 34, 200, 24, 24 })).add(texPic("z00r", "sx_arrow_l.bti", { 222, 200, 24, 24 }));
 		out.push_back(layout("data_i.blo", k));
 	}
 	{ // drawSaveFailure.cpp: save_x.blo (saxx, back).
