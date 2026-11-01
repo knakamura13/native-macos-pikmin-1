@@ -15,6 +15,8 @@ from verify_scenario_png import (
     edge_object_pixels,
     is_saturated_red,
     is_silver,
+    parse_region_colour,
+    region_colour_count,
     read_png_rgb,
     verify_showcase_composition,
 )
@@ -132,6 +134,25 @@ def run_self_test() -> None:
             frame[y * sw + x] = (230, 50, 55)
     if edge_object_pixels(sw, sh, frame, y_max=40) != 20:
         raise AssertionError("model on the left border must leave 20 border pixels (2 columns x 10 rows)")
+
+    # Region colour guard (#99): exact colour inside a region, tolerance, and bad specs.
+    region, rgb, tol, bound = parse_region_colour("0,0,20,20:E63237:12:100")
+    if (region, rgb, tol, bound) != ((0, 0, 20, 20), (0xE6, 0x32, 0x37), 12, 100):
+        raise AssertionError("region colour spec must parse")
+    if region_colour_count(sw, sh, frame, region, rgb, tol) != 100:
+        raise AssertionError("red block must count 100 pixels near E63237")
+    if region_colour_count(sw, sh, frame, region, rgb, 0) != 100:
+        raise AssertionError("tolerance 0 must match (230,50,55) exactly against E63237")
+    if region_colour_count(sw, sh, frame, region, (0xE6, 0x32, 0x3A), 2) != 0:
+        raise AssertionError("tolerance 2 must not match blue 55 against 58")
+    if region_colour_count(sw, sh, frame, (35, 0, 60, 20), rgb, tol) != 0:
+        raise AssertionError("silver block must not match red")
+    for bad in ("0,0,20,20:E6323:12:1", "0,0,20,20:E63237:12", "20,0,0,20:E63237:1:1"):
+        try:
+            parse_region_colour(bad)
+        except ValueError:
+            continue
+        raise AssertionError(f"bad region colour spec {bad!r} must be rejected")
 
     print(f"verify_scenario_png self-test ok (golden {n} distinct colours)")
 

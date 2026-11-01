@@ -205,5 +205,10 @@ struct DrawCountDown;
 } // namespace zen
 GameCoreSection* pc_scenario_gamecore(void);
 zen::DrawCountDown* pc_scenario_countdown_window(void);
+// The map and controller menu (Y, MOVIECMD_CreateMenuWindow): null while it is closed.
+namespace zen {
+struct ogScrMenuMgr;
+} // namespace zen
+zen::ogScrMenuMgr* pc_scenario_menu_window(void);
 
 #endif

@@ -50,7 +50,9 @@ struct Writer {
 	bool pane(const BloPane& p)
 	{
 		if (p.tag.size() != 4) return fail(p.tag, "tag is not 4 bytes");
-		if (p.tag == std::string(4, '\0')) return fail(p.tag, "tag 0 is never found by P2DPane::search");
+		// Tag 0 is never found by P2DPane::search. Only a picture may go untagged: the disc's menu
+		// glass is, and pcExtendMenu (drawMenu.cpp) stretches exactly the untagged pictures.
+		if (p.tag == std::string(4, '\0') && p.type != BloType::Picture) return fail(p.tag, "tag 0 is never found by P2DPane::search");
 		if (p.w <= 0 || p.h <= 0) return fail(p.tag, "empty rectangle (P2DPane::draw skips it)");
 		switch (p.type) {
 		case BloType::Pane:
