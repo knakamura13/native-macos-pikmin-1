@@ -443,6 +443,17 @@ and `acos`, `asin`, `atan`, `log10`, `tan` imported from `msvcrt.dll`). Pairwise
 with the option OFF: Linux against Windows 16 of 30 identical, macOS against
 either 0 of 30.
 
+Seen once, on 2026-10-31 (PR #122, run 41266102728, W4 #96): `scenario_challenge_extinction_30`
+passed on all three OSes, but Linux's hash log had 463 lines against 421 on macOS
+and Windows. The first 420 lines were identical. Linux's soft reset out of the
+challenge results window came 42 ticks later, and the state hash did not change in
+those ticks (the window waits, everything else is still). On that branch the log
+is byte-identical to its base's locally. Locally (Linux, 2026-10-31), 8 runs gave 421 lines and the
+soft reset at t=412 every time: 3 on an idle machine and 5 with 16 busy loops.
+Not explained. The results window's exit goes through the save screen
+(`DrawCMresult::modeSave`, the card thread in `cardutil.cpp`), which is one
+candidate for a wall-clock dependence. A rerun of the whole workflow is the check.
+
 #### macOS jobs cancelled with no runner
 
 Seen on 2026-10-28 (for example runs 40744496133 and 40684014259): a `macOS (arm64)`
