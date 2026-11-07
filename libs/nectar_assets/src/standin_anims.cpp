@@ -58,7 +58,7 @@ StandInAnimSet buildPikiSet()
 			a.info.animKeys  = { 0, kThrowReleaseFrame, kThrowFrames - 1 };
 			a.info.infoKeys  = { actionKey(1) };
 		} else if (i == kAnimInfoKuttuku || i == kAnimInfoJob2 || i == kAnimInfoGakkari || i == kAnimInfoPickLoop || i == kAnimInfoKizuku || i == kAnimInfoFlick
-		           || i == kAnimInfoWait || i == kAnimInfoAttack || i == kAnimInfoStillJump || i == kAnimInfoJKoke || i == kAnimInfoGetUp) {
+		           || i == kAnimInfoWait || i == kAnimInfoEsa || i == kAnimInfoAttack || i == kAnimInfoStillJump || i == kAnimInfoJKoke || i == kAnimInfoGetUp) {
 			// Disc timing (standin_anims.h): anim keys, then info keys as (anim-key
 			// index, type) with 0 loop start, 1 loop end, 2 KEY_Action0, 3 KEY_Action1.
 			struct Timing {
@@ -72,7 +72,7 @@ StandInAnimSet buildPikiSet()
 			               : i == kAnimInfoPickLoop ? Timing { { 0, 10, 13, 18, 20, 29 }, { { 1, 2 }, { 2, 0 }, { 3, 1 }, { 4, 3 } }, -1 }
 			               : i == kAnimInfoKizuku   ? Timing { { 0, 1, 11, 15 }, { { 1, 2 }, { 2, 3 } }, -1 }
 			               : i == kAnimInfoFlick    ? Timing { { 0, 1, 9 }, { { 1, 2 } }, -1, 6 }
-			               : i == kAnimInfoWait     ? Timing { { 0, 19 }, { { 0, 0 }, { 1, 1 } }, -1 }
+			               : i == kAnimInfoWait || i == kAnimInfoEsa ? Timing { { 0, 19 }, { { 0, 0 }, { 1, 1 } }, -1 }
 			               : i == kAnimInfoAttack   ? Timing { { 0, 3, 5, 19 }, { { 1, 2 }, { 2, 3 } }, 5 }
 			               : i == kAnimInfoStillJump ? Timing { { 0, 6, 26, 34 }, { { 1, 2 }, { 2, 3 } }, -1, 6 }
 			               : i == kAnimInfoJKoke    ? Timing { { 0, 15 }, {}, -1 }
@@ -95,6 +95,15 @@ StandInAnimSet buildPikiSet()
 				e.eventType = 1;
 				a.info.eventKeys.push_back(e);
 			}
+		} else if (i == kAnimInfoRun || i == kAnimInfoNigeru || i == kAnimInfoWalk) {
+			// Run, Nigeru and Walk: measured through the disc AnimMgr; the
+			// approach/detach motions in bulborb_fight loop frames 10 through 30.
+			a.frameCount = 40;
+			a.measured = true;
+			a.info.flags = 6;
+			a.info.speed = 30.0f;
+			a.info.animKeys = { 0, 10, 30, 39 };
+			a.info.infoKeys = { { 1, 0, 0, 0 }, { 2, 0, 0, 1 } };
 		} else if (i == kAnimInfoMizunomi) {
 			// Loop window frames 10 to 20 (anim keys 1 and 2): info keys loop start, loop end.
 			a.frameCount    = kStandInDefaultFrames;

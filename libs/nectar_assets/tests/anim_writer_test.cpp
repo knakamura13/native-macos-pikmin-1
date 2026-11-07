@@ -496,6 +496,19 @@ void testStandInSet()
 	std::string err;
 	check(nectar::checkStandInAnims(set, err), "the stand-in set passes the generator assertions: " + err);
 
+	// Disc locomotion timing reached while approaching/detaching in bulborb_fight.
+	for (int i : { nectar::kAnimInfoRun, nectar::kAnimInfoNigeru, nectar::kAnimInfoWalk }) {
+		const auto& a = set.anims[std::size_t(i)];
+		check(a.frameCount == 40 && a.info.flags == 6 && a.info.animKeys == std::vector<std::int32_t>({ 0, 10, 30, 39 })
+		          && a.info.infoKeys.size() == 2 && a.info.infoKeys[0].frame == 1 && a.info.infoKeys[0].keyType == 0
+		          && a.info.infoKeys[1].frame == 2 && a.info.infoKeys[1].keyType == 1, "combat locomotion carries disc loop keys");
+	}
+
+	const auto& eaten = set.anims[nectar::kAnimInfoEsa];
+	check(eaten.frameCount == 20 && eaten.info.flags == 5 && eaten.info.animKeys == std::vector<std::int32_t>({ 0, 19 })
+	          && eaten.info.infoKeys.size() == 2 && eaten.info.infoKeys[0].frame == 0 && eaten.info.infoKeys[0].keyType == 0
+	          && eaten.info.infoKeys[1].frame == 1 && eaten.info.infoKeys[1].keyType == 1, "Esa swallowed combat motion carries the disc's measured loop");
+
 	// Each assertion fires on its own mutation.
 	auto breaks = [&](const char* what, auto mutate) {
 		nectar::StandInAnimSet s = set;

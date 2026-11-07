@@ -97,3 +97,17 @@ stand-ins needs the key it waits on (Action0 or LoopEnd) in the stand-in table, 
 - 3j: the draw-side effect of negative glyph widths, and the negative widths of the all-opaque 256x128 and 64x32 fonts.
 - 3h: `rootRing.txe` on a native Windows build (not built here).
 - Item 5: the states listed as not covered.
+
+## Chappy rig follow-up (#154, 2026-11-06)
+
+The measured MOD rest rig and collision-ancestor animation now feed the generated
+Chappy assets. Both runtime actors have scale 1.0; the earlier 0.8 claim was wrong.
+The disc's roughly 11-unit idle centre comes from animated geometry, versus a
+14-unit MOD rest root. Collision radii/local offsets remain unchanged.
+
+Moving collision geometry reproduces the full disc-Chappy-bundle overlay's
+runtime traces exactly at 30/60 Hz. Kills are 3.5/3.0 s, mean Flick 3.20/2.99 s;
+disc-stage results remain 3.4/2.5 s and 2.89/2.78 s. This fixes missing Flick
+at 30 Hz relative to the rest-rig experiment, but does not close #154.
+Source SHA-256, exact decode/regeneration, motion-channel checks, actor/stage
+controls and current per-log hash reasons: [standin-chappy-rig.md](standin-chappy-rig.md).
